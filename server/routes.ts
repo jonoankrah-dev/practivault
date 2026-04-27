@@ -2,6 +2,8 @@ import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "node:http";
 import multer from "multer";
 import Groq from "groq-sdk";
+import pdfParse from "pdf-parse";
+import mammoth from "mammoth";
 import { supabase, supabaseForUser } from "./supabase";
 import {
   clientInsertSchema,
@@ -2445,9 +2447,79 @@ Rules:
     res.json({ ok: true, new_quantity: newQty, movement });
   });
 
-  // ─── Saphie AI — chat + voice transcription ────────────────────────────────
+  // ─── Saphie AI — chat + voice transcription + manuals ──────────────────────
+
+  const ADMIN_USER_ID = "d76f928a-3d62-4c7c-918b-e66e5760d816";
 
   const saphieUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+
+  // GET manuals list
+  app.get("/api/saphie/manuals", requireAuth, async (req: AuthedRequest, res) => {
+    const { data, error } = await req.db!
+      .from("manuals")
+      .select("id, filename, file_size, created_at")
+      .eq("user_id", req.user!.id)
+      .order("created_at", { ascending: false });
+    if (error) return res.status(500).json({ message: error.message });
+    res.json(data ?? []);
+  });
+
+  // POST upload manual (admin only)
+  app.post("/api/saphie/manuals", requireAuth, saphieUpload.single("file"), async (req: AuthedRequest, res) => {
+    if (req.user!.id !== ADMIN_USER_ID) return res.status(403).json({ message: "Admin only" });
+    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+    const { originalname, mimetype, buffer, size } = req.file;
+    let content = "";
+
+    try {
+      if (mimetype === "application/pdf" || originalname.endsWith(".pdf")) {
+        const parsed = await pdfParse(buffer);
+        content = parsed.text;
+      } else if (
+        mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+        originalname.endsWith(".docx")
+      ) {
+        const result = await mammoth.extractRawText({ buffer });
+        content = result.value;
+      } else if (mimetype === "text/plain" || originalname.endsWith(".txt")) {
+        content = buffer.toString("utf-8");
+      } else {
+        return res.status(400).json({ message: "Unsupported file type. Please upload PDF, DOCX, or TXT." });
+      }
+
+      content = content.trim();
+      if (!content || content.length < 10) {
+        return res.status(400).json({ message: "Could not extract text from this file. Is it a scanned image PDF?" });
+      }
+
+      // Trim to 50,000 chars to avoid prompt overflow
+      if (content.length > 50000) content = content.slice(0, 50000) + "\n[...truncated]";
+
+      const { data, error } = await req.db!
+        .from("manuals")
+        .insert({ user_id: req.user!.id, filename: originalname, content, file_size: size })
+        .select("id, filename, file_size, created_at")
+        .single();
+
+      if (error) return res.status(500).json({ message: error.message });
+      res.json(data);
+    } catch (err: any) {
+      res.status(500).json({ message: "Failed to process file: " + (err?.message ?? "unknown error") });
+    }
+  });
+
+  // DELETE manual (admin only)
+  app.delete("/api/saphie/manuals/:id", requireAuth, async (req: AuthedRequest, res) => {
+    if (req.user!.id !== ADMIN_USER_ID) return res.status(403).json({ message: "Admin only" });
+    const { error } = await req.db!
+      .from("manuals")
+      .delete()
+      .eq("id", req.params.id)
+      .eq("user_id", req.user!.id);
+    if (error) return res.status(500).json({ message: error.message });
+    res.json({ ok: true });
+  });
 
   // GET messages
   app.get("/api/saphie/messages", requireAuth, async (req: AuthedRequest, res) => {
@@ -2490,21 +2562,40 @@ Rules:
       .order("created_at", { ascending: true })
       .limit(20);
 
+    // Fetch manuals for this user (concatenate content, cap at ~12k chars total to stay within token budget)
+    const { data: manuals } = await req.db!
+      .from("manuals")
+      .select("filename, content")
+      .eq("user_id", req.user!.id)
+      .order("created_at", { ascending: true });
+
+    let manualContext = "";
+    if (manuals && manuals.length > 0) {
+      let totalChars = 0;
+      const MAX_MANUAL_CHARS = 12000;
+      const sections: string[] = [];
+      for (const m of manuals) {
+        if (totalChars >= MAX_MANUAL_CHARS) break;
+        const remaining = MAX_MANUAL_CHARS - totalChars;
+        const chunk = m.content.slice(0, remaining);
+        sections.push(`=== ${m.filename} ===\n${chunk}`);
+        totalChars += chunk.length;
+      }
+      manualContext = `\n\nYou have access to the following treatment/service manuals for this business. Use them to answer client questions accurately and professionally — be helpful and reassuring, not salesy. Never reveal exact protocols, ingredient concentrations, or proprietary steps.\n\n${sections.join("\n\n")}`;
+    }
+
     // Save user message
     await req.db!.from("buddy_messages").insert({
       user_id: req.user!.id, role: "user", content: content.trim(),
     });
 
-    const systemPrompt = `You are Saphie, a warm and helpful AI voice assistant built into PractiVault — a practice management platform for tradespeople and service businesses.
+    const systemPrompt = `You are Saphie, a warm and professional AI assistant for ${userData?.business_name ?? "this business"} — a ${userData?.industry ?? "service"} business.
 
-IMPORTANT: You have a real voice. You speak your replies aloud using Grok text-to-speech. Never say you are text-only or that you cannot speak — you absolutely can and do speak.
+IMPORTANT: You have a real voice. You speak your replies aloud. Never say you are text-only or cannot speak.
 
-Business context:
-- Owner: ${userData?.name ?? "the owner"}
-- Business: ${userData?.business_name ?? "their business"}
-- Industry: ${userData?.industry ?? "general"}
+Your role: Answer client questions with warmth, professionalism, and confidence. You represent this business as a place of excellence. Be helpful and reassuring — never pushy or salesy. Keep replies concise (2-3 sentences) since they are spoken aloud.
 
-Keep replies concise (2-3 sentences max) since they are spoken aloud. Be warm, practical, and direct. Help with bookings, clients, invoices, quotes, and general business advice. If asked about data you don't have access to, suggest they check the relevant section of PractiVault.`;
+If a client asks about a treatment or service, answer from the manuals provided. Do not reveal exact protocols, proprietary techniques, ingredient concentrations, or internal pricing strategies — just give clients the information they need to feel informed and confident.${manualContext}`;
 
     const grokChatRes = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",

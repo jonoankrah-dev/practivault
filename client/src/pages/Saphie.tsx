@@ -8,6 +8,7 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient, getAuthToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -15,14 +16,22 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Send, Trash2, Loader2, Mic, MicOff, Sparkles, Bot,
   TrendingUp, Users, Calendar, FileText, ExternalLink,
+  BookOpen, Upload, X, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import PageHeader from "@/components/PageHeader";
 
 // Detect if we're inside an iframe (Perplexity embed) — mic won't work there
 const IS_IFRAME = (() => { try { return window.self !== window.top; } catch { return true; } })();
-// Open the app directly in a new tab at the BamBam page — bypasses iframe mic block
 const DIRECT_URL = "https://practivault-backend-production.up.railway.app/";
+const ADMIN_USER_ID = "d76f928a-3d62-4c7c-918b-e66e5760d816";
+
+interface Manual {
+  id: string;
+  filename: string;
+  file_size: number | null;
+  created_at: string;
+}
 
 interface Message {
   id: string;
@@ -71,10 +80,21 @@ function TypingIndicator() {
 
 type VoiceState = "listening" | "transcribing";
 
+function formatBytes(bytes: number | null) {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function Saphie() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.id === ADMIN_USER_ID;
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [manualsOpen, setManualsOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [voiceState, setVoiceState] = useState<VoiceState>("listening");
   const [micMuted, setMicMuted] = useState(false);
@@ -91,6 +111,54 @@ export default function Saphie() {
   const { data: messages = [], isLoading } = useQuery<Message[]>({
     queryKey: ["/api/saphie/messages"],
   });
+
+  const { data: manuals = [], isLoading: manualsLoading } = useQuery<Manual[]>({
+    queryKey: ["/api/saphie/manuals"],
+  });
+
+  const uploadManualMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const token = getAuthToken();
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/saphie/manuals", {
+        method: "POST",
+        headers,
+        body: formData,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message || "Upload failed");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/saphie/manuals"] });
+      toast({ title: "Manual uploaded", description: "Saphie will now use it to answer questions." });
+    },
+    onError: (e: any) => {
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const deleteManualMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/saphie/manuals/${id}`);
+      if (!res.ok) throw new Error("Delete failed");
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/saphie/manuals"] }),
+    onError: (e: any) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
+  });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    uploadManualMutation.mutate(file);
+    e.target.value = "";
+  };
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -447,6 +515,86 @@ export default function Saphie() {
           ) : undefined
         }
       />
+
+      {/* Manuals panel */}
+      <div className="mx-4 mt-3">
+        <button
+          onClick={() => setManualsOpen(o => !o)}
+          className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-border bg-card hover:bg-accent text-sm font-medium transition-colors"
+        >
+          <span className="flex items-center gap-2">
+            <BookOpen className="h-4 w-4 text-[#b1306f]" />
+            Saphie's Manuals
+            {manuals.length > 0 && (
+              <span className="text-xs bg-[#b1306f]/10 text-[#b1306f] px-1.5 py-0.5 rounded-full font-semibold">{manuals.length}</span>
+            )}
+          </span>
+          {manualsOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        </button>
+
+        {manualsOpen && (
+          <div className="mt-2 border border-border rounded-xl bg-card overflow-hidden">
+            {/* Upload — admin only */}
+            {isAdmin && (
+              <div className="px-4 py-3 border-b border-border">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.docx,.txt"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-dashed border-[#b1306f]/40 text-[#b1306f] hover:bg-[#b1306f]/5"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadManualMutation.isPending}
+                >
+                  {uploadManualMutation.isPending
+                    ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Uploading…</>
+                    : <><Upload className="h-4 w-4 mr-2" />Upload manual (PDF, DOCX, TXT)</>
+                  }
+                </Button>
+              </div>
+            )}
+
+            {/* List */}
+            <div className="divide-y divide-border">
+              {manualsLoading && (
+                <div className="px-4 py-3 flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />Loading manuals…
+                </div>
+              )}
+              {!manualsLoading && manuals.length === 0 && (
+                <div className="px-4 py-4 text-center text-sm text-muted-foreground">
+                  No manuals uploaded yet.
+                  {isAdmin ? " Upload one above so Saphie can answer client questions from it." : ""}
+                </div>
+              )}
+              {manuals.map(m => (
+                <div key={m.id} className="flex items-center gap-3 px-4 py-3">
+                  <FileText className="h-4 w-4 text-[#b1306f] shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{m.filename}</p>
+                    {m.file_size && <p className="text-xs text-muted-foreground">{formatBytes(m.file_size)}</p>}
+                  </div>
+                  {isAdmin && (
+                    <button
+                      onClick={() => deleteManualMutation.mutate(m.id)}
+                      disabled={deleteManualMutation.isPending}
+                      className="shrink-0 text-muted-foreground hover:text-destructive transition-colors p-1 rounded"
+                      title="Delete manual"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Iframe mic warning */}
       {IS_IFRAME && (
