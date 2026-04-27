@@ -9,7 +9,7 @@ import {
   ShieldCheck, Settings, MessageSquare, Camera, Phone, BookOpen,
   ImageIcon, Receipt, Users2, Video, Package, GraduationCap,
   MapPin, Warehouse, Wrench, HardHat, Zap, Leaf, ClipboardList,
-  HeartPulse, Hammer, Wind, Bot,
+  HeartPulse, Hammer, Wind, Bot, Building2,
 } from "lucide-react";
 
 export type NavItemDef = {
@@ -79,6 +79,7 @@ const NAV = {
   cpd:         { href: "/cpd",              label: "CPD Log",         icon: GraduationCap },
   locations:   { href: "/locations",        label: "Locations",       icon: MapPin },
   settings:    { href: "/settings",         label: "Settings",        icon: Settings },
+  businessInfo:{ href: "/business-info",    label: "Business Info",   icon: Building2 },
 } as const;
 
 // ─── Industry configs ─────────────────────────────────────────────────────────
@@ -102,7 +103,8 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
       NAV.leads, NAV.quotes, NAV.consent,
       NAV.team, NAV.invoices, NAV.photos,
       NAV.manuals, NAV.videos, NAV.packages,
-      NAV.stock, NAV.cpd, NAV.locations, NAV.settings,
+      NAV.stock, NAV.cpd, NAV.locations,
+      NAV.businessInfo, NAV.settings,
     ],
   },
 

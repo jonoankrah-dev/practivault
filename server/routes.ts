@@ -1727,6 +1727,30 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
     res.json({ ok: true });
   });
 
+  // ========== BUSINESS INFO ==========
+  app.get("/api/business-info", requireAuth, async (req: AuthedRequest, res: Response) => {
+    const { data, error } = await req.db!
+      .from("business_info")
+      .select("*")
+      .eq("user_id", req.user!.id)
+      .single();
+    if (error && error.code !== "PGRST116") return res.status(500).json({ message: error.message });
+    res.json(data ?? { products: [], faqs: [] });
+  });
+
+  app.post("/api/business-info", requireAuth, async (req: AuthedRequest, res: Response) => {
+    const userId = req.user!.id;
+    const { tagline, about, logo_url, website_url, instagram_url, tiktok_url, facebook_url, youtube_url, products, faqs } = req.body;
+    const payload = { user_id: userId, tagline, about, logo_url, website_url, instagram_url, tiktok_url, facebook_url, youtube_url, products: products ?? [], faqs: faqs ?? [], updated_at: new Date().toISOString() };
+    const { data, error } = await req.db!
+      .from("business_info")
+      .upsert(payload, { onConflict: "user_id" })
+      .select()
+      .single();
+    if (error) return res.status(500).json({ message: error.message });
+    res.json(data);
+  });
+
   // ========== MANUALS ==========
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
@@ -2502,15 +2526,17 @@ Rules:
     const { content } = req.body;
     if (!content?.trim()) return res.status(400).json({ message: "No content" });
 
-    // Fetch all 3 data sources in parallel — significantly faster than sequential awaits
-    const [userRes, historyRes, manualsRes] = await Promise.all([
+    // Fetch all data sources in parallel
+    const [userRes, historyRes, manualsRes, bizRes] = await Promise.all([
       req.db!.from("users").select("name, business_name, industry").eq("id", req.user!.id).single(),
       req.db!.from("buddy_messages").select("role, content").eq("user_id", req.user!.id).order("created_at", { ascending: true }).limit(10),
       req.db!.from("manuals").select("name, extracted_text").eq("user_id", req.user!.id).not("extracted_text", "is", null).order("created_at", { ascending: true }),
+      req.db!.from("business_info").select("*").eq("user_id", req.user!.id).single(),
     ]);
     const userData = userRes.data;
     const history = historyRes.data;
     const manuals = manualsRes.data;
+    const bizInfo = bizRes.data;
 
     let manualContext = "";
     if (manuals && manuals.length > 0) {
@@ -2533,13 +2559,33 @@ Rules:
       user_id: req.user!.id, role: "user", content: content.trim(),
     });
 
-    const systemPrompt = `You are Saphie, a warm and professional AI assistant for ${userData?.business_name ?? "this business"} — a ${userData?.industry ?? "service"} business.
+    // Build business info context for Saphie
+    let bizContext = "";
+    if (bizInfo) {
+      if (bizInfo.tagline) bizContext += `\nTagline: ${bizInfo.tagline}`;
+      if (bizInfo.about) bizContext += `\nAbout: ${bizInfo.about}`;
+      if (bizInfo.website_url) bizContext += `\nWebsite: ${bizInfo.website_url}`;
+      if (bizInfo.instagram_url) bizContext += `\nInstagram: ${bizInfo.instagram_url}`;
+      if (bizInfo.tiktok_url) bizContext += `\nTikTok: ${bizInfo.tiktok_url}`;
+      if (bizInfo.products && (bizInfo.products as any[]).length > 0) {
+        const productLines = (bizInfo.products as any[]).map((p: any) =>
+          `- ${p.name}${p.price ? ` (${p.price})` : ""}${p.category ? ` [${p.category}]` : ""}: ${p.description || ""}`
+        ).join("\n");
+        bizContext += `\n\nProducts & Services:\n${productLines}`;
+      }
+      if (bizInfo.faqs && (bizInfo.faqs as any[]).length > 0) {
+        const faqLines = (bizInfo.faqs as any[]).map((f: any) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n");
+        bizContext += `\n\nFrequently Asked Questions:\n${faqLines}`;
+      }
+    }
+
+    const systemPrompt = `You are Saphie, a warm and professional AI assistant for ${userData?.business_name ?? "this business"} — a ${userData?.industry ?? "service"} business.${bizContext}
 
 IMPORTANT: You have a real voice. You speak your replies aloud. Never say you are text-only or cannot speak.
 
 Your role: Answer client questions with warmth, professionalism, and confidence. You represent this business as a place of excellence. Be helpful and reassuring — never pushy or salesy. Keep replies concise (2-3 sentences) since they are spoken aloud.
 
-If a client asks about a treatment or service, answer from the manuals provided. Do not reveal exact protocols, proprietary techniques, ingredient concentrations, or internal pricing strategies — just give clients the information they need to feel informed and confident.${manualContext}`;
+If a client asks about a product, course or service, use the products list above to give accurate pricing and details. Do not reveal exact protocols, proprietary techniques, ingredient concentrations, or internal pricing strategies — just give clients the information they need to feel informed and confident.${manualContext}`;
 
     const grokChatRes = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",

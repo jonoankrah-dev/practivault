@@ -22,6 +22,7 @@ import Consent from "@/pages/Consent";
 import Settings from "@/pages/Settings";
 import ConsentPublic from "@/pages/ConsentPublic";
 import Manuals from "@/pages/Manuals";
+import BusinessInfo from "@/pages/BusinessInfo";
 import Photos from "@/pages/Photos";
 import Invoices from "@/pages/Invoices";
 import Team from "@/pages/Team";
@@ -169,6 +170,9 @@ function AppRouter() {
         <Protected>
           <Photos />
         </Protected>
+      </Route>
+      <Route path="/business-info">
+          <ProtectedRoute><BusinessInfo /></ProtectedRoute>
       </Route>
       <Route path="/manuals">
         <Protected>
