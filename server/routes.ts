@@ -2501,28 +2501,15 @@ Rules:
     const { content } = req.body;
     if (!content?.trim()) return res.status(400).json({ message: "No content" });
 
-    // Fetch user business context
-    const { data: userData } = await req.db!
-      .from("users")
-      .select("name, business_name, industry")
-      .eq("id", req.user!.id)
-      .single();
-
-    // Fetch conversation history (last 20)
-    const { data: history } = await req.db!
-      .from("buddy_messages")
-      .select("role, content")
-      .eq("user_id", req.user!.id)
-      .order("created_at", { ascending: true })
-      .limit(20);
-
-    // Fetch manuals from the Manuals Library — use extracted_text for Saphie context
-    const { data: manuals } = await req.db!
-      .from("manuals")
-      .select("name, extracted_text")
-      .eq("user_id", req.user!.id)
-      .not("extracted_text", "is", null)
-      .order("created_at", { ascending: true });
+    // Fetch all 3 data sources in parallel — significantly faster than sequential awaits
+    const [userRes, historyRes, manualsRes] = await Promise.all([
+      req.db!.from("users").select("name, business_name, industry").eq("id", req.user!.id).single(),
+      req.db!.from("buddy_messages").select("role, content").eq("user_id", req.user!.id).order("created_at", { ascending: true }).limit(10),
+      req.db!.from("manuals").select("name, extracted_text").eq("user_id", req.user!.id).not("extracted_text", "is", null).order("created_at", { ascending: true }),
+    ]);
+    const userData = userRes.data;
+    const history = historyRes.data;
+    const manuals = manualsRes.data;
 
     let manualContext = "";
     if (manuals && manuals.length > 0) {

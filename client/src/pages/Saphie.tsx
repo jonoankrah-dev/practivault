@@ -315,7 +315,7 @@ export default function Saphie() {
         let calibrationSamples: number[] = [];
         let calibrationDone = false;
         let dynamicThreshold = 15;
-        const SILENCE_DURATION = 1800;
+        const SILENCE_DURATION = 1200;
         let speechDetected = false;
         let silenceStart: number | null = null;
         const calibrationStart = Date.now();
