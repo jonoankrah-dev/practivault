@@ -132,13 +132,15 @@ export default function Saphie() {
     mutationFn: async (content: string) => {
       setIsTyping(true);
       const res = await apiRequest("POST", "/api/saphie/chat", { content });
-      return res.json();
+      const json = await res.json();
+      return json; // { reply: "..." }
     },
     onSuccess: async (data: any) => {
       setIsTyping(false);
       queryClient.invalidateQueries({ queryKey: ["/api/saphie/messages"] });
-      const reply = data?.reply as string | undefined;
-      if (reply?.trim()) speakReply(reply.trim());
+      // Extract reply — handle both { reply } and raw string
+      const reply: string = typeof data === "string" ? data : (data?.reply ?? "");
+      if (reply.trim()) speakReply(reply.trim());
     },
     onError: (e: any) => {
       setIsTyping(false);
