@@ -122,12 +122,13 @@ export default function Saphie() {
   const sendMutation = useMutation({
     mutationFn: async (content: string) => {
       setIsTyping(true);
-      return apiRequest("POST", "/api/saphie/chat", { content });
+      const res = await apiRequest("POST", "/api/saphie/chat", { content });
+      return res.json(); // parse JSON so onSuccess gets { reply: "..." }
     },
     onSuccess: async (data: any) => {
       setIsTyping(false);
       queryClient.invalidateQueries({ queryKey: ["/api/saphie/messages"] });
-      // Speak the reply back — Groq Orpheus TTS
+      // Speak the reply back — Grok (xAI) TTS
       const reply = data?.reply as string | undefined;
       if (reply?.trim()) speakReply(reply.trim());
     },
