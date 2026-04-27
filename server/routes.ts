@@ -2506,31 +2506,31 @@ Business context:
 
 Keep replies concise (2-3 sentences max) since they are spoken aloud. Be warm, practical, and direct. Help with bookings, clients, invoices, quotes, and general business advice. If asked about data you don't have access to, suggest they check the relevant section of PractiVault.`;
 
-    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    const grokChatRes = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+        "Authorization": `Bearer ${process.env.XAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: "grok-3-mini",
         messages: [
           { role: "system", content: systemPrompt },
           ...(history ?? []).map((m: any) => ({ role: m.role, content: m.content })),
           { role: "user", content: content.trim() },
         ],
-        max_tokens: 512,
+        max_tokens: 256,
         temperature: 0.7,
       }),
     });
 
-    if (!groqRes.ok) {
-      const err = await groqRes.text();
-      return res.status(500).json({ message: "Groq error: " + err });
+    if (!grokChatRes.ok) {
+      const err = await grokChatRes.text();
+      return res.status(500).json({ message: "Grok chat error: " + err });
     }
 
-    const groqData = await groqRes.json() as any;
-    const reply = groqData.choices?.[0]?.message?.content ?? "Sorry, I couldn't get a response.";
+    const grokChatData = await grokChatRes.json() as any;
+    const reply = grokChatData.choices?.[0]?.message?.content ?? "Sorry, I couldn't get a response.";
 
     // Save assistant reply
     await req.db!.from("buddy_messages").insert({
@@ -2540,48 +2540,45 @@ Keep replies concise (2-3 sentences max) since they are spoken aloud. Be warm, p
     res.json({ reply });
   });
 
-  // POST transcribe (Groq Whisper) — uses form-data + native fetch (Node 18+)
+  // POST transcribe — xAI Grok STT (/v1/stt)
   app.post("/api/saphie/transcribe", requireAuth, saphieUpload.single("audio"), async (req: AuthedRequest, res) => {
     if (!req.file) return res.status(400).json({ message: "No audio file" });
 
-    // Build multipart form using native Node.js — no external form-data dependency
-    const boundary = `----WhisperBoundary${Date.now()}`;
     const ext = req.file.mimetype.includes("mp4") ? "mp4"
       : req.file.mimetype.includes("ogg") ? "ogg" : "webm";
 
+    // Build multipart using native Node — xAI STT needs file last
+    const boundary = `----GrokSTTBoundary${Date.now()}`;
     const bodyParts: Buffer[] = [];
-    const append = (name: string, value: string | Buffer, filename?: string, contentType?: string) => {
-      let header = `--${boundary}\r\nContent-Disposition: form-data; name="${name}"`;
-      if (filename) header += `; filename="${filename}"`;
-      if (contentType) header += `\r\nContent-Type: ${contentType}`;
-      header += `\r\n\r\n`;
-      bodyParts.push(Buffer.from(header));
-      bodyParts.push(typeof value === "string" ? Buffer.from(value) : value);
-      bodyParts.push(Buffer.from("\r\n"));
+    const appendField = (name: string, value: string) => {
+      bodyParts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`));
     };
-
-    append("file", req.file.buffer, `audio.${ext}`, req.file.mimetype);
-    append("model", "whisper-large-v3-turbo");
-    append("response_format", "json");
-    bodyParts.push(Buffer.from(`--${boundary}--\r\n`));
+    // xAI requires file to be last field
+    appendField("language", "en");
+    appendField("format", "true");
+    bodyParts.push(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="audio.${ext}"\r\nContent-Type: ${req.file.mimetype}\r\n\r\n`
+    ));
+    bodyParts.push(req.file.buffer);
+    bodyParts.push(Buffer.from(`\r\n--${boundary}--\r\n`));
     const bodyBuffer = Buffer.concat(bodyParts);
 
-    const whisperRes = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+    const sttRes = await fetch("https://api.x.ai/v1/stt", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+        "Authorization": `Bearer ${process.env.XAI_API_KEY}`,
         "Content-Type": `multipart/form-data; boundary=${boundary}`,
         "Content-Length": String(bodyBuffer.length),
       },
       body: bodyBuffer,
     });
 
-    if (!whisperRes.ok) {
-      const err = await whisperRes.text();
-      return res.status(500).json({ message: "Whisper error: " + err });
+    if (!sttRes.ok) {
+      const err = await sttRes.text();
+      return res.status(500).json({ message: "Grok STT error: " + err });
     }
 
-    const result = await whisperRes.json() as any;
+    const result = await sttRes.json() as any;
     res.json({ text: result.text ?? "" });
   });
 
