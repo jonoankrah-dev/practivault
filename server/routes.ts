@@ -2542,23 +2542,36 @@ You help with business insights, answering questions about their bookings, clien
   app.post("/api/saphie/transcribe", requireAuth, saphieUpload.single("audio"), async (req: AuthedRequest, res) => {
     if (!req.file) return res.status(400).json({ message: "No audio file" });
 
-    // Dynamically import form-data (CommonJS) so esbuild doesn't choke
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const FormDataNode = require("form-data");
-    const form = new FormDataNode();
+    // Build multipart form using native Node.js — no external form-data dependency
+    const boundary = `----WhisperBoundary${Date.now()}`;
     const ext = req.file.mimetype.includes("mp4") ? "mp4"
       : req.file.mimetype.includes("ogg") ? "ogg" : "webm";
-    form.append("file", req.file.buffer, { filename: `audio.${ext}`, contentType: req.file.mimetype });
-    form.append("model", "whisper-large-v3-turbo");
-    form.append("response_format", "json");
+
+    const bodyParts: Buffer[] = [];
+    const append = (name: string, value: string | Buffer, filename?: string, contentType?: string) => {
+      let header = `--${boundary}\r\nContent-Disposition: form-data; name="${name}"`;
+      if (filename) header += `; filename="${filename}"`;
+      if (contentType) header += `\r\nContent-Type: ${contentType}`;
+      header += `\r\n\r\n`;
+      bodyParts.push(Buffer.from(header));
+      bodyParts.push(typeof value === "string" ? Buffer.from(value) : value);
+      bodyParts.push(Buffer.from("\r\n"));
+    };
+
+    append("file", req.file.buffer, `audio.${ext}`, req.file.mimetype);
+    append("model", "whisper-large-v3-turbo");
+    append("response_format", "json");
+    bodyParts.push(Buffer.from(`--${boundary}--\r\n`));
+    const bodyBuffer = Buffer.concat(bodyParts);
 
     const whisperRes = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
-        ...form.getHeaders(),
+        "Content-Type": `multipart/form-data; boundary=${boundary}`,
+        "Content-Length": String(bodyBuffer.length),
       },
-      body: form,
+      body: bodyBuffer,
     });
 
     if (!whisperRes.ok) {
