@@ -13,8 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Send, Trash2, Loader2, Mic, Sparkles, Bot,
-  TrendingUp, Users, Calendar, FileText, Square, ExternalLink,
+  Send, Trash2, Loader2, Mic, MicOff, Sparkles, Bot,
+  TrendingUp, Users, Calendar, FileText, ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import PageHeader from "@/components/PageHeader";
@@ -69,14 +69,15 @@ function TypingIndicator() {
   );
 }
 
-type VoiceState = "idle" | "recording" | "transcribing";
+type VoiceState = "listening" | "transcribing";
 
 export default function Saphie() {
   const { toast } = useToast();
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const [voiceState, setVoiceState] = useState<VoiceState>("idle");
+  const [voiceState, setVoiceState] = useState<VoiceState>("listening");
+  const [micMuted, setMicMuted] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -94,10 +95,6 @@ export default function Saphie() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
-
-  useEffect(() => {
-    return () => { streamRef.current?.getTracks().forEach(t => t.stop()); };
-  }, []);
 
   // Unlock browser autoplay by playing a silent buffer on first user gesture
   const unlockAudio = () => {
@@ -206,26 +203,36 @@ export default function Saphie() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  // ── Voice — tap to start, auto-stops on silence ──────────────────────────
+  // ── Always-on voice loop ─────────────────────────────────────────────────
+  // loopActiveRef: true = loop should keep running; set false to halt entirely
+  const loopActiveRef = useRef<boolean>(false);
 
+  const stopRecordingHard = () => {
+    if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
+    if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
+    if (audioCtxRef.current) { audioCtxRef.current.close().catch(() => {}); audioCtxRef.current = null; }
+    if (recorderRef.current && recorderRef.current.state !== "inactive") {
+      recorderRef.current.stop();
+    }
+    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+  };
+
+  // stopAndTranscribe: stop current recording; onstop handler will transcribe then restart
   const stopAndTranscribe = () => {
     if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
     if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
     if (audioCtxRef.current) { audioCtxRef.current.close().catch(() => {}); audioCtxRef.current = null; }
-    recorderRef.current?.stop();
+    if (recorderRef.current && recorderRef.current.state === "recording") {
+      recorderRef.current.stop(); // triggers onstop → transcribe → restart
+    }
   };
 
-  const handleMicClick = async () => {
-    // If already recording — manual stop
-    if (voiceState === "recording") {
-      stopAndTranscribe();
-      return;
-    }
+  const startListeningLoop = async () => {
+    if (!loopActiveRef.current) return; // loop was halted
 
-    // Start recording — also unlocks browser autoplay on first tap
-    unlockAudio();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!loopActiveRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
       streamRef.current = stream;
       chunksRef.current = [];
 
@@ -247,9 +254,13 @@ export default function Saphie() {
         const mimeType = recorder.mimeType || "audio/webm";
         const blob = new Blob(chunksRef.current, { type: mimeType });
 
+        // If muted or loop stopped, don't transcribe — just restart or halt
+        if (!loopActiveRef.current) return;
+
         if (blob.size < 1000) {
-          setVoiceState("idle");
-          toast({ title: "Too short", description: "Tap the mic, speak, then pause — Saphie stops automatically." });
+          // Too short — restart listening immediately (no speech detected)
+          setVoiceState("listening");
+          if (loopActiveRef.current) startListeningLoop();
           return;
         }
 
@@ -276,21 +287,22 @@ export default function Saphie() {
           }
 
           const { text } = await res.json();
-          setVoiceState("idle");
 
           if (text?.trim()) {
             sendMutation.mutate(text.trim());
-          } else {
-            toast({ title: "Didn't catch that", description: "Try speaking closer to the mic." });
           }
+          // After transcription (speech found or not), restart listening
+          setVoiceState("listening");
+          if (loopActiveRef.current) startListeningLoop();
         } catch (err: any) {
-          setVoiceState("idle");
+          setVoiceState("listening");
           toast({ title: "Voice error", description: err.message, variant: "destructive" });
+          if (loopActiveRef.current) startListeningLoop();
         }
       };
 
       recorder.start();
-      setVoiceState("recording");
+      setVoiceState("listening");
 
       // ── Silence detection via Web Audio API ──────────────────────────────────
       try {
@@ -302,12 +314,11 @@ export default function Saphie() {
         source.connect(analyser);
         const dataArray = new Uint8Array(analyser.fftSize);
 
-        // Calibrate: sample background noise for 300ms, then set threshold just above it
         let calibrationSamples: number[] = [];
         let calibrationDone = false;
-        let dynamicThreshold = 15; // fallback
-        const SILENCE_DURATION = 1800; // ms of silence after speech before auto-stop
-        let speechDetected = false;   // must hear speech first before silence counts
+        let dynamicThreshold = 15;
+        const SILENCE_DURATION = 1800;
+        let speechDetected = false;
         let silenceStart: number | null = null;
         const calibrationStart = Date.now();
 
@@ -323,22 +334,21 @@ export default function Saphie() {
 
         const checkSilence = () => {
           if (!recorderRef.current || recorderRef.current.state !== "recording") return;
+          if (!loopActiveRef.current) return;
 
           const rms = getRMS();
 
-          // Phase 1: calibrate background noise for 400ms
           if (!calibrationDone) {
             calibrationSamples.push(rms);
             if (Date.now() - calibrationStart > 400) {
               const avg = calibrationSamples.reduce((a,b) => a+b, 0) / calibrationSamples.length;
-              dynamicThreshold = Math.max(avg * 2.5, 12); // 2.5x background noise, min 12
+              dynamicThreshold = Math.max(avg * 2.5, 12);
               calibrationDone = true;
             }
             animFrameRef.current = requestAnimationFrame(checkSilence);
             return;
           }
 
-          // Phase 2: wait for speech, then detect silence
           if (rms > dynamicThreshold) {
             speechDetected = true;
             silenceStart = null;
@@ -355,7 +365,9 @@ export default function Saphie() {
 
         animFrameRef.current = requestAnimationFrame(checkSilence);
       } catch {
-        // AudioContext not available — manual stop only
+        // AudioContext not available — rely on silence timer fallback
+        // Auto-stop after 10s max if no silence detection
+        silenceTimerRef.current = setTimeout(() => stopAndTranscribe(), 10000);
       }
 
     } catch (err: any) {
@@ -365,15 +377,60 @@ export default function Saphie() {
           description: "Voice doesn't work inside Perplexity preview. Use the Railway link instead.",
           variant: "destructive",
         });
+        loopActiveRef.current = false;
       } else if (err?.name === "NotAllowedError") {
         toast({ title: "Microphone blocked", description: "Tap the lock icon in your address bar, set Microphone to Allow, then try again.", variant: "destructive" });
+        loopActiveRef.current = false;
       } else if (err?.name === "NotFoundError") {
         toast({ title: "No microphone found", description: "Please connect a mic and try again.", variant: "destructive" });
+        loopActiveRef.current = false;
       } else {
-        toast({ title: "Microphone error", description: err?.message || "Could not access microphone.", variant: "destructive" });
+        // Transient error — retry after a short pause
+        setTimeout(() => { if (loopActiveRef.current) startListeningLoop(); }, 1000);
       }
     }
   };
+
+  // Mute toggle: stop loop when muting, restart when unmuting
+  const handleMuteToggle = () => {
+    unlockAudio();
+    if (!micMuted) {
+      // Muting
+      loopActiveRef.current = false;
+      stopRecordingHard();
+      setMicMuted(true);
+      setVoiceState("listening"); // keeps UI consistent
+    } else {
+      // Unmuting
+      setMicMuted(false);
+      loopActiveRef.current = true;
+      startListeningLoop();
+    }
+  };
+
+  // Auto-start on mount (user must interact first to unlock mic — handled by first tap/type)
+  useEffect(() => {
+    // Start loop on first user interaction (click/keydown anywhere)
+    const startOnInteraction = () => {
+      if (loopActiveRef.current) return;
+      unlockAudio();
+      loopActiveRef.current = true;
+      startListeningLoop();
+      // Remove listeners once started
+      window.removeEventListener("click", startOnInteraction);
+      window.removeEventListener("keydown", startOnInteraction);
+    };
+    window.addEventListener("click", startOnInteraction);
+    window.addEventListener("keydown", startOnInteraction);
+    return () => {
+      // Cleanup on unmount
+      loopActiveRef.current = false;
+      stopRecordingHard();
+      window.removeEventListener("click", startOnInteraction);
+      window.removeEventListener("keydown", startOnInteraction);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
@@ -403,16 +460,22 @@ export default function Saphie() {
       )}
 
       {/* Status banners */}
-      {voiceState === "recording" && (
+      {!micMuted && voiceState === "listening" && (
         <div className="mx-4 mt-3 flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm">
           <div className="h-3 w-3 rounded-full bg-red-500 animate-pulse shrink-0" />
-          <span className="text-red-700 font-medium flex-1">Listening… tap the mic again to stop</span>
+          <span className="text-red-700 font-medium flex-1">Saphie is listening…</span>
+        </div>
+      )}
+      {micMuted && (
+        <div className="mx-4 mt-3 flex items-center gap-3 bg-muted border border-border rounded-xl px-4 py-3 text-sm">
+          <MicOff className="h-4 w-4 text-muted-foreground shrink-0" />
+          <span className="text-muted-foreground flex-1">Mic muted — tap to unmute</span>
         </div>
       )}
       {voiceState === "transcribing" && (
         <div className="mx-4 mt-3 flex items-center gap-3 bg-[#b1306f]/5 border border-[#b1306f]/20 rounded-xl px-4 py-3 text-sm">
           <Loader2 className="h-4 w-4 text-[#b1306f] animate-spin shrink-0" />
-          <span className="text-[#b1306f] flex-1">Transcribing your voice…</span>
+          <span className="text-[#b1306f] flex-1">Saphie heard you…</span>
         </div>
       )}
 
@@ -438,7 +501,7 @@ export default function Saphie() {
               <div className="text-center">
                 <h2 className="text-lg font-semibold mb-1">Hey, I'm Saphie 👋</h2>
                 <p className="text-sm text-muted-foreground max-w-xs">
-                  I know your business inside out. Type a message or tap the mic and speak to me.
+                  I know your business inside out. Just speak — I'm always listening. Or type below.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-2 w-full max-w-sm">
@@ -461,7 +524,7 @@ export default function Saphie() {
 
         {/* Input bar */}
         <div className="border-t border-border bg-background px-4 py-3">
-          {messages.length > 0 && !isTyping && voiceState === "idle" && (
+          {messages.length > 0 && !isTyping && voiceState !== "transcribing" && (
             <div className="flex gap-1.5 mb-2 flex-wrap">
               {QUICK_PROMPTS.map(({ label, prompt }) => (
                 <button key={label} onClick={() => sendMutation.mutate(prompt)}
@@ -481,7 +544,7 @@ export default function Saphie() {
               placeholder="Ask Saphie anything… or tap the mic to speak"
               className="min-h-[44px] max-h-[120px] resize-none text-sm"
               rows={1}
-              disabled={sendMutation.isPending || voiceState !== "idle"}
+              disabled={sendMutation.isPending || voiceState === "transcribing"}
             />
 
             <Button
@@ -489,25 +552,25 @@ export default function Saphie() {
               size="icon"
               className={cn(
                 "h-11 w-11 shrink-0 transition-all",
-                voiceState === "recording" && "bg-red-500 border-red-500 text-white hover:bg-red-600 animate-pulse",
+                !micMuted && voiceState === "listening" && "bg-red-500 border-red-500 text-white hover:bg-red-600",
+                micMuted && "border-muted-foreground text-muted-foreground hover:bg-muted",
                 voiceState === "transcribing" && "opacity-50 cursor-not-allowed",
-                voiceState === "idle" && "border-[#b1306f] text-[#b1306f] hover:bg-[#b1306f]/10",
               )}
-              onClick={handleMicClick}
+              onClick={handleMuteToggle}
               disabled={voiceState === "transcribing" || sendMutation.isPending}
-              title={voiceState === "recording" ? "Tap to stop recording" : "Tap to speak to Saphie"}
+              title={micMuted ? "Unmute mic" : "Mute mic"}
             >
-              {voiceState === "recording"
-                ? <Square className="h-4 w-4 fill-current" />
-                : voiceState === "transcribing"
+              {voiceState === "transcribing"
                 ? <Loader2 className="h-4 w-4 animate-spin" />
+                : micMuted
+                ? <MicOff className="h-4 w-4" />
                 : <Mic className="h-4 w-4" />
               }
             </Button>
 
             <Button
               onClick={handleSend}
-              disabled={!input.trim() || sendMutation.isPending || voiceState !== "idle"}
+              disabled={!input.trim() || sendMutation.isPending || voiceState === "transcribing"}
               size="icon"
               className="h-11 w-11 shrink-0 bg-[#b1306f] hover:bg-[#9a2860]"
             >
@@ -518,7 +581,7 @@ export default function Saphie() {
             </Button>
           </div>
           <p className="text-[11px] text-muted-foreground mt-1.5">
-            Enter to send · Tap mic to speak · Auto-stops on silence
+            Saphie is always listening · tap mic to mute
           </p>
         </div>
       </div>
