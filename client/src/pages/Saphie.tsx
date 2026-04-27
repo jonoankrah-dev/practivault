@@ -131,71 +131,14 @@ export default function Saphie() {
   const sendMutation = useMutation({
     mutationFn: async (content: string) => {
       setIsTyping(true);
-
-      const token = getAuthToken();
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-
-      const res = await fetch("/api/saphie/chat", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ content }),
-        credentials: "include",
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "Chat failed");
-      }
-
-      // Consume SSE stream — collect tokens, speak sentence by sentence
-      const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let sentenceBuffer = "";
-      let fullReply = "";
-      let firstSentenceSpoken = false;
-
-      const isSentenceEnd = (text: string) => /[.!?]\s*$/.test(text.trimEnd());
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6).trim();
-          if (!data) continue;
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.token) {
-              sentenceBuffer += parsed.token;
-              fullReply += parsed.token;
-            }
-            if (parsed.done) {
-              // Speak any remaining text
-              if (sentenceBuffer.trim()) speakReply(sentenceBuffer.trim());
-              break;
-            }
-            // Speak as soon as we have a complete sentence
-            if (isSentenceEnd(sentenceBuffer) && sentenceBuffer.trim().length > 10) {
-              speakReply(sentenceBuffer.trim());
-              sentenceBuffer = "";
-              firstSentenceSpoken = true;
-            }
-          } catch {}
-        }
-      }
-
-      return { reply: fullReply };
+      const res = await apiRequest("POST", "/api/saphie/chat", { content });
+      return res.json();
     },
-    onSuccess: async () => {
+    onSuccess: async (data: any) => {
       setIsTyping(false);
       queryClient.invalidateQueries({ queryKey: ["/api/saphie/messages"] });
+      const reply = data?.reply as string | undefined;
+      if (reply?.trim()) speakReply(reply.trim());
     },
     onError: (e: any) => {
       setIsTyping(false);
