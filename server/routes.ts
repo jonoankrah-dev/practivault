@@ -2513,7 +2513,7 @@ Keep replies concise (2-3 sentences max) since they are spoken aloud. Be warm, p
         "Authorization": `Bearer ${process.env.XAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "grok-3-mini",
+        model: "grok-3",
         messages: [
           { role: "system", content: systemPrompt },
           ...(history ?? []).map((m: any) => ({ role: m.role, content: m.content })),
@@ -2521,6 +2521,7 @@ Keep replies concise (2-3 sentences max) since they are spoken aloud. Be warm, p
         ],
         max_tokens: 256,
         temperature: 0.7,
+        stream: true,
       }),
     });
 
@@ -2529,15 +2530,42 @@ Keep replies concise (2-3 sentences max) since they are spoken aloud. Be warm, p
       return res.status(500).json({ message: "Grok chat error: " + err });
     }
 
-    const grokChatData = await grokChatRes.json() as any;
-    const reply = grokChatData.choices?.[0]?.message?.content ?? "Sorry, I couldn't get a response.";
+    // Stream the reply — collect full text for DB, send chunks to client via SSE
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
 
-    // Save assistant reply
+    let fullReply = "";
+    const reader = grokChatRes.body!;
+    let buffer = "";
+
+    for await (const chunk of reader as any) {
+      buffer += Buffer.isBuffer(chunk) ? chunk.toString("utf-8") : chunk;
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const data = line.slice(6).trim();
+        if (data === "[DONE]") continue;
+        try {
+          const parsed = JSON.parse(data);
+          const token = parsed.choices?.[0]?.delta?.content;
+          if (token) {
+            fullReply += token;
+            res.write(`data: ${JSON.stringify({ token })}\n\n`);
+          }
+        } catch {}
+      }
+    }
+
+    // Save full reply to DB
     await req.db!.from("buddy_messages").insert({
-      user_id: req.user!.id, role: "assistant", content: reply,
+      user_id: req.user!.id, role: "assistant", content: fullReply || "...",
     });
 
-    res.json({ reply });
+    res.write(`data: ${JSON.stringify({ done: true, reply: fullReply })}\n\n`);
+    res.end();
   });
 
   // POST transcribe — xAI Grok STT (/v1/stt)
