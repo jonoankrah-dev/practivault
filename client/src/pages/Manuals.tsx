@@ -149,27 +149,28 @@ export default function Manuals() {
       formData.append("category", uploadCategory);
 
       const token = getAuthToken();
-      const API_BASE = (window as any).__PORT_5000__
-        ? (window as any).__PORT_5000__
-        : "";
-
-      // Use fetch directly for multipart (can't use apiRequest for FormData)
-      const res = await fetch(`${API_BASE}/api/manuals/upload`, {
+      // Use __PORT_5000__ proxy path so it works both locally and on Railway
+      const apiBase = (window as any).__PORT_5000__ ?? "";
+      const res = await fetch(`${apiBase}/api/manuals/upload`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
+        credentials: "include",
       });
-      if (!res.ok) throw new Error("Upload failed");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message || `Upload failed (${res.status})`);
+      }
 
       queryClient.invalidateQueries({ queryKey: ["/api/manuals"] });
-      toast({ title: "Manual uploaded successfully" });
+      toast({ title: "Manual uploaded", description: "Saphie can now answer questions from it." });
       setUploadOpen(false);
       setUploadName("");
       setUploadDesc("");
       setUploadCategory("endopulse");
       setUploadFile(null);
     } catch (e: any) {
-      toast({ title: e.message || "Upload failed", variant: "destructive" });
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
     } finally {
       setUploading(false);
     }
