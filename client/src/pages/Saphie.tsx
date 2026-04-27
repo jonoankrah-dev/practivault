@@ -96,7 +96,7 @@ export default function Saphie() {
     return () => { streamRef.current?.getTracks().forEach(t => t.stop()); };
   }, []);
 
-  // Speak a reply aloud using Groq Orpheus TTS
+  // Speak a reply aloud using Grok (xAI) TTS
   const speakReply = async (text: string) => {
     try {
       const token = getAuthToken();
@@ -108,14 +108,23 @@ export default function Saphie() {
         body: JSON.stringify({ text }),
         credentials: "include",
       });
-      if (!res.ok) return; // silent fail — don't interrupt text flow
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ message: res.statusText }));
+        toast({ title: "Voice error", description: errData.message || "TTS failed", variant: "destructive" });
+        return;
+      }
       const blob = await res.blob();
+      if (blob.size < 100) {
+        toast({ title: "Voice error", description: "Empty audio returned", variant: "destructive" });
+        return;
+      }
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audio.onended = () => URL.revokeObjectURL(url);
+      audio.onerror = () => toast({ title: "Voice error", description: "Audio playback failed", variant: "destructive" });
       await audio.play();
-    } catch {
-      // TTS is best-effort; never crash the chat
+    } catch (err: any) {
+      toast({ title: "Voice error", description: err?.message || "Unknown TTS error", variant: "destructive" });
     }
   };
 
