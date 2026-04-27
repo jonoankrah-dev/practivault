@@ -24,6 +24,15 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+// CORS — allow requests from any origin (Perplexity embed, pplx.app, direct)
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") return res.status(204).end();
+  next();
+});
+
 // Allow microphone and camera access when embedded in iframes
 app.use((_req, res, next) => {
   res.setHeader("Permissions-Policy", "microphone=*, camera=*");

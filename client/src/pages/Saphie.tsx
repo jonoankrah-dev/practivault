@@ -173,7 +173,8 @@ export default function Saphie() {
           const headers: Record<string, string> = {};
           if (token) headers["Authorization"] = `Bearer ${token}`;
 
-          const res = await fetch("/api/saphie/transcribe", {
+          const BACKEND = "https://practivault-backend-production.up.railway.app";
+          const res = await fetch(`${BACKEND}/api/saphie/transcribe`, {
             method: "POST",
             headers,
             body: formData,
