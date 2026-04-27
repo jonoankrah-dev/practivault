@@ -22,7 +22,7 @@ import PageHeader from "@/components/PageHeader";
 // Detect if we're inside an iframe (Perplexity embed) — mic won't work there
 const IS_IFRAME = (() => { try { return window.self !== window.top; } catch { return true; } })();
 // Open the app directly in a new tab at the BamBam page — bypasses iframe mic block
-const DIRECT_URL = "https://practivault-kmAYypKQQS.pplx.app/";
+const DIRECT_URL = "https://practivault-backend-production.up.railway.app/";
 
 interface Message {
   id: string;
@@ -173,8 +173,7 @@ export default function Saphie() {
           const headers: Record<string, string> = {};
           if (token) headers["Authorization"] = `Bearer ${token}`;
 
-          const BACKEND = "https://practivault-backend-production.up.railway.app";
-          const res = await fetch(`${BACKEND}/api/saphie/transcribe`, {
+          const res = await fetch("/api/saphie/transcribe", {
             method: "POST",
             headers,
             body: formData,

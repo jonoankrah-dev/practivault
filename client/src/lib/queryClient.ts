@@ -1,7 +1,7 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-const RAILWAY_URL = "https://practivault-backend-production.up.railway.app";
-const API_BASE = "__PORT_5000__".startsWith("__") ? RAILWAY_URL : "__PORT_5000__";
+// Empty string = relative URLs — works on any domain (Railway, local, etc)
+const API_BASE = "";
 
 // Global auth token holder — updated by AuthContext
 let authToken: string | null = null;
