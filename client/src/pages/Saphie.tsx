@@ -244,33 +244,56 @@ export default function Saphie() {
         audioCtxRef.current = audioCtx;
         const source = audioCtx.createMediaStreamSource(stream);
         const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 512;
+        analyser.fftSize = 1024;
         source.connect(analyser);
         const dataArray = new Uint8Array(analyser.fftSize);
 
-        const SILENCE_THRESHOLD = 8;   // 0-255 amplitude scale
-        const SILENCE_DURATION = 1500; // ms of silence before auto-stop
+        // Calibrate: sample background noise for 300ms, then set threshold just above it
+        let calibrationSamples: number[] = [];
+        let calibrationDone = false;
+        let dynamicThreshold = 15; // fallback
+        const SILENCE_DURATION = 1800; // ms of silence after speech before auto-stop
+        let speechDetected = false;   // must hear speech first before silence counts
         let silenceStart: number | null = null;
+        const calibrationStart = Date.now();
 
-        const checkSilence = () => {
-          if (!recorderRef.current || recorderRef.current.state !== "recording") return;
-
+        const getRMS = () => {
           analyser.getByteTimeDomainData(dataArray);
           let sum = 0;
           for (let i = 0; i < dataArray.length; i++) {
             const v = (dataArray[i] - 128) / 128;
             sum += v * v;
           }
-          const rms = Math.sqrt(sum / dataArray.length) * 255;
+          return Math.sqrt(sum / dataArray.length) * 255;
+        };
 
-          if (rms < SILENCE_THRESHOLD) {
+        const checkSilence = () => {
+          if (!recorderRef.current || recorderRef.current.state !== "recording") return;
+
+          const rms = getRMS();
+
+          // Phase 1: calibrate background noise for 400ms
+          if (!calibrationDone) {
+            calibrationSamples.push(rms);
+            if (Date.now() - calibrationStart > 400) {
+              const avg = calibrationSamples.reduce((a,b) => a+b, 0) / calibrationSamples.length;
+              dynamicThreshold = Math.max(avg * 2.5, 12); // 2.5x background noise, min 12
+              calibrationDone = true;
+            }
+            animFrameRef.current = requestAnimationFrame(checkSilence);
+            return;
+          }
+
+          // Phase 2: wait for speech, then detect silence
+          if (rms > dynamicThreshold) {
+            speechDetected = true;
+            silenceStart = null;
+          } else if (speechDetected) {
             if (silenceStart === null) silenceStart = Date.now();
             else if (Date.now() - silenceStart >= SILENCE_DURATION) {
               stopAndTranscribe();
               return;
             }
-          } else {
-            silenceStart = null;
           }
 
           animFrameRef.current = requestAnimationFrame(checkSilence);
