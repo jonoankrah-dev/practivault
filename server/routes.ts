@@ -2513,13 +2513,13 @@ Keep replies concise (2-3 sentences max) since they are spoken aloud. Be warm, p
         "Authorization": `Bearer ${process.env.XAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "grok-3",
+        model: "grok-3-mini",
         messages: [
           { role: "system", content: systemPrompt },
           ...(history ?? []).map((m: any) => ({ role: m.role, content: m.content })),
           { role: "user", content: content.trim() },
         ],
-        max_tokens: 256,
+        max_tokens: 150,
         temperature: 0.7,
       }),
     });
@@ -2532,10 +2532,10 @@ Keep replies concise (2-3 sentences max) since they are spoken aloud. Be warm, p
     const grokChatData = await grokChatRes.json() as any;
     const reply = grokChatData.choices?.[0]?.message?.content ?? "Sorry, I couldn't get a response.";
 
-    // Save assistant reply
-    await req.db!.from("buddy_messages").insert({
+    // Save assistant reply in background — don't await, reply to client immediately
+    req.db!.from("buddy_messages").insert({
       user_id: req.user!.id, role: "assistant", content: reply,
-    });
+    }).then(() => {}).catch(() => {});
 
     res.json({ reply });
   });
