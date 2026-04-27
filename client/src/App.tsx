@@ -172,7 +172,7 @@ function AppRouter() {
         </Protected>
       </Route>
       <Route path="/business-info">
-          <ProtectedRoute><BusinessInfo /></ProtectedRoute>
+        <Protected><BusinessInfo /></Protected>
       </Route>
       <Route path="/manuals">
         <Protected>
