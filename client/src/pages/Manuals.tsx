@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, getAuthToken } from "@/lib/queryClient";
 import PageHeader from "@/components/PageHeader";
@@ -94,15 +94,12 @@ export default function Manuals() {
   const [uploading, setUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
-  const handleFileDrop = useCallback((file: File) => {
+  const handleFileDrop = (file: File) => {
     setUploadFile(file);
-    // Auto-fill name from filename if empty
-    if (!uploadName.trim()) {
-      const nameFromFile = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
-      setUploadName(nameFromFile.charAt(0).toUpperCase() + nameFromFile.slice(1));
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uploadName]);
+    // Always auto-fill name from filename
+    const nameFromFile = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+    setUploadName(nameFromFile.charAt(0).toUpperCase() + nameFromFile.slice(1));
+  };
 
   const onDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
   const onDragLeave = () => setIsDragging(false);
@@ -149,11 +146,11 @@ export default function Manuals() {
       formData.append("category", uploadCategory);
 
       const token = getAuthToken();
-      // Use __PORT_5000__ proxy path so it works both locally and on Railway
-      const apiBase = (window as any).__PORT_5000__ ?? "";
-      const res = await fetch(`${apiBase}/api/manuals/upload`, {
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch("/api/manuals/upload", {
         method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers,
         body: formData,
       });
       if (!res.ok) {
