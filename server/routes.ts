@@ -2591,7 +2591,7 @@ You help with business insights, answering questions about their bookings, clien
     // xAI TTS supports up to 15,000 chars — truncate to be safe
     const safeText = String(text).slice(0, 1000);
 
-    const ttsRes = await fetch("https://api.x.ai/v1/audio/speech", {
+    const ttsRes = await fetch("https://api.x.ai/v1/tts", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -2599,9 +2599,9 @@ You help with business insights, answering questions about their bookings, clien
       },
       body: JSON.stringify({
         model: "grok-tts",
-        input: safeText,
+        text: safeText,
         voice: "eve",
-        response_format: "wav",
+        language: "en",
       }),
     });
 
