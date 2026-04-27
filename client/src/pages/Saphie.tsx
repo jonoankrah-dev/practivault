@@ -83,6 +83,9 @@ export default function Saphie() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const animFrameRef = useRef<number | null>(null);
+  const audioUnlockedRef = useRef<boolean>(false);
+  const speakQueueRef = useRef<string[]>([]);
+  const isSpeakingRef = useRef<boolean>(false);
 
   const { data: messages = [], isLoading } = useQuery<Message[]>({
     queryKey: ["/api/saphie/messages"],
@@ -96,8 +99,27 @@ export default function Saphie() {
     return () => { streamRef.current?.getTracks().forEach(t => t.stop()); };
   }, []);
 
-  // Speak a reply aloud using Grok (xAI) TTS
-  const speakReply = async (text: string) => {
+  // Unlock browser autoplay by playing a silent buffer on first user gesture
+  const unlockAudio = () => {
+    if (audioUnlockedRef.current) return;
+    try {
+      const ctx = new AudioContext();
+      const buf = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+      ctx.close();
+      audioUnlockedRef.current = true;
+    } catch {}
+  };
+
+  // Speak a reply aloud using Grok (xAI) TTS — queued so sentences don't overlap
+  const processSpeakQueue = async () => {
+    if (isSpeakingRef.current) return;
+    if (speakQueueRef.current.length === 0) return;
+    isSpeakingRef.current = true;
+    const text = speakQueueRef.current.shift()!;
     try {
       const token = getAuthToken();
       const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -111,21 +133,41 @@ export default function Saphie() {
       if (!res.ok) {
         const errData = await res.json().catch(() => ({ message: res.statusText }));
         toast({ title: "Voice error", description: errData.message || "TTS failed", variant: "destructive" });
+        isSpeakingRef.current = false;
+        processSpeakQueue();
         return;
       }
       const blob = await res.blob();
       if (blob.size < 100) {
-        toast({ title: "Voice error", description: "Empty audio returned", variant: "destructive" });
+        isSpeakingRef.current = false;
+        processSpeakQueue();
         return;
       }
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
-      audio.onended = () => URL.revokeObjectURL(url);
-      audio.onerror = () => toast({ title: "Voice error", description: "Audio playback failed", variant: "destructive" });
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        isSpeakingRef.current = false;
+        processSpeakQueue();
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        toast({ title: "Voice error", description: "Audio playback failed", variant: "destructive" });
+        isSpeakingRef.current = false;
+        processSpeakQueue();
+      };
       await audio.play();
     } catch (err: any) {
       toast({ title: "Voice error", description: err?.message || "Unknown TTS error", variant: "destructive" });
+      isSpeakingRef.current = false;
+      processSpeakQueue();
     }
+  };
+
+  const speakReply = (text: string) => {
+    if (!text.trim()) return;
+    speakQueueRef.current.push(text.trim());
+    processSpeakQueue();
   };
 
   const sendMutation = useMutation({
@@ -180,7 +222,8 @@ export default function Saphie() {
       return;
     }
 
-    // Start recording
+    // Start recording — also unlocks browser autoplay on first tap
+    unlockAudio();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
