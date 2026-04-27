@@ -1752,14 +1752,15 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
       const userId = req.user!.id;
       const fileName = `${userId}/${Date.now()}_${file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
 
-      // Upload to Supabase Storage
-      const { error: storageError } = await supabase.storage
+      // Upload to Supabase Storage using the authenticated user client so that
+      // storage RLS policies (which check auth.uid()) are satisfied.
+      const { error: storageError } = await req.db!.storage
         .from("manuals")
         .upload(fileName, file.buffer, { contentType: file.mimetype, upsert: false });
 
       if (storageError) throw new Error(storageError.message);
 
-      const { data: urlData } = supabase.storage.from("manuals").getPublicUrl(fileName);
+      const { data: urlData } = req.db!.storage.from("manuals").getPublicUrl(fileName);
       const fileUrl = urlData.publicUrl;
 
       // Extract text for Saphie
@@ -1821,7 +1822,7 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
       const url = manual.file_url as string;
       const pathMatch = url.match(/\/manuals\/(.+)$/);
       if (pathMatch) {
-        await supabase.storage.from("manuals").remove([pathMatch[1]]);
+        await req.db!.storage.from("manuals").remove([pathMatch[1]]);
       }
     }
 
