@@ -155,7 +155,6 @@ export default function Manuals() {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
-        credentials: "include",
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ message: res.statusText }));
@@ -183,10 +182,33 @@ export default function Manuals() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div
+      className="p-6 max-w-5xl mx-auto space-y-6 relative"
+      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragging(false); }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setIsDragging(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file) {
+          handleFileDrop(file);
+          setUploadOpen(true);
+        }
+      }}
+    >
+      {/* Full-page drag overlay */}
+      {isDragging && (
+        <div className="fixed inset-0 z-50 bg-[#b1306f]/10 border-4 border-dashed border-[#b1306f] flex items-center justify-center pointer-events-none">
+          <div className="bg-white rounded-2xl px-8 py-6 text-center shadow-xl">
+            <Upload className="h-10 w-10 text-[#b1306f] mx-auto mb-2" />
+            <p className="font-semibold text-[#b1306f] text-lg">Drop to upload</p>
+            <p className="text-sm text-muted-foreground mt-1">PDF, DOCX or TXT</p>
+          </div>
+        </div>
+      )}
       <PageHeader
         title="Manuals Library"
-        subtitle="Store and manage your training manuals and CPD course materials"
+        subtitle="Drag a file anywhere on this page to upload, or click Upload Manual"
         action={
           <Button onClick={() => setUploadOpen(true)} data-testid="button-upload-manual">
             <Plus className="h-4 w-4 mr-2" />
