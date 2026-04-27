@@ -2583,5 +2583,40 @@ You help with business insights, answering questions about their bookings, clien
     res.json({ text: result.text ?? "" });
   });
 
+  // POST /api/saphie/speak — Groq Orpheus TTS → returns WAV audio
+  // Note: Orpheus max input = 200 chars, so we chunk and concatenate
+  app.post("/api/saphie/speak", requireAuth, async (req: AuthedRequest, res) => {
+    const { text } = req.body;
+    if (!text?.trim()) return res.status(400).json({ message: "No text" });
+
+    // Truncate to first 200 chars (Orpheus hard limit)
+    const safeText = String(text).slice(0, 200);
+
+    const ttsRes = await fetch("https://api.groq.com/openai/v1/audio/speech", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "canopylabs/orpheus-v1-english",
+        voice: "hannah",
+        input: safeText,
+        response_format: "wav",
+      }),
+    });
+
+    if (!ttsRes.ok) {
+      const err = await ttsRes.text();
+      console.error("TTS error:", err);
+      return res.status(500).json({ message: "TTS error: " + err });
+    }
+
+    res.setHeader("Content-Type", "audio/wav");
+    res.setHeader("Cache-Control", "no-cache");
+    const arrayBuffer = await ttsRes.arrayBuffer();
+    res.end(Buffer.from(arrayBuffer));
+  });
+
   return httpServer;
 }

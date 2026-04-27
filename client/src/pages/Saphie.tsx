@@ -80,6 +80,9 @@ export default function Saphie() {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const animFrameRef = useRef<number | null>(null);
 
   const { data: messages = [], isLoading } = useQuery<Message[]>({
     queryKey: ["/api/saphie/messages"],
@@ -93,14 +96,40 @@ export default function Saphie() {
     return () => { streamRef.current?.getTracks().forEach(t => t.stop()); };
   }, []);
 
+  // Speak a reply aloud using Groq Orpheus TTS
+  const speakReply = async (text: string) => {
+    try {
+      const token = getAuthToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch("/api/saphie/speak", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ text }),
+        credentials: "include",
+      });
+      if (!res.ok) return; // silent fail — don't interrupt text flow
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.onended = () => URL.revokeObjectURL(url);
+      await audio.play();
+    } catch {
+      // TTS is best-effort; never crash the chat
+    }
+  };
+
   const sendMutation = useMutation({
     mutationFn: async (content: string) => {
       setIsTyping(true);
       return apiRequest("POST", "/api/saphie/chat", { content });
     },
-    onSuccess: () => {
+    onSuccess: async (data: any) => {
       setIsTyping(false);
       queryClient.invalidateQueries({ queryKey: ["/api/saphie/messages"] });
+      // Speak the reply back — Groq Orpheus TTS
+      const reply = data?.reply as string | undefined;
+      if (reply?.trim()) speakReply(reply.trim());
     },
     onError: (e: any) => {
       setIsTyping(false);
@@ -124,16 +153,23 @@ export default function Saphie() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  // ── Voice — tap once to start, tap again to stop ──────────────────────────
+  // ── Voice — tap to start, auto-stops on silence ──────────────────────────
+
+  const stopAndTranscribe = () => {
+    if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
+    if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null; }
+    if (audioCtxRef.current) { audioCtxRef.current.close().catch(() => {}); audioCtxRef.current = null; }
+    recorderRef.current?.stop();
+  };
 
   const handleMicClick = async () => {
-    // If already recording — stop it
+    // If already recording — manual stop
     if (voiceState === "recording") {
-      recorderRef.current?.stop();
+      stopAndTranscribe();
       return;
     }
 
-    // Start recording — getUserMedia fires browser permission popup here
+    // Start recording
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -159,7 +195,7 @@ export default function Saphie() {
 
         if (blob.size < 1000) {
           setVoiceState("idle");
-          toast({ title: "Too short", description: "Hold the mic button while speaking, then tap again to stop." });
+          toast({ title: "Too short", description: "Tap the mic, speak, then pause — Saphie stops automatically." });
           return;
         }
 
@@ -201,12 +237,55 @@ export default function Saphie() {
 
       recorder.start();
       setVoiceState("recording");
+
+      // ── Silence detection via Web Audio API ──────────────────────────────────
+      try {
+        const audioCtx = new AudioContext();
+        audioCtxRef.current = audioCtx;
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+        const dataArray = new Uint8Array(analyser.fftSize);
+
+        const SILENCE_THRESHOLD = 8;   // 0-255 amplitude scale
+        const SILENCE_DURATION = 1500; // ms of silence before auto-stop
+        let silenceStart: number | null = null;
+
+        const checkSilence = () => {
+          if (!recorderRef.current || recorderRef.current.state !== "recording") return;
+
+          analyser.getByteTimeDomainData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            const v = (dataArray[i] - 128) / 128;
+            sum += v * v;
+          }
+          const rms = Math.sqrt(sum / dataArray.length) * 255;
+
+          if (rms < SILENCE_THRESHOLD) {
+            if (silenceStart === null) silenceStart = Date.now();
+            else if (Date.now() - silenceStart >= SILENCE_DURATION) {
+              stopAndTranscribe();
+              return;
+            }
+          } else {
+            silenceStart = null;
+          }
+
+          animFrameRef.current = requestAnimationFrame(checkSilence);
+        };
+
+        animFrameRef.current = requestAnimationFrame(checkSilence);
+      } catch {
+        // AudioContext not available — manual stop only
+      }
+
     } catch (err: any) {
-      // SecurityError = iframe / non-HTTPS origin
       if (err?.name === "SecurityError" || err?.message?.toLowerCase().includes("security") || err?.message?.toLowerCase().includes("origin")) {
         toast({
           title: "Open the app directly for voice",
-          description: "Voice doesn't work inside the Perplexity preview. Use the 'Open app' button at the top of this page.",
+          description: "Voice doesn't work inside Perplexity preview. Use the Railway link instead.",
           variant: "destructive",
         });
       } else if (err?.name === "NotAllowedError") {
@@ -362,7 +441,7 @@ export default function Saphie() {
             </Button>
           </div>
           <p className="text-[11px] text-muted-foreground mt-1.5">
-            Enter to send · Tap mic to speak · Tap again to stop
+            Enter to send · Tap mic to speak · Auto-stops on silence
           </p>
         </div>
       </div>
