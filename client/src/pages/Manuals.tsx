@@ -206,7 +206,7 @@ export default function Manuals() {
       <PageHeader
         title="Manuals Library"
         subtitle="Drag a file anywhere on this page to upload, or click Upload Manual"
-        action={
+        actions={
           <Button onClick={() => setUploadOpen(true)} data-testid="button-upload-manual">
             <Plus className="h-4 w-4 mr-2" />
             Upload Manual
