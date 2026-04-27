@@ -1762,6 +1762,27 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
       const { data: urlData } = supabase.storage.from("manuals").getPublicUrl(fileName);
       const fileUrl = urlData.publicUrl;
 
+      // Extract text for Saphie
+      let extractedText: string | null = null;
+      try {
+        const mime = file.mimetype || "";
+        const fname = file.originalname || "";
+        if (mime === "application/pdf" || fname.endsWith(".pdf")) {
+          const parsed = await pdfParse(file.buffer);
+          extractedText = parsed.text?.trim() || null;
+        } else if (mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || fname.endsWith(".docx")) {
+          const result = await mammoth.extractRawText({ buffer: file.buffer });
+          extractedText = result.value?.trim() || null;
+        } else if (mime === "text/plain" || fname.endsWith(".txt")) {
+          extractedText = file.buffer.toString("utf-8").trim();
+        }
+        if (extractedText && extractedText.length > 60000) {
+          extractedText = extractedText.slice(0, 60000) + "\n[...truncated]";
+        }
+      } catch {
+        // Text extraction failed — that's fine, file is still stored
+      }
+
       const { data, error } = await req.db!
         .from("manuals")
         .insert({
@@ -1772,6 +1793,7 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
           file_url: fileUrl,
           file_name: file.originalname,
           file_size: file.size,
+          extracted_text: extractedText,
         })
         .select()
         .single();
@@ -2453,74 +2475,6 @@ Rules:
 
   const saphieUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
-  // GET manuals list
-  app.get("/api/saphie/manuals", requireAuth, async (req: AuthedRequest, res) => {
-    const { data, error } = await req.db!
-      .from("manuals")
-      .select("id, filename, file_size, created_at")
-      .eq("user_id", req.user!.id)
-      .order("created_at", { ascending: false });
-    if (error) return res.status(500).json({ message: error.message });
-    res.json(data ?? []);
-  });
-
-  // POST upload manual (admin only)
-  app.post("/api/saphie/manuals", requireAuth, saphieUpload.single("file"), async (req: AuthedRequest, res) => {
-    if (req.user!.id !== ADMIN_USER_ID) return res.status(403).json({ message: "Admin only" });
-    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
-
-    const { originalname, mimetype, buffer, size } = req.file;
-    let content = "";
-
-    try {
-      if (mimetype === "application/pdf" || originalname.endsWith(".pdf")) {
-        const parsed = await pdfParse(buffer);
-        content = parsed.text;
-      } else if (
-        mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-        originalname.endsWith(".docx")
-      ) {
-        const result = await mammoth.extractRawText({ buffer });
-        content = result.value;
-      } else if (mimetype === "text/plain" || originalname.endsWith(".txt")) {
-        content = buffer.toString("utf-8");
-      } else {
-        return res.status(400).json({ message: "Unsupported file type. Please upload PDF, DOCX, or TXT." });
-      }
-
-      content = content.trim();
-      if (!content || content.length < 10) {
-        return res.status(400).json({ message: "Could not extract text from this file. Is it a scanned image PDF?" });
-      }
-
-      // Trim to 50,000 chars to avoid prompt overflow
-      if (content.length > 50000) content = content.slice(0, 50000) + "\n[...truncated]";
-
-      const { data, error } = await req.db!
-        .from("manuals")
-        .insert({ user_id: req.user!.id, filename: originalname, content, file_size: size })
-        .select("id, filename, file_size, created_at")
-        .single();
-
-      if (error) return res.status(500).json({ message: error.message });
-      res.json(data);
-    } catch (err: any) {
-      res.status(500).json({ message: "Failed to process file: " + (err?.message ?? "unknown error") });
-    }
-  });
-
-  // DELETE manual (admin only)
-  app.delete("/api/saphie/manuals/:id", requireAuth, async (req: AuthedRequest, res) => {
-    if (req.user!.id !== ADMIN_USER_ID) return res.status(403).json({ message: "Admin only" });
-    const { error } = await req.db!
-      .from("manuals")
-      .delete()
-      .eq("id", req.params.id)
-      .eq("user_id", req.user!.id);
-    if (error) return res.status(500).json({ message: error.message });
-    res.json({ ok: true });
-  });
-
   // GET messages
   app.get("/api/saphie/messages", requireAuth, async (req: AuthedRequest, res) => {
     const { data, error } = await req.db!
@@ -2562,11 +2516,12 @@ Rules:
       .order("created_at", { ascending: true })
       .limit(20);
 
-    // Fetch manuals for this user (concatenate content, cap at ~12k chars total to stay within token budget)
+    // Fetch manuals from the Manuals Library — use extracted_text for Saphie context
     const { data: manuals } = await req.db!
       .from("manuals")
-      .select("filename, content")
+      .select("name, extracted_text")
       .eq("user_id", req.user!.id)
+      .not("extracted_text", "is", null)
       .order("created_at", { ascending: true });
 
     let manualContext = "";
@@ -2576,9 +2531,10 @@ Rules:
       const sections: string[] = [];
       for (const m of manuals) {
         if (totalChars >= MAX_MANUAL_CHARS) break;
+        const text = (m.extracted_text as string) || "";
         const remaining = MAX_MANUAL_CHARS - totalChars;
-        const chunk = m.content.slice(0, remaining);
-        sections.push(`=== ${m.filename} ===\n${chunk}`);
+        const chunk = text.slice(0, remaining);
+        sections.push(`=== ${m.name} ===\n${chunk}`);
         totalChars += chunk.length;
       }
       manualContext = `\n\nYou have access to the following treatment/service manuals for this business. Use them to answer client questions accurately and professionally — be helpful and reassuring, not salesy. Never reveal exact protocols, ingredient concentrations, or proprietary steps.\n\n${sections.join("\n\n")}`;

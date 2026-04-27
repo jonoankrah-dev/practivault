@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, getAuthToken } from "@/lib/queryClient";
 import PageHeader from "@/components/PageHeader";
@@ -50,6 +50,7 @@ type Manual = {
   file_url: string;
   file_name: string;
   file_size: number | null;
+  extracted_text: string | null;
   created_at: string;
 };
 
@@ -91,6 +92,26 @@ export default function Manuals() {
   const [uploadCategory, setUploadCategory] = useState("endopulse");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleFileDrop = useCallback((file: File) => {
+    setUploadFile(file);
+    // Auto-fill name from filename if empty
+    if (!uploadName.trim()) {
+      const nameFromFile = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+      setUploadName(nameFromFile.charAt(0).toUpperCase() + nameFromFile.slice(1));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uploadName]);
+
+  const onDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
+  const onDragLeave = () => setIsDragging(false);
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFileDrop(file);
+  };
 
   const { data: manuals = [], isLoading } = useQuery<Manual[]>({
     queryKey: ["/api/manuals"],
@@ -255,12 +276,17 @@ export default function Manuals() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <Badge
                             className={`text-[10px] px-2 py-0.5 font-medium border-0 ${CATEGORY_COLOURS[m.category] || CATEGORY_COLOURS.other}`}
                           >
                             {CATEGORIES.find((c) => c.value === m.category)?.label || m.category}
                           </Badge>
+                          {m.extracted_text && (
+                            <Badge className="text-[10px] px-2 py-0.5 font-medium border-0 bg-[#b1306f]/10 text-[#b1306f]">
+                              Saphie ✓
+                            </Badge>
+                          )}
                           {m.file_size && (
                             <span className="text-[11px] text-muted-foreground">
                               {formatBytes(m.file_size)}
@@ -351,30 +377,46 @@ export default function Manuals() {
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium mb-1.5 block">PDF file *</label>
+              <label className="text-sm font-medium mb-1.5 block">File * <span className="text-muted-foreground font-normal">(PDF, DOCX, TXT)</span></label>
               <div
-                className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-[hsl(var(--primary))] transition-colors"
+                className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                  isDragging
+                    ? "border-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.05)]"
+                    : uploadFile
+                    ? "border-[hsl(var(--primary)/0.5)] bg-[hsl(var(--primary)/0.03)]"
+                    : "border-border hover:border-[hsl(var(--primary)/0.6)] hover:bg-accent"
+                }`}
                 onClick={() => fileRef.current?.click()}
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                onDrop={onDrop}
                 data-testid="dropzone-manual"
               >
                 {uploadFile ? (
                   <div className="flex items-center justify-center gap-2 text-sm">
-                    <FileText className="h-5 w-5 text-[hsl(var(--primary))]" />
-                    <span className="font-medium">{uploadFile.name}</span>
-                    <span className="text-muted-foreground">({formatBytes(uploadFile.size)})</span>
+                    <FileText className="h-5 w-5 text-[hsl(var(--primary))] shrink-0" />
+                    <div className="text-left min-w-0">
+                      <p className="font-medium truncate">{uploadFile.name}</p>
+                      <p className="text-xs text-muted-foreground">{formatBytes(uploadFile.size)} · click to change</p>
+                    </div>
                   </div>
                 ) : (
                   <div className="text-muted-foreground text-sm">
-                    <Upload className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>Click to select a PDF file</p>
+                    <Upload className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                    <p className="font-medium">Drag & drop your file here</p>
+                    <p className="text-xs mt-0.5">or click to browse from your computer</p>
+                    <p className="text-xs mt-2 opacity-60">PDF, DOCX or TXT · max 25 MB</p>
                   </div>
                 )}
                 <input
                   ref={fileRef}
                   type="file"
-                  accept=".pdf"
+                  accept=".pdf,.docx,.txt"
                   className="hidden"
-                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleFileDrop(f);
+                  }}
                 />
               </div>
             </div>
