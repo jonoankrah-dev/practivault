@@ -1,5 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "node:http";
+import { WebSocketServer, WebSocket as WS } from "ws";
 import multer from "multer";
 import Groq from "groq-sdk";
 import pdfParse from "pdf-parse";
@@ -2509,6 +2510,130 @@ Rules:
     }).select().single();
     if (logErr) return res.status(500).json({ message: logErr.message });
     res.json({ ok: true, new_quantity: newQty, movement });
+  });
+
+  // ─── Saphie Realtime — xAI grok-voice-think-fast-1.0 WebSocket proxy ────────
+
+  // 1. Ephemeral token — browser uses this so xAI API key stays server-side
+  app.post("/api/saphie/realtime-token", requireAuth, async (req: AuthedRequest, res: Response) => {
+    try {
+      // Fetch business info + user data in parallel for session instructions
+      const [userRes, bizRes, manualsRes] = await Promise.all([
+        req.db!.from("users").select("name, business_name, industry").eq("id", req.user!.id).single(),
+        req.db!.from("business_info").select("*").eq("user_id", req.user!.id).single(),
+        req.db!.from("manuals").select("name, extracted_text").eq("user_id", req.user!.id).not("extracted_text", "is", null).order("created_at", { ascending: true }),
+      ]);
+      const userData = userRes.data;
+      const bizInfo = bizRes.data;
+      const manuals = manualsRes.data;
+
+      // Build instructions
+      let bizContext = "";
+      if (bizInfo) {
+        if (bizInfo.tagline) bizContext += `\nTagline: ${bizInfo.tagline}`;
+        if (bizInfo.about) bizContext += `\nAbout: ${bizInfo.about}`;
+        if (bizInfo.website_url) bizContext += `\nWebsite: ${bizInfo.website_url}`;
+        if (bizInfo.instagram_url) bizContext += `\nInstagram: ${bizInfo.instagram_url}`;
+        if (bizInfo.tiktok_url) bizContext += `\nTikTok: ${bizInfo.tiktok_url}`;
+        if (bizInfo.products && (bizInfo.products as any[]).length > 0) {
+          const lines = (bizInfo.products as any[]).map((p: any) =>
+            `- ${p.name}${p.price ? ` — ${p.price}` : ""}${p.description ? `: ${p.description}` : ""}`
+          ).join("\n");
+          bizContext += `\n\nProducts & Services:\n${lines}`;
+        }
+        if (bizInfo.faqs && (bizInfo.faqs as any[]).length > 0) {
+          bizContext += `\n\nFAQs:\n${(bizInfo.faqs as any[]).map((f: any) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n")}`;
+        }
+      }
+      let manualContext = "";
+      if (manuals && manuals.length > 0) {
+        let totalChars = 0;
+        const MAX = 8000;
+        const sections: string[] = [];
+        for (const m of manuals) {
+          if (totalChars >= MAX) break;
+          const text = (m.extracted_text as string) || "";
+          const chunk = text.slice(0, MAX - totalChars);
+          sections.push(`=== ${m.name} ===\n${chunk}`);
+          totalChars += chunk.length;
+        }
+        manualContext = `\n\nManuals:\n${sections.join("\n\n")}`;
+      }
+
+      const instructions = `You are Saphie, the AI voice assistant for ${userData?.business_name ?? "Mayfair Aesthetics Academy"}.${bizContext}${manualContext}
+
+You speak your replies aloud — keep them concise, warm, and conversational (2-3 sentences max).
+You are a knowledgeable sales assistant. Give prices confidently and directly when asked.
+All courses are 100% online, CPD accredited, no UK licence required, no consultation needed.
+Payment plans via Clearpay and Klarna. All sales non-refundable.
+Direct people to the website to purchase. Never be vague about pricing.`;
+
+      // Request ephemeral token from xAI
+      const tokenRes = await fetch("https://api.x.ai/v1/realtime/client_secrets", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.XAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "grok-voice-think-fast-1.0",
+          voice: "eve",
+          instructions,
+          turn_detection: { type: "server_vad" },
+        }),
+      });
+      if (!tokenRes.ok) {
+        const err = await tokenRes.text();
+        return res.status(502).json({ message: `xAI token error: ${err}` });
+      }
+      const tokenData = await tokenRes.json();
+      res.json({ client_secret: tokenData.client_secret, instructions });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // 2. WebSocket proxy — relay between browser and xAI realtime
+  const realtimeWss = new WebSocketServer({ noServer: true });
+  httpServer.on("upgrade", (request, socket, head) => {
+    const url = new URL(request.url ?? "", `http://${request.headers.host}`);
+    if (url.pathname !== "/ws/saphie/realtime") return;
+    realtimeWss.handleUpgrade(request, socket as any, head, (browserWs) => {
+      realtimeWss.emit("connection", browserWs, request);
+    });
+  });
+
+  realtimeWss.on("connection", async (browserWs: WS, request: any) => {
+    // Extract token from query param
+    const url = new URL(request.url ?? "", "http://localhost");
+    const clientSecret = url.searchParams.get("token");
+    if (!clientSecret) {
+      browserWs.close(1008, "Missing token");
+      return;
+    }
+
+    // Connect to xAI realtime
+    const xaiWs = new WS(
+      "wss://api.x.ai/v1/realtime?model=grok-voice-think-fast-1.0",
+      { headers: { Authorization: `xai-client-secret.${clientSecret}` } }
+    );
+
+    xaiWs.on("open", () => {
+      // Relay browser → xAI
+      browserWs.on("message", (data) => {
+        if (xaiWs.readyState === WS.OPEN) xaiWs.send(data);
+      });
+    });
+
+    // Relay xAI → browser
+    xaiWs.on("message", (data) => {
+      if (browserWs.readyState === WS.OPEN) browserWs.send(data);
+    });
+
+    xaiWs.on("close", (code, reason) => browserWs.close(code, reason));
+    xaiWs.on("error", (err) => { console.error("xAI WS error:", err); browserWs.close(1011, "xAI error"); });
+    browserWs.on("close", () => { if (xaiWs.readyState === WS.OPEN) xaiWs.close(); });
+    browserWs.on("error", (err) => { console.error("Browser WS error:", err); });
   });
 
   // ─── Saphie AI — chat + voice transcription + manuals ──────────────────────
