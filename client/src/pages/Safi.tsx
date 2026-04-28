@@ -97,7 +97,8 @@ export default function Safi() {
     if (wsRef.current) return;
     setConnState("connecting");
     try {
-      const tokenData = await apiRequest("POST", "/api/safi/realtime-token", {}) as any;
+      const tokenRes = await apiRequest("POST", "/api/safi/realtime-token", {});
+      const tokenData = await tokenRes.json() as any;
       const secret = tokenData.client_secret ?? tokenData.value;
       if (!secret) throw new Error(tokenData.message ?? `Token error: ${JSON.stringify(tokenData)}`);
       const sessionInstructions = tokenData.instructions as string | undefined;
