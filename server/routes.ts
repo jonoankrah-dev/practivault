@@ -1637,6 +1637,7 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
     const { data, error } = await req.db!
       .from("invoices")
       .select("*, clients(name, email)")
+      .eq("user_id", req.user!.id)
       .order("created_at", { ascending: false });
     if (error) return res.status(500).json({ message: error.message });
     // Auto-mark overdue
@@ -1700,9 +1701,10 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
     const { data, error } = await req.db!
       .from("client_photos")
       .select("*, clients(name)")
+      .eq("user_id", req.user!.id)
       .order("created_at", { ascending: false });
     if (error) return res.status(500).json({ message: error.message });
-    const mapped = (data || []).map((p: any) => ({ ...p, client_name: p.clients?.name }));
+    const mapped = (data || []).map((p: any) => ({ ...p, client_name: (p.clients as any)?.name ?? null }));
     res.json(mapped);
   });
 
@@ -2508,13 +2510,13 @@ Rules:
   app.post("/api/stock/movements", requireAuth, async (req: AuthedRequest, res) => {
     const { stock_item_id, movement_type, quantity, notes } = req.body;
     if (!stock_item_id || !movement_type || !quantity) return res.status(400).json({ message: "Missing fields" });
-    // Fetch current quantity
-    const { data: item, error: fetchErr } = await req.db!.from("stock_items").select("quantity").eq("id", stock_item_id).single();
+    // Fetch current quantity — also verifies ownership
+    const { data: item, error: fetchErr } = await req.db!.from("stock_items").select("quantity").eq("id", stock_item_id).eq("user_id", req.user!.id).single();
     if (fetchErr || !item) return res.status(404).json({ message: "Item not found" });
     const delta = movement_type === "in" ? Number(quantity) : -Number(quantity);
     const newQty = Math.max(0, Number(item.quantity) + delta);
     // Update quantity
-    const { error: updateErr } = await req.db!.from("stock_items").update({ quantity: newQty }).eq("id", stock_item_id);
+    const { error: updateErr } = await req.db!.from("stock_items").update({ quantity: newQty }).eq("id", stock_item_id).eq("user_id", req.user!.id);
     if (updateErr) return res.status(500).json({ message: updateErr.message });
     // Log the movement
     const { data: movement, error: logErr } = await req.db!.from("stock_movements").insert({
