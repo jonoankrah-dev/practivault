@@ -517,7 +517,7 @@ IMPORTANT:
   });
 
   // ---- USERS / PROFILE ----
-  app.get("/api/me", async (req: AuthedRequest, res) => {
+  app.get("/api/me", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     // Ensure a users row exists for this auth user
     const { data: existing } = await db.from("users").select("*").eq("id", req.user!.id).maybeSingle();
@@ -533,7 +533,7 @@ IMPORTANT:
     res.json(existing);
   });
 
-  app.patch("/api/me", async (req: AuthedRequest, res) => {
+  app.patch("/api/me", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const allowed = [
       "name", "avatar_url",
@@ -573,7 +573,7 @@ IMPORTANT:
   });
 
   // ---- DASHBOARD STATS ----
-  app.get("/api/dashboard/stats", async (req: AuthedRequest, res) => {
+  app.get("/api/dashboard/stats", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const userId = req.user!.id;
     const today = new Date().toISOString().slice(0, 10);
@@ -649,7 +649,7 @@ IMPORTANT:
   });
 
   // ---- CLIENTS ----
-  app.get("/api/clients", async (req: AuthedRequest, res) => {
+  app.get("/api/clients", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { q, stage } = req.query as Record<string, string>;
     let query = db.from("clients").select("*").eq("user_id", req.user!.id).order("created_at", { ascending: false });
@@ -669,7 +669,7 @@ IMPORTANT:
     res.json(list);
   });
 
-  app.get("/api/clients/:id", async (req: AuthedRequest, res) => {
+  app.get("/api/clients/:id", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { id } = req.params;
     const [client, bookings, timeline] = await Promise.all([
@@ -686,7 +686,7 @@ IMPORTANT:
     res.json({ client: client.data, bookings: bookings.data || [], timeline: timeline.data || [] });
   });
 
-  app.post("/api/clients", async (req: AuthedRequest, res) => {
+  app.post("/api/clients", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const parsed = clientInsertSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
@@ -699,7 +699,7 @@ IMPORTANT:
     res.json(data);
   });
 
-  app.patch("/api/clients/:id", async (req: AuthedRequest, res) => {
+  app.patch("/api/clients/:id", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { id } = req.params;
     const { data, error } = await db
@@ -713,7 +713,7 @@ IMPORTANT:
     res.json(data);
   });
 
-  app.delete("/api/clients/:id", async (req: AuthedRequest, res) => {
+  app.delete("/api/clients/:id", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { id } = req.params;
     const { error } = await db.from("clients").delete().eq("id", id).eq("user_id", req.user!.id);
@@ -722,7 +722,7 @@ IMPORTANT:
   });
 
   // ---- TREATMENTS ----
-  app.get("/api/treatments", async (req: AuthedRequest, res) => {
+  app.get("/api/treatments", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { data, error } = await db
       .from("treatments")
@@ -733,7 +733,7 @@ IMPORTANT:
     res.json(data || []);
   });
 
-  app.post("/api/treatments", async (req: AuthedRequest, res) => {
+  app.post("/api/treatments", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const parsed = treatmentInsertSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
@@ -746,7 +746,7 @@ IMPORTANT:
     res.json(data);
   });
 
-  app.patch("/api/treatments/:id", async (req: AuthedRequest, res) => {
+  app.patch("/api/treatments/:id", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { data, error } = await db
       .from("treatments")
@@ -759,14 +759,14 @@ IMPORTANT:
     res.json(data);
   });
 
-  app.delete("/api/treatments/:id", async (req: AuthedRequest, res) => {
+  app.delete("/api/treatments/:id", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { error } = await db.from("treatments").delete().eq("id", req.params.id).eq("user_id", req.user!.id);
     if (error) return res.status(500).json({ message: error.message });
     res.json({ ok: true });
   });
 
-  app.post("/api/treatments/seed", async (req: AuthedRequest, res) => {
+  app.post("/api/treatments/seed", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { data: existing } = await db.from("treatments").select("id").eq("user_id", req.user!.id).limit(1);
     if (existing && existing.length > 0) return res.json({ seeded: false, existing: true });
@@ -784,7 +784,7 @@ IMPORTANT:
   });
 
   // ---- BOOKINGS ----
-  app.get("/api/bookings", async (req: AuthedRequest, res) => {
+  app.get("/api/bookings", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { from, to } = req.query as Record<string, string>;
     let query = db
@@ -800,7 +800,7 @@ IMPORTANT:
     res.json(data || []);
   });
 
-  app.post("/api/bookings", async (req: AuthedRequest, res) => {
+  app.post("/api/bookings", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const parsed = bookingInsertSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
@@ -828,7 +828,7 @@ IMPORTANT:
     res.json(data);
   });
 
-  app.patch("/api/bookings/:id", async (req: AuthedRequest, res) => {
+  app.patch("/api/bookings/:id", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { id } = req.params;
     const { data, error } = await db
@@ -852,7 +852,7 @@ IMPORTANT:
     res.json(data);
   });
 
-  app.delete("/api/bookings/:id", async (req: AuthedRequest, res) => {
+  app.delete("/api/bookings/:id", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { error } = await db.from("bookings").delete().eq("id", req.params.id).eq("user_id", req.user!.id);
     if (error) return res.status(500).json({ message: error.message });
@@ -860,7 +860,7 @@ IMPORTANT:
   });
 
   // ---- LEADS ----
-  app.get("/api/leads", async (req: AuthedRequest, res) => {
+  app.get("/api/leads", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { status, source } = req.query as Record<string, string>;
     let query = db.from("leads").select("*").eq("user_id", req.user!.id).order("created_at", { ascending: false });
@@ -871,7 +871,7 @@ IMPORTANT:
     res.json(data || []);
   });
 
-  app.post("/api/leads", async (req: AuthedRequest, res) => {
+  app.post("/api/leads", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const parsed = leadInsertSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
@@ -891,7 +891,7 @@ IMPORTANT:
     res.json(data);
   });
 
-  app.patch("/api/leads/:id", async (req: AuthedRequest, res) => {
+  app.patch("/api/leads/:id", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { data, error } = await db
       .from("leads")
@@ -904,14 +904,14 @@ IMPORTANT:
     res.json(data);
   });
 
-  app.delete("/api/leads/:id", async (req: AuthedRequest, res) => {
+  app.delete("/api/leads/:id", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { error } = await db.from("leads").delete().eq("id", req.params.id).eq("user_id", req.user!.id);
     if (error) return res.status(500).json({ message: error.message });
     res.json({ ok: true });
   });
 
-  app.post("/api/leads/:id/convert", async (req: AuthedRequest, res) => {
+  app.post("/api/leads/:id/convert", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { id } = req.params;
     const { data: lead, error: leadErr } = await db
@@ -948,7 +948,7 @@ IMPORTANT:
   });
 
   // ---- QUOTES ----
-  app.get("/api/quotes", async (req: AuthedRequest, res) => {
+  app.get("/api/quotes", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { data, error } = await db
       .from("quotes")
@@ -959,7 +959,7 @@ IMPORTANT:
     res.json(data || []);
   });
 
-  app.post("/api/quotes", async (req: AuthedRequest, res) => {
+  app.post("/api/quotes", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const parsed = quoteInsertSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
@@ -982,7 +982,7 @@ IMPORTANT:
     res.json(data);
   });
 
-  app.patch("/api/quotes/:id", async (req: AuthedRequest, res) => {
+  app.patch("/api/quotes/:id", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const updates: any = { ...(req.body || {}) };
     if (updates.status === "sent" && !updates.sent_at) updates.sent_at = new Date().toISOString();
@@ -998,7 +998,7 @@ IMPORTANT:
     res.json(data);
   });
 
-  app.delete("/api/quotes/:id", async (req: AuthedRequest, res) => {
+  app.delete("/api/quotes/:id", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { error } = await db.from("quotes").delete().eq("id", req.params.id).eq("user_id", req.user!.id);
     if (error) return res.status(500).json({ message: error.message });
@@ -1006,7 +1006,7 @@ IMPORTANT:
   });
 
   // Convert accepted quote to invoice
-  app.post("/api/quotes/:id/convert-to-invoice", async (req: AuthedRequest, res) => {
+  app.post("/api/quotes/:id/convert-to-invoice", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const userId = req.user!.id;
 
@@ -1092,7 +1092,7 @@ IMPORTANT:
   });
 
   // ---- CONSENT ----
-  app.get("/api/consent", async (req: AuthedRequest, res) => {
+  app.get("/api/consent", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { data, error } = await db
       .from("consent_forms")
@@ -1103,7 +1103,7 @@ IMPORTANT:
     res.json(data || []);
   });
 
-  app.post("/api/consent", async (req: AuthedRequest, res) => {
+  app.post("/api/consent", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const parsed = consentInsertSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
@@ -1129,7 +1129,7 @@ IMPORTANT:
     res.json(data);
   });
 
-  app.patch("/api/consent/:id", async (req: AuthedRequest, res) => {
+  app.patch("/api/consent/:id", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { data, error } = await db
       .from("consent_forms")
@@ -1142,7 +1142,7 @@ IMPORTANT:
     res.json(data);
   });
 
-  app.delete("/api/consent/:id", async (req: AuthedRequest, res) => {
+  app.delete("/api/consent/:id", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { error } = await db.from("consent_forms").delete().eq("id", req.params.id).eq("user_id", req.user!.id);
     if (error) return res.status(500).json({ message: error.message });
@@ -1150,7 +1150,7 @@ IMPORTANT:
   });
 
   // ---- AI FRONT DESK ----
-  app.post("/api/ai-front-desk/analyse", async (req: AuthedRequest, res) => {
+  app.post("/api/ai-front-desk/analyse", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const parsed = aiFrontDeskAnalyseSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
@@ -1267,7 +1267,7 @@ Respond ONLY with a JSON object (no markdown, no code blocks) with exactly these
     res.json(saved);
   });
 
-  app.get("/api/ai-front-desk", async (req: AuthedRequest, res) => {
+  app.get("/api/ai-front-desk", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { data, error } = await db
       .from("ai_front_desk")
@@ -1279,7 +1279,7 @@ Respond ONLY with a JSON object (no markdown, no code blocks) with exactly these
     res.json(data || []);
   });
 
-  app.delete("/api/ai-front-desk/:id", async (req: AuthedRequest, res) => {
+  app.delete("/api/ai-front-desk/:id", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { error } = await db
       .from("ai_front_desk")
