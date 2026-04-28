@@ -678,9 +678,10 @@ IMPORTANT:
         .from("bookings")
         .select("*, treatments(name,price,duration_mins)")
         .eq("client_id", id)
+        .eq("user_id", req.user!.id)
         .order("date", { ascending: false })
         .limit(20),
-      db.from("client_timeline").select("*").eq("client_id", id).order("created_at", { ascending: false }).limit(30),
+      db.from("client_timeline").select("*").eq("client_id", id).eq("user_id", req.user!.id).order("created_at", { ascending: false }).limit(30),
     ]);
     if (client.error) return res.status(404).json({ message: client.error.message });
     res.json({ client: client.data, bookings: bookings.data || [], timeline: timeline.data || [] });
@@ -2295,7 +2296,7 @@ Rules:
   // LOCATIONS
   // ============================================================
   app.get("/api/locations", requireAuth, async (req: AuthedRequest, res) => {
-    const { data, error } = await req.db!.from("locations").select("*").order("is_default", { ascending: false });
+    const { data, error } = await req.db!.from("locations").select("*").eq("user_id", req.user!.id).order("is_default", { ascending: false });
     if (error) return res.status(500).json({ message: error.message });
     res.json(data);
   });
@@ -2333,7 +2334,7 @@ Rules:
   });
 
   app.delete("/api/locations/:id", requireAuth, async (req: AuthedRequest, res) => {
-    const { error } = await req.db!.from("locations").delete().eq("id", req.params.id);
+    const { error } = await req.db!.from("locations").delete().eq("id", req.params.id).eq("user_id", req.user!.id);
     if (error) return res.status(500).json({ message: error.message });
     res.json({ ok: true });
   });
