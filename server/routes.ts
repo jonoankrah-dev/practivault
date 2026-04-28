@@ -1786,6 +1786,7 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
     const { data, error } = await req.db!
       .from("manuals")
       .select("*")
+      .eq("user_id", req.user!.id)
       .order("created_at", { ascending: false });
     if (error) return res.status(500).json({ message: error.message });
     res.json(data || []);
@@ -1814,17 +1815,19 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
       const { data: urlData } = req.db!.storage.from("manuals").getPublicUrl(fileName);
       const fileUrl = urlData.publicUrl;
 
-      // Extract text for Saphie
+      // Extract text for Safi (with hard timeout so a bad PDF never hangs the route)
       let extractedText: string | null = null;
       try {
         const mime = file.mimetype || "";
         const fname = file.originalname || "";
+        const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
+          Promise.race([promise, new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms))]);
         if (mime === "application/pdf" || fname.endsWith(".pdf")) {
-          const parsed = await pdfParse(file.buffer);
-          extractedText = parsed.text?.trim() || null;
+          const parsed = await withTimeout(pdfParse(file.buffer), 10_000);
+          extractedText = (parsed as any).text?.trim() || null;
         } else if (mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || fname.endsWith(".docx")) {
-          const result = await mammoth.extractRawText({ buffer: file.buffer });
-          extractedText = result.value?.trim() || null;
+          const result = await withTimeout(mammoth.extractRawText({ buffer: file.buffer }), 10_000);
+          extractedText = (result as any).value?.trim() || null;
         } else if (mime === "text/plain" || fname.endsWith(".txt")) {
           extractedText = file.buffer.toString("utf-8").trim();
         }
@@ -1832,7 +1835,8 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
           extractedText = extractedText.slice(0, 60000) + "\n[...truncated]";
         }
       } catch {
-        // Text extraction failed — that's fine, file is still stored
+        // Text extraction failed or timed out — file is still stored, Safi just won't have text
+        extractedText = null;
       }
 
       const { data, error } = await req.db!
