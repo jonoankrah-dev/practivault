@@ -1,4 +1,5 @@
 import type { Express, Request, Response, NextFunction } from "express";
+import { Resend } from "resend";
 import type { Server } from "node:http";
 import { WebSocketServer, WebSocket as WS } from "ws";
 import multer from "multer";
@@ -2808,13 +2809,14 @@ Rules:
     },
     {
       type: "function",
-      name: "create_consent_form",
-      description: "Create and send a consent form to a client. Generates a unique signing link.",
+      name: "send_consent_form",
+      description: "Create a consent form and send it directly to the client via email. Composes a friendly email with the signing link and sends it to the client's email address. Use this instead of create_consent_form.",
       parameters: {
         type: "object",
         properties: {
           client_name: { type: "string", description: "Client name to search for" },
           form_type: { type: "string", enum: ["general_consent","laser_treatment","fat_melting","skin_tightening","medical_history","patch_test"], description: "Type of consent form" },
+          business_name: { type: "string", description: "The business name to use in the email (use the business name from context)" },
         },
         required: ["client_name", "form_type"],
       },
@@ -3087,19 +3089,68 @@ Rules:
           if (!data?.length) return "No consent forms found.";
           return data.map((f: any) => `${(f.clients as any)?.name ?? "Unknown"} — ${f.form_type.replace(/_/g, " ")} — ${f.status}${f.signed_at ? ` (signed ${new Date(f.signed_at).toLocaleDateString("en-GB")})` : ` (sent ${new Date(f.created_at).toLocaleDateString("en-GB")})`}`).join("\n");
         }
-        case "create_consent_form": {
-          const { data: cl } = await db.from("clients").select("id, name").eq("user_id", userId).ilike("name", `%${args.client_name}%`).limit(1).single();
-          if (!cl) return `No client found matching "${args.client_name}".`;
+        case "send_consent_form": {
+          // Look up client with email
+          const { data: cl } = await db.from("clients").select("id, name, email").eq("user_id", userId).ilike("name", `%${args.client_name}%`).limit(1).single();
+          if (!cl) return `No client found matching "${args.client_name}". Please create the client first.`;
+          if (!cl.email) return `${cl.name} doesn't have an email address on file. Please add their email in the Clients section first, then I can send the form.`;
+
+          // Create the consent form record
           const token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-          const { data, error } = await db.from("consent_forms").insert({
+          const { data: form, error: formErr } = await db.from("consent_forms").insert({
             user_id: userId,
             client_id: cl.id,
             form_type: args.form_type,
             status: "sent",
             token,
           }).select("id, token, form_type, status").single();
-          if (error) return `Failed to create consent form: ${error.message}`;
-          return `Consent form created for ${cl.name} — ${data.form_type.replace(/_/g, " ")} — status: sent. Signing link token: ${data.token}`;
+          if (formErr) return `Failed to create consent form: ${formErr.message}`;
+
+          // Build the signing link
+          const appUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+            ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+            : "https://practivault-backend-production.up.railway.app";
+          const signingLink = `${appUrl}/#/consent/public/${form.token}`;
+          const formLabel = form.form_type.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+          const bizName = args.business_name ?? "your practitioner";
+
+          // Send the email via Resend
+          const resendKey = process.env.RESEND_API_KEY;
+          if (!resendKey) {
+            return `Consent form created for ${cl.name} but email could not be sent — RESEND_API_KEY is not configured. Signing link: ${signingLink}`;
+          }
+
+          const resend = new Resend(resendKey);
+          const { error: emailErr } = await resend.emails.send({
+            from: "Safi <noreply@practivault.com>",
+            to: cl.email,
+            subject: `Your ${formLabel} form from ${bizName}`,
+            html: `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
+              <h2 style="color:#b1306f;margin-bottom:8px">${formLabel}</h2>
+              <p>Hi ${cl.name},</p>
+              <p>Please complete your <strong>${formLabel}</strong> form before your next appointment with <strong>${bizName}</strong>.</p>
+              <p>It only takes a minute — just click the button below:</p>
+              <p style="text-align:center;margin:32px 0">
+                <a href="${signingLink}" style="background:#b1306f;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Complete My Form</a>
+              </p>
+              <p style="color:#666;font-size:13px">Or copy this link into your browser:<br>${signingLink}</p>
+              <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
+              <p style="color:#999;font-size:12px">Sent on behalf of ${bizName} via PractiVault</p>
+            </div>`,
+          });
+
+          if (emailErr) return `Consent form created but email failed to send: ${(emailErr as any).message ?? "unknown error"}. Signing link: ${signingLink}`;
+
+          // Log to client timeline
+          await db.from("client_timeline").insert({
+            client_id: cl.id,
+            user_id: userId,
+            type: "consent",
+            description: `Consent form sent via email: ${form.form_type}`,
+            metadata: { consent_id: form.id, token: form.token },
+          }).catch(() => {});
+
+          return `Done! I've sent the ${formLabel} consent form to ${cl.name} at ${cl.email}. They'll receive an email with a link to complete it. I'll show it as "sent" in the Consent Forms list.`;
         }
         case "get_before_after_photos": {
           let q = db.from("photos").select("id, treatment_type, notes, taken_at, before_url, after_url, clients(name)").eq("user_id", userId).order("taken_at", { ascending: false }).limit(args.limit ?? 10);
@@ -3159,25 +3210,25 @@ Rules:
 
     const systemPrompt = `You are Safi, the fully agentic AI assistant for ${userData?.business_name ?? "this business"}.${bizContext}${manualContext}
 
-You are a fully autonomous business AI. Think, plan, and prepare everything yourself — but follow this strict approval rule:
+You are a fully autonomous business AI and you're also warm, friendly, and genuinely helpful — like a trusted colleague who knows the business inside out. Keep your tone conversational and natural. Use first names when you know them. Be encouraging but efficient — no waffle, just good energy and clear communication.
 
 APPROVAL RULE (non-negotiable):
 Before executing ANY outbound or write action — including sending messages, posting on social media, sending quotes, sending invoices, updating lead status, or creating records — you MUST first show the user exactly what you have prepared and ask for their approval.
 
 How to ask for approval:
 1. Show the full prepared content (the post, quote, invoice, message — exactly as it would be sent/created)
-2. Ask clearly: "Shall I go ahead and [action]?" or "Is this okay to send / create / post?"
-3. WAIT for the user to say yes (or words like "go ahead", "looks good", "send it", "yes", "do it")
+2. Ask warmly: "Happy for me to go ahead?" or "Shall I send this?" or "Does this look good to you?"
+3. WAIT for the user to say yes (or words like "go ahead", "looks good", "send it", "yes", "do it", "perfect")
 4. Only then call the tool to execute the action
 
-If the user says yes/approved: call the tool immediately and confirm it's done.
+If the user says yes/approved: call the tool immediately and confirm it's done with a short friendly confirmation.
 If the user edits or asks for changes: update the draft and show it again before executing.
-If the user says no/cancel: discard and ask what they'd like to do instead.
+If the user says no/cancel: discard warmly and ask what they'd like to do instead.
 
 Read-only actions (fetching data, showing lists, generating reports) do NOT need approval — do those immediately.
 
 Reply in clear, concise markdown. Use bullet points or short lists where helpful.
-When you retrieve data, summarise it clearly.
+When you retrieve data, summarise it clearly and add a brief observation where useful (e.g. "3 invoices overdue — worth chasing those this week").
 
 Key business facts:
 - All courses are 100% online, CPD accredited, no UK licence required
