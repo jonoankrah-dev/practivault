@@ -2,7 +2,7 @@
  * Training Videos — add video form (link or upload) + Safi AI chat
  */
 import { useState, useRef } from "react";
-import { Video, Upload, Link2, X, Loader2, Trash2, ExternalLink, Play, ChevronDown, ChevronUp } from "lucide-react";
+import { Video, Upload, Link2, X, Loader2, Trash2, ExternalLink, Play, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 import SafiSectionChat from "@/components/SafiSectionChat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getAuthToken } from "@/lib/queryClient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -74,6 +74,8 @@ export default function Videos() {
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [showAdd, setShowAdd] = useState(true);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const { data: videos = [], isLoading } = useQuery<TrainingVideo[]>({
     queryKey: ["/api/videos"],
@@ -120,7 +122,12 @@ export default function Videos() {
         fd.append("file", file!);
       }
 
-      const res = await fetch("/api/videos", { method: "POST", body: fd, credentials: "include" });
+      const token = getAuthToken();
+      const res = await fetch("/api/videos", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
       if (!res.ok) { const e = await res.json(); throw new Error(e.message || "Failed"); }
 
       toast({ title: "Video added", description: `${title} is now in your library.` });
@@ -134,14 +141,19 @@ export default function Videos() {
     }
   };
 
-  const handleDelete = async (id: string, videoTitle: string) => {
-    if (!confirm(`Delete "${videoTitle}"? This cannot be undone.`)) return;
+  const handleDeleteConfirmed = async () => {
+    if (!confirmDeleteId) return;
+    const vid = videos.find(v => v.id === confirmDeleteId);
+    setDeleting(true);
     try {
-      await apiRequest("DELETE", `/api/videos/${id}`);
-      toast({ title: "Deleted", description: `${videoTitle} removed.` });
+      await apiRequest("DELETE", `/api/videos/${confirmDeleteId}`);
+      toast({ title: "Deleted", description: `"${vid?.title}" removed.` });
       qc.invalidateQueries({ queryKey: ["/api/videos"] });
-    } catch {
-      toast({ title: "Error", description: "Could not delete this video.", variant: "destructive" });
+    } catch (e: any) {
+      toast({ title: "Delete failed", description: e.message, variant: "destructive" });
+    } finally {
+      setDeleting(false);
+      setConfirmDeleteId(null);
     }
   };
 
@@ -267,29 +279,50 @@ export default function Videos() {
           ) : (
             <div className="space-y-2">
               {videos.map(v => (
-                <div key={v.id} className="group flex items-start gap-2 p-2 rounded-lg border bg-muted/30 hover:bg-muted/60 transition-colors">
-                  <Video className="h-4 w-4 text-[#b1306f] shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{v.title}</p>
-                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                      {getVideoIcon(v.video_type)}
-                      <Badge variant="outline" className="text-[9px] px-1 py-0 capitalize border-[#b1306f]/20 text-[#b1306f]">{v.category}</Badge>
-                      <span className="text-[9px] text-muted-foreground">{v.is_free ? "Free" : `£${v.price ?? 0}`}</span>
-                      {v.duration_mins && <span className="text-[9px] text-muted-foreground">{v.duration_mins}min</span>}
+                <div key={v.id} className="flex flex-col gap-1.5 p-2.5 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
+                  {confirmDeleteId !== v.id ? (
+                    <div className="flex items-start gap-2">
+                      <Video className="h-4 w-4 text-[#b1306f] shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{v.title}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          {getVideoIcon(v.video_type)}
+                          <Badge variant="outline" className="text-[9px] px-1 py-0 capitalize border-[#b1306f]/20 text-[#b1306f]">{v.category}</Badge>
+                          <span className="text-[9px] text-muted-foreground">{v.is_free ? "Free" : `£${(v as any).price ?? 0}`}</span>
+                          {v.duration_mins && <span className="text-[9px] text-muted-foreground">{v.duration_mins}min</span>}
+                        </div>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        {(v.video_url || v.file_url) && (
+                          <a href={v.video_url || v.file_url} target="_blank" rel="noopener noreferrer"
+                            className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground">
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                        <button onClick={() => setConfirmDeleteId(v.id)}
+                          className="h-6 w-6 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    {(v.video_url || v.file_url) && (
-                      <a href={v.video_url || v.file_url} target="_blank" rel="noopener noreferrer"
-                        className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground">
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                    <button onClick={() => handleDelete(v.id, v.title)}
-                      className="h-6 w-6 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1.5 text-destructive">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                        <p className="text-xs font-medium truncate">Delete "{v.title}"?</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="destructive" className="h-7 text-xs flex-1"
+                          onClick={handleDeleteConfirmed} disabled={deleting}>
+                          {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : "Yes, delete"}
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-7 text-xs flex-1"
+                          onClick={() => setConfirmDeleteId(null)} disabled={deleting}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

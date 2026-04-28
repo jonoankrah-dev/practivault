@@ -2,14 +2,14 @@
  * Before & After — photo upload form + Safi AI chat
  */
 import { useState, useRef } from "react";
-import { Camera, Upload, X, Loader2, Trash2, ChevronDown, ChevronUp, ImageIcon } from "lucide-react";
+import { Camera, Upload, X, Loader2, Trash2, ChevronDown, ChevronUp, ImageIcon, AlertTriangle } from "lucide-react";
 import SafiSectionChat from "@/components/SafiSectionChat";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getAuthToken } from "@/lib/queryClient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 
@@ -78,6 +78,8 @@ export default function Photos() {
   const [beforeFile, setBeforeFile] = useState<File | null>(null);
   const [afterFile, setAfterFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [showUpload, setShowUpload] = useState(true);
 
   const { data: clients = [] } = useQuery<Client[]>({
@@ -116,7 +118,12 @@ export default function Photos() {
       if (beforeFile) fd.append("before", beforeFile);
       if (afterFile) fd.append("after", afterFile);
 
-      const res = await fetch("/api/photos/upload", { method: "POST", body: fd, credentials: "include" });
+      const token = getAuthToken();
+      const res = await fetch("/api/photos/upload", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
       if (!res.ok) { const e = await res.json(); throw new Error(e.message || "Upload failed"); }
 
       const clientName = clients.find(c => c.id === clientId)?.name ?? "Client";
@@ -132,14 +139,18 @@ export default function Photos() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Delete this photo record? This cannot be undone.")) return;
+  const handleDeleteConfirmed = async () => {
+    if (!confirmDeleteId) return;
+    setDeleting(true);
     try {
-      await apiRequest("DELETE", `/api/photos/${id}`);
+      await apiRequest("DELETE", `/api/photos/${confirmDeleteId}`);
       toast({ title: "Deleted", description: "Photo record removed." });
       qc.invalidateQueries({ queryKey: ["/api/photos"] });
-    } catch {
-      toast({ title: "Error", description: "Could not delete this record.", variant: "destructive" });
+    } catch (e: any) {
+      toast({ title: "Delete failed", description: e.message, variant: "destructive" });
+    } finally {
+      setDeleting(false);
+      setConfirmDeleteId(null);
     }
   };
 
@@ -278,26 +289,47 @@ export default function Photos() {
           ) : (
             <div className="space-y-2">
               {photos.map(p => (
-                <div key={p.id} className="group flex items-start gap-2 p-2 rounded-lg border bg-muted/30 hover:bg-muted/60 transition-colors">
-                  {/* Thumbnails */}
-                  <div className="flex gap-1 shrink-0">
-                    <ImageThumb url={p.before_url} label="Before" />
-                    <ImageThumb url={p.after_url} label="After" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{p.client_name ?? "Unknown"}</p>
-                    {p.treatment_type && (
-                      <Badge variant="outline" className="text-[9px] px-1 py-0 border-[#b1306f]/20 text-[#b1306f] mt-0.5 inline-block">{p.treatment_type}</Badge>
-                    )}
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{new Date(p.taken_at).toLocaleDateString("en-GB")}</p>
-                    {p.notes && <p className="text-[10px] text-muted-foreground truncate">{p.notes}</p>}
-                  </div>
-                  <button
-                    onClick={() => handleDelete(p.id)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive shrink-0"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
+                <div key={p.id} className="flex flex-col gap-1.5 p-2.5 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
+                  {confirmDeleteId !== p.id ? (
+                    <div className="flex items-start gap-2">
+                      <div className="flex gap-1 shrink-0">
+                        <ImageThumb url={p.before_url} label="Before" />
+                        <ImageThumb url={p.after_url} label="After" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{p.client_name ?? "Unknown"}</p>
+                        {p.treatment_type && (
+                          <Badge variant="outline" className="text-[9px] px-1 py-0 border-[#b1306f]/20 text-[#b1306f] mt-0.5 inline-block">{p.treatment_type}</Badge>
+                        )}
+                        <p className="text-[10px] text-muted-foreground mt-0.5">{new Date(p.taken_at).toLocaleDateString("en-GB")}</p>
+                        {p.notes && <p className="text-[10px] text-muted-foreground truncate">{p.notes}</p>}
+                      </div>
+                      <button
+                        onClick={() => setConfirmDeleteId(p.id)}
+                        className="h-6 w-6 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive shrink-0"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1.5 text-destructive">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                        <p className="text-xs font-medium">Delete this photo record?</p>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">This permanently removes the images from storage.</p>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="destructive" className="h-7 text-xs flex-1"
+                          onClick={handleDeleteConfirmed} disabled={deleting}>
+                          {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : "Yes, delete"}
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-7 text-xs flex-1"
+                          onClick={() => setConfirmDeleteId(null)} disabled={deleting}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

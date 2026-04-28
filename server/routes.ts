@@ -2266,7 +2266,7 @@ Rules:
   // CPD LOGS
   // ============================================================
   app.get("/api/cpd", requireAuth, async (req: AuthedRequest, res) => {
-    const { data, error } = await req.db!.from("cpd_logs").select("*").order("date", { ascending: false });
+    const { data, error } = await req.db!.from("cpd_logs").select("*").eq("user_id", req.user!.id).order("date", { ascending: false });
     if (error) return res.status(500).json({ message: error.message });
     res.json(data);
   });
@@ -2284,7 +2284,7 @@ Rules:
   });
 
   app.delete("/api/cpd/:id", requireAuth, async (req: AuthedRequest, res) => {
-    const { error } = await req.db!.from("cpd_logs").delete().eq("id", req.params.id);
+    const { error } = await req.db!.from("cpd_logs").delete().eq("id", req.params.id).eq("user_id", req.user!.id);
     if (error) return res.status(500).json({ message: error.message });
     res.json({ ok: true });
   });
@@ -2479,7 +2479,7 @@ Rules:
   // STOCK & INVENTORY
   // ============================================================
   app.get("/api/stock", requireAuth, async (req: AuthedRequest, res) => {
-    const { data, error } = await req.db!.from("stock_items").select("*").order("category").order("name");
+    const { data, error } = await req.db!.from("stock_items").select("*").eq("user_id", req.user!.id).order("category").order("name");
     if (error) return res.status(500).json({ message: error.message });
     res.json(data);
   });
@@ -2499,7 +2499,7 @@ Rules:
   });
 
   app.delete("/api/stock/:id", requireAuth, async (req: AuthedRequest, res) => {
-    const { error } = await req.db!.from("stock_items").delete().eq("id", req.params.id);
+    const { error } = await req.db!.from("stock_items").delete().eq("id", req.params.id).eq("user_id", req.user!.id);
     if (error) return res.status(500).json({ message: error.message });
     res.json({ ok: true });
   });
@@ -3287,7 +3287,7 @@ Rules:
           return `Done! I've sent the ${formLabel} consent form to ${cl.name} at ${cl.email}. They'll receive an email with a link to complete it. I'll show it as "sent" in the Consent Forms list.`;
         }
         case "get_before_after_photos": {
-          let q = db.from("photos").select("id, treatment_type, notes, taken_at, before_url, after_url, clients(name)").eq("user_id", userId).order("taken_at", { ascending: false }).limit(args.limit ?? 10);
+          let q = db.from("client_photos").select("id, treatment_type, notes, taken_at, before_url, after_url, clients(name)").eq("user_id", userId).order("taken_at", { ascending: false }).limit(args.limit ?? 10);
           if (args.client_name) {
             const { data: cl } = await db.from("clients").select("id").eq("user_id", userId).ilike("name", `%${args.client_name}%`).limit(1).single();
             if (cl) q = q.eq("client_id", cl.id);
