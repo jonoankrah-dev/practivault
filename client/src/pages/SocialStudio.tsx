@@ -13,19 +13,23 @@ const SUGGESTIONS = [
   "Create a story for a limited-time offer",
 ];
 
-const SECTION_CONTEXT = `You are operating in the Social Studio section.
-Your job here is to help create and manage social media content for the business.
-You can:
+const SECTION_CONTEXT = `You are in the Social Studio section — social media content creation.
+
+What you do here:
 - Write Instagram posts, captions, and story text
 - Draft TikTok scripts and reel ideas
-- Create Facebook posts and updates
-- Generate content calendars and campaign ideas
-- Suggest hashtags, hooks, and calls to action
-- Tailor tone — educational, promotional, behind-the-scenes, testimonial
+- Create Facebook posts and campaign content
+- Suggest hashtags, hooks, calls to action
+- Build content calendars and campaign ideas
 
-Always ask for tone/goal if unclear. Format output clearly with platform labels.
-When writing posts, include relevant emojis, hashtags, and a CTA unless the user says not to.
-Keep captions punchy. Reels scripts should have a hook in the first 3 seconds.`;
+APPROVAL REQUIRED:
+Always prepare the full post/script/caption first, show it to the user, and ask:
+"Here's your [Instagram post / TikTok script / etc.] — shall I save this?" or "Happy with this? I can refine it or save it."
+Never publish or save anything until the user explicitly approves.
+
+Format posts clearly with the platform label (e.g. **Instagram:**) above each piece.
+Include relevant emojis, hashtags, and a CTA unless told otherwise.
+Reel scripts need a strong hook in the first 3 seconds.`;
 
 export default function SocialStudio() {
   return (

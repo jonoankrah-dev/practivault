@@ -285,8 +285,24 @@ ${K.join(`
 
 `)}`}let A=`You are Safi, the fully agentic AI assistant for ${_?.business_name??"this business"}.${j}${E}
 
-You are a fully autonomous business AI. When asked to look something up, USE YOUR TOOLS immediately \u2014 don't just describe what you could do.
-Reply in clear, concise text. Use bullet points or short lists where helpful.
+You are a fully autonomous business AI. Think, plan, and prepare everything yourself \u2014 but follow this strict approval rule:
+
+APPROVAL RULE (non-negotiable):
+Before executing ANY outbound or write action \u2014 including sending messages, posting on social media, sending quotes, sending invoices, updating lead status, or creating records \u2014 you MUST first show the user exactly what you have prepared and ask for their approval.
+
+How to ask for approval:
+1. Show the full prepared content (the post, quote, invoice, message \u2014 exactly as it would be sent/created)
+2. Ask clearly: "Shall I go ahead and [action]?" or "Is this okay to send / create / post?"
+3. WAIT for the user to say yes (or words like "go ahead", "looks good", "send it", "yes", "do it")
+4. Only then call the tool to execute the action
+
+If the user says yes/approved: call the tool immediately and confirm it's done.
+If the user edits or asks for changes: update the draft and show it again before executing.
+If the user says no/cancel: discard and ask what they'd like to do instead.
+
+Read-only actions (fetching data, showing lists, generating reports) do NOT need approval \u2014 do those immediately.
+
+Reply in clear, concise markdown. Use bullet points or short lists where helpful.
 When you retrieve data, summarise it clearly.
 
 Key business facts:
@@ -294,7 +310,7 @@ Key business facts:
 - Payment plans via Clearpay and Klarna
 - Website: ${k?.website_url??"your website"}${f?`
 
---- CURRENT SECTION ---
+--- CURRENT SECTION CONTEXT ---
 ${f}`:""}`,T=r.map(O=>({type:"function",function:{name:O.name,description:O.description,parameters:O.parameters}})),P=[{role:"system",content:A},...u.slice(-10),{role:"user",content:l}],M=5;for(let O=0;O<M;O++){let K=await fetch("https://api.x.ai/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${process.env.XAI_API_KEY}`},body:JSON.stringify({model:"grok-3-mini",messages:P,tools:T,tool_choice:"auto",max_tokens:1e3})});if(!K.ok){let ve=await K.text();return p.status(502).json({message:`AI error: ${ve}`})}let B=(await K.json()).choices?.[0]?.message;if(!B)return p.status(502).json({message:"No response from AI"});if(P.push(B),!B.tool_calls?.length)return p.json({reply:B.content??"",messages:P});let oe=await Promise.all(B.tool_calls.map(async ve=>{let J=ve.function?.name??ve.name??"",be={};try{be=JSON.parse(ve.function?.arguments??ve.arguments??"{}")}catch{}let hx=Object.assign(Object.create(Object.getPrototypeOf(h)),h,{_userId:v}),vx=await c(J,be,hx);return{tool_call_id:ve.id,role:"tool",content:vx}}));P.push(...oe)}return p.json({reply:"I've completed the requested tasks.",messages:P})});let d="d76f928a-3d62-4c7c-918b-e66e5760d816",m=(0,ze.default)({storage:ze.default.memoryStorage(),limits:{fileSize:25*1024*1024}});return e.get("/api/saphie/messages",F,async(o,p)=>{let{data:l,error:u}=await o.db.from("buddy_messages").select("*").eq("user_id",o.user.id).order("created_at",{ascending:!0});if(u)return p.status(500).json({message:u.message});p.json(l??[])}),e.delete("/api/saphie/messages",F,async(o,p)=>{let{error:l}=await o.db.from("buddy_messages").delete().eq("user_id",o.user.id);if(l)return p.status(500).json({message:l.message});p.json({ok:!0})}),e.post("/api/saphie/chat",F,async(o,p)=>{let{content:l}=o.body;if(!l?.trim())return p.status(400).json({message:"No content"});let[u,f,h,v]=await Promise.all([o.db.from("users").select("name, business_name, industry").eq("id",o.user.id).single(),o.db.from("buddy_messages").select("role, content").eq("user_id",o.user.id).order("created_at",{ascending:!0}).limit(10),o.db.from("manuals").select("name, extracted_text").eq("user_id",o.user.id).not("extracted_text","is",null).order("created_at",{ascending:!0}),o.db.from("business_info").select("*").eq("user_id",o.user.id).single()]),g=u.data,w=f.data,x=h.data,_=v.data,k="";if(x&&x.length>0){let P=0,M=12e3,O=[];for(let K of x){if(P>=M)break;let Z=K.extracted_text||"",Y=M-P,B=Z.slice(0,Y);O.push(`=== ${K.name} ===
 ${B}`),P+=B.length}k=`
 

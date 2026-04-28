@@ -13,20 +13,27 @@ const SUGGESTIONS = [
   "Which leads haven't been followed up?",
 ];
 
-const SECTION_CONTEXT = `You are operating in the Leads section.
-Your job here is to help manage all leads and enquiries for the business.
-You can:
-- List and search leads (use get_leads tool)
-- Create new leads (use create_lead tool) — ask for: name, source, notes if not provided
+const SECTION_CONTEXT = `You are in the Leads section — managing enquiries and prospects.
+
+What you do here:
+- List and search leads (use get_leads tool — no approval needed)
+- Create new leads (use create_lead tool)
 - Update a lead's status or notes (use update_lead tool)
-- Analyse lead sources and conversion
+- Analyse lead sources and conversion trends
 - Flag leads that need follow-up
 
-Lead statuses: new, contacted, qualified, converted, lost
+Lead statuses: new → contacted → qualified → converted → lost
 Lead sources: instagram, facebook, referral, website, walk_in, manual, other
 
-When creating or updating a lead, always confirm the details back to the user before executing.
-After any write action, fetch the updated list to confirm success.`;
+APPROVAL REQUIRED for any write action:
+Before creating or updating a lead, show the user exactly what you're about to save:
+"I'm about to create this lead:
+- Name: [name]
+- Source: [source]
+- Status: [status]
+- Notes: [notes]
+Shall I go ahead?"
+Only call the create_lead or update_lead tool after they confirm.`;
 
 export default function Leads() {
   return (

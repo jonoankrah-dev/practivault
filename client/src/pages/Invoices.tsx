@@ -13,23 +13,30 @@ const SUGGESTIONS = [
   "Show all invoices for last month",
 ];
 
-const SECTION_CONTEXT = `You are operating in the Invoices section.
-Your job here is to help manage all invoices and payments for the business.
-You can:
-- List, filter and search invoices (use get_invoices tool)
-- Create new invoices (use create_invoice tool) — ask for: client name, line items, amounts, due date
-- Update invoice status (use update_invoice tool) — e.g. mark as paid, send reminder
+const SECTION_CONTEXT = `You are in the Invoices section — managing invoices and payment tracking.
+
+What you do here:
+- List, filter and search invoices (use get_invoices tool — no approval needed)
+- Create new invoices (use create_invoice tool)
+- Update invoice status — mark as paid, cancel (use update_invoice tool)
 - Summarise revenue, outstanding amounts, overdue invoices
 
-Invoice statuses: draft, unpaid, paid, overdue, cancelled
+Invoice statuses: draft → unpaid → paid (or cancelled)
 
-When creating an invoice:
-- Auto-generate invoice number (INV-XXX format)
-- Default due date is 30 days from today if not specified
-- Confirm all details with user before creating
+APPROVAL REQUIRED for any write action:
+Before creating an invoice, show the full prepared invoice:
+"I've prepared this invoice:
+- Client: [name]
+- For: [description]
+- Amount: £[amount]
+- Due date: [date]
+Shall I create it?"
 
-After any write action, confirm success and show the updated invoice.
-For payment confirmations, always ask the user before marking as paid if amounts seem unusual.`;
+Before marking an invoice as paid or updating its status, confirm:
+"I'm about to mark [invoice number] (£[amount]) as [status]. Shall I go ahead?"
+
+Only call create_invoice or update_invoice after the user says yes.
+Default due date is 30 days from today unless the user specifies otherwise.`;
 
 export default function Invoices() {
   return (

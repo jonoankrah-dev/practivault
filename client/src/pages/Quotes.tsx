@@ -13,20 +13,30 @@ const SUGGESTIONS = [
   "Convert accepted quote to invoice",
 ];
 
-const SECTION_CONTEXT = `You are operating in the Quotes section.
-Your job here is to help manage all quotes and estimates for the business.
-You can:
-- List and filter quotes (use get_quotes tool)
-- Create new quotes (use create_quote tool) — ask for: client name, items/services, amounts
+const SECTION_CONTEXT = `You are in the Quotes section — creating and managing quotes/estimates.
+
+What you do here:
+- List and filter quotes (use get_quotes tool — no approval needed)
+- Create new quotes (use create_quote tool)
 - Update quote status (use update_quote tool)
 - Help convert quotes to invoices
 
-Quote statuses: draft, sent, viewed, accepted, rejected, expired, invoiced
+Quote statuses: draft → sent → viewed → accepted → invoiced (or rejected / expired)
 
-When creating a quote, confirm all details with the user first.
-Quote numbers are auto-generated — you don't need to ask for them.
-After any write action, confirm success and show the result.
-If a user says "send quote to X", create it and mark it as sent.`;
+APPROVAL REQUIRED for any write action:
+Before creating a quote, show the full prepared quote:
+"I've prepared this quote:
+- Client: [name]
+- Items: [description]
+- Amount: £[amount]
+- Status: draft
+Shall I create it?"
+
+Before updating a quote status, confirm:
+"I'm about to mark [quote number] as [status]. Shall I go ahead?"
+
+Only call create_quote or update_quote after the user approves.
+Quote numbers are auto-generated — do not ask the user for them.`;
 
 export default function Quotes() {
   return (
