@@ -1,5 +1,5 @@
 /**
- * BusinessInfo — Mayfair Aesthetics Academy business profile
+ * BusinessInfo — Business profile page
  * Stores products/services, social links, and FAQs for Safi to use
  */
 
@@ -62,23 +62,7 @@ const EMPTY_INFO: BusinessInfoData = {
   products: [], faqs: [],
 };
 
-// ── Mayfair default products ──────────────────────────────────────────────────
-const MAYFAIR_PRODUCTS: Product[] = [
-  { id: "p1",  name: "Model Booking",                              price: "£500.00",   category: "Treatment Booking", description: "Exclusive model space for an advanced EndoPulse treatment targeting the under-eye area. Minimally invasive laser treatment to tighten skin, reduce under-eye bags, improve crepey texture, and stimulate collagen production. Carried out by a qualified practitioner in a clinical training environment. Strictly non-refundable." },
-  { id: "p2",  name: "JARO DROPS",                                 price: "£99.00",    category: "Wellness Product",  description: "50ml bottle of powerful liquid wellness formula combining Berberine and Fenugreek tincture in fast-absorbing drop format. Supports healthy metabolism, balanced blood sugar, reduces cravings, and promotes energy. Approx 8-week supply. No returns or refunds." },
-  { id: "p3",  name: "Endopulse 980nm + 1470nm Dual Wavelength",  price: "£2,999.00", category: "Medical Equipment", description: "Laser lipolysis machine with fibre laser at 980nm + 1470nm dual wavelength. Made to order — no returns, refunds or exchanges once purchased. Cancellations not accepted." },
-  { id: "p4",  name: "Nose Slimming Course",                       price: "£499.00",   category: "CPD Course",        description: "CPD-accredited, self-paced online Non-Surgical Nose Slimming Course for qualified aesthetic practitioners. Covers nasal contouring using botulinum toxin and lipolytic mesotherapy. Practitioners typically charge £180–£300+ per treatment. 100% Online, Certificate of Completion. Non-refundable." },
-  { id: "p5",  name: "Dry Needling Course",                        price: "£399.00",   category: "CPD Course",        description: "CPD-accredited, self-paced online course covering musculoskeletal pain management using dry needling to target myofascial trigger points. Practitioners typically charge £50–£120+ per session. 100% Online, Certificate of Completion." },
-  { id: "p6",  name: "Skinny IV Drip Course",                      price: "£499.00",   category: "CPD Course",        description: "CPD-accredited, self-paced online Skinny IV Drip (L-Carnitine) Course. Covers metabolic support and fat-burning IV infusion. Practitioners typically charge £120–£200+ per infusion. 100% Online, Certificate of Completion. Non-refundable." },
-  { id: "p7",  name: "Vaginal HIFU Course",                        price: "£599.00",   category: "CPD Course",        description: "CPD-accredited, self-paced online course covering advanced non-surgical intimate rejuvenation using HIFU. Practitioners typically charge £100–£130+ per session. 100% Online, Certificate of Completion. Non-refundable." },
-  { id: "p8",  name: "Hollywood 8-Point Facelift Course",          price: "£399.00",   category: "CPD Course",        description: "CPD-accredited, self-paced online course covering advanced non-surgical facial rejuvenation using dermal fillers at eight key anatomical points. Practitioners typically charge £500–£600+ per treatment. 100% Online, Certificate of Completion. Non-refundable." },
-  { id: "p9",  name: "Microblading Course",                        price: "£499.00",   category: "CPD Course",        description: "CPD-accredited, self-paced online Microblading Course covering semi-permanent makeup and natural hair-stroke brows. Practitioners typically charge £250–£450+ per client. 100% Online, Certificate of Completion. Non-refundable." },
-  { id: "p10", name: "Sculptra® Course",                           price: "£299.00",   category: "CPD Course",        description: "CPD-accredited, self-paced online Collagen-Stimulating Injectable course covering Sculptra® (poly-L-lactic acid). Practitioners typically charge £400–£450+ per treatment session. 100% Online, Certificate of Completion. Non-refundable." },
-  { id: "p11", name: "Breast Filler Course",                       price: "£599.00",   category: "CPD Course",        description: "CPD-accredited, self-paced online course covering advanced non-surgical breast enhancement using dermal fillers. Practitioners typically charge £600–£1,400+ per session. 100% Online, Certificate of Completion. Non-refundable." },
-  { id: "p12", name: "BBL (Brazilian Bottom Lift) Dermal Filler Course", price: "£699.00", category: "CPD Course",   description: "CPD-accredited, self-paced online course covering advanced body contouring using dermal fillers for buttock enhancement. Practitioners typically charge £600–£2,500+ per session. 100% Online, Certificate of Completion. Non-refundable." },
-  { id: "p13", name: "Online Lip Blush Training Course",           price: "£599.00",   category: "CPD Course",        description: "CPD-accredited, self-paced online Lip Blush Course covering semi-permanent lip colour, symmetry and definition. Many practitioners charge £250+ per client. CPD Accredited, Lifetime Access. Course emailed within 24–48 hours of purchase. Non-refundable." },
-  { id: "p14", name: "Methylene Blue IV Drip Course",              price: "£399.99",   category: "CPD Course",        description: "CPD-accredited, self-paced online course covering Methylene Blue IV Drip therapy for cellular energy support, cognitive function, anti-ageing protocols and mitochondrial health. Practitioners typically charge £150–£300+ per infusion. 100% Online, CPD Accredited. Non-refundable." },
-];
+// (no default products — each business adds their own)
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -254,12 +238,6 @@ export default function BusinessInfo() {
   const deleteFaq = (id: string) =>
     setForm(f => ({ ...f, faqs: f.faqs.filter(x => x.id !== id) }));
 
-  // Pre-populate with Mayfair products
-  const loadMayfairProducts = () => {
-    setForm(f => ({ ...f, products: MAYFAIR_PRODUCTS }));
-    toast({ title: "14 products loaded", description: "Review and save when ready." });
-  };
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -279,7 +257,7 @@ export default function BusinessInfo() {
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <PageHeader
         title="Business Info"
-        subtitle="Everything Safi needs to represent Mayfair Aesthetics Academy perfectly"
+        subtitle="Everything Safi needs to represent your business perfectly"
         actions={
           <Button
             onClick={handleSave}
@@ -319,7 +297,7 @@ export default function BusinessInfo() {
             <Textarea
               value={form.about ?? ""}
               onChange={e => setForm(f => ({ ...f, about: e.target.value }))}
-              placeholder="A short paragraph about Mayfair Aesthetics Academy — who you are, what you offer, your ethos…"
+              placeholder="A short paragraph about your business — who you are, what you offer, your ethos…"
               rows={4}
               className="resize-none text-sm"
               data-testid="input-about"
@@ -345,7 +323,7 @@ export default function BusinessInfo() {
               <Input
                 value={form.website_url ?? ""}
                 onChange={e => setForm(f => ({ ...f, website_url: e.target.value }))}
-                placeholder="https://mayfair.bigcartel.com"
+                placeholder="https://yourwebsite.com"
                 data-testid="input-website"
               />
             </div>
@@ -356,7 +334,7 @@ export default function BusinessInfo() {
               <Input
                 value={form.instagram_url ?? ""}
                 onChange={e => setForm(f => ({ ...f, instagram_url: e.target.value }))}
-                placeholder="https://instagram.com/mayfairaesthetics"
+                placeholder="https://instagram.com/yourbusiness"
                 data-testid="input-instagram"
               />
             </div>
@@ -367,7 +345,7 @@ export default function BusinessInfo() {
               <Input
                 value={form.tiktok_url ?? ""}
                 onChange={e => setForm(f => ({ ...f, tiktok_url: e.target.value }))}
-                placeholder="https://tiktok.com/@mayfairaesthetics"
+                placeholder="https://tiktok.com/@yourbusiness"
                 data-testid="input-tiktok"
               />
             </div>
@@ -378,7 +356,7 @@ export default function BusinessInfo() {
               <Input
                 value={form.facebook_url ?? ""}
                 onChange={e => setForm(f => ({ ...f, facebook_url: e.target.value }))}
-                placeholder="https://facebook.com/mayfairaesthetics"
+                placeholder="https://facebook.com/yourbusiness"
                 data-testid="input-facebook"
               />
             </div>
@@ -389,7 +367,7 @@ export default function BusinessInfo() {
               <Input
                 value={form.youtube_url ?? ""}
                 onChange={e => setForm(f => ({ ...f, youtube_url: e.target.value }))}
-                placeholder="https://youtube.com/@mayfairaesthetics"
+                placeholder="https://youtube.com/@yourbusiness"
                 data-testid="input-youtube"
               />
             </div>
@@ -407,17 +385,6 @@ export default function BusinessInfo() {
               <Badge variant="outline" className="text-xs font-normal ml-1">{form.products.length}</Badge>
             </CardTitle>
             <div className="flex items-center gap-2">
-              {form.products.length === 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={loadMayfairProducts}
-                  data-testid="button-load-mayfair"
-                  className="text-xs"
-                >
-                  Load from Mayfair store
-                </Button>
-              )}
               <Button
                 size="sm"
                 onClick={() => setProductDialog({ open: true, item: null })}
@@ -434,7 +401,7 @@ export default function BusinessInfo() {
             <div className="text-center py-8 text-sm text-muted-foreground">
               <ShoppingBag className="h-8 w-8 mx-auto mb-2 opacity-30" />
               <p>No products yet.</p>
-              <p className="text-xs mt-1">Add products manually or load from the Mayfair store.</p>
+              <p className="text-xs mt-1">Add your products and services so Safi can answer client questions.</p>
             </div>
           ) : (
             <div className="space-y-2">

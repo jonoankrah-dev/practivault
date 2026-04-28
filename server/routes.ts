@@ -264,7 +264,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       let bizProducts = "";
       let bizFaqs = "";
       let bizWebsite = "";
+      let bizName = "this business";
       try {
+        const { data: userInfo } = await supabaseForUser(req.token!)
+          .from("users")
+          .select("business_name")
+          .eq("id", req.user!.id)
+          .single();
+        if (userInfo?.business_name) bizName = userInfo.business_name;
+
         const { data: bizInfo } = await supabaseForUser(req.token!)
           .from("business_info")
           .select("*")
@@ -282,14 +290,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       } catch {}
 
       const assistantConfig = {
-        name: "Safi — Mayfair Aesthetics Academy",
+        name: `Safi — ${bizName}`,
         model: {
           provider: "openai",
           model: "gpt-4o-mini",
           messages: [
             {
               role: "system",
-              content: `You are Safi, the friendly AI phone assistant for Mayfair Aesthetics Academy — a UK-based provider of premium CPD-accredited online training courses for aesthetic and wellness practitioners.
+              content: `You are Safi, the friendly AI phone assistant for ${bizName}.
 
 YOUR PERSONALITY:
 - Warm, confident, professional. Short conversational sentences — this is a phone call.
@@ -303,7 +311,7 @@ KEY FACTS:
 - No consultation needed — courses can be purchased directly from the website
 - Payment plans available via Clearpay and Klarna (3–4 interest-free payments)
 - All purchases are non-refundable
-- Website: ${bizWebsite || "https://mayfair.bigcartel.com"}
+- Website: ${bizWebsite || "your website"}
 
 PRODUCTS & PRICES:
 ${bizProducts || `- Nose Slimming Course — £499
@@ -323,7 +331,7 @@ ${bizProducts || `- Nose Slimming Course — £499
 ${bizFaqs ? `\nFREQUENTLY ASKED QUESTIONS:\n${bizFaqs}` : ""}
 
 CALL HANDLING:
-1. Greet warmly: "Hi, thanks for calling Mayfair Aesthetics Academy! I'm Safi, how can I help you today?"
+1. Greet warmly: "Hi, thanks for calling ${bizName}! I'm Safi, how can I help you today?"
 2. Answer their question directly using the knowledge above
 3. If they ask about a course — give the name, price, one sentence on what it covers, and direct them to the website to purchase
 4. If they want to know more — offer to go through the details with them
@@ -347,7 +355,7 @@ IMPORTANT:
           similarityBoost: 0.75,
         },
         firstMessage:
-          "Hi, thanks for calling Mayfair Aesthetics Academy! I'm Safi, how can I help you today?",
+          `Hi, thanks for calling ${bizName}! I'm Safi, how can I help you today?`,
         endCallMessage:
           "Brilliant! Thanks so much for calling. Have a lovely day!",
         transcriber: {
@@ -2742,7 +2750,7 @@ When you retrieve data, summarise it clearly.
 Key business facts:
 - All courses are 100% online, CPD accredited, no UK licence required
 - Payment plans via Clearpay and Klarna
-- Website: ${bizInfo?.website_url ?? "https://mayfair.bigcartel.com"}`;
+- Website: ${bizInfo?.website_url ?? "your website"}`;
 
     // Convert OpenAI-style tools for xAI
     const xaiTools = SAFI_TOOLS.map(t => ({
@@ -2892,7 +2900,7 @@ Key business facts:
       }
     }
 
-    const systemPrompt = `You are Safi, the AI assistant for ${userData?.business_name ?? "Mayfair Aesthetics Academy"}.${bizContext}
+    const systemPrompt = `You are Safi, the AI assistant for ${userData?.business_name ?? "this business"}.${bizContext}
 
 IMPORTANT: You have a real voice. You speak your replies aloud. Never say you are text-only or cannot speak.
 
