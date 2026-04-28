@@ -2763,29 +2763,25 @@ Key business facts:
       const userId = req.user!.id;
       const instructions = await buildSafiInstructions(db, userId);
 
+      // xAI client_secrets only accepts model — nothing else
       const tokenRes = await fetch("https://api.x.ai/v1/realtime/client_secrets", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${process.env.XAI_API_KEY}` },
-        body: JSON.stringify({
-          model: "grok-voice-think-fast-1.0",
-          voice: "eve",
-          instructions,
-          turn_detection: { type: "server_vad" },
-          tools: SAFI_TOOLS,
-        }),
+        body: JSON.stringify({ model: "grok-voice-think-fast-1.0" }),
       });
       if (!tokenRes.ok) return res.status(502).json({ message: `xAI token error: ${await tokenRes.text()}` });
       const tokenData = await tokenRes.json();
       const secret = tokenData.value ?? tokenData.client_secret;
-      res.json({ client_secret: secret });
+      if (!secret) return res.status(502).json({ message: `No secret in xAI response: ${JSON.stringify(tokenData)}` });
+      // Return secret + session config so frontend can send session.update
+      res.json({ client_secret: secret, instructions, tools: SAFI_TOOLS });
     } catch (e: any) {
       res.status(500).json({ message: e.message });
     }
   });
 
-  // Keep old endpoint as alias for any cached references
+  // Alias
   app.post("/api/saphie/realtime-token", requireAuth, async (req: AuthedRequest, res: Response) => {
-    req.url = "/api/safi/realtime-token";
     try {
       const db = req.db!;
       const userId = req.user!.id;
@@ -2793,11 +2789,13 @@ Key business facts:
       const tokenRes = await fetch("https://api.x.ai/v1/realtime/client_secrets", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${process.env.XAI_API_KEY}` },
-        body: JSON.stringify({ model: "grok-voice-think-fast-1.0", voice: "eve", instructions, turn_detection: { type: "server_vad" }, tools: SAFI_TOOLS }),
+        body: JSON.stringify({ model: "grok-voice-think-fast-1.0" }),
       });
       if (!tokenRes.ok) return res.status(502).json({ message: `xAI token error: ${await tokenRes.text()}` });
       const tokenData = await tokenRes.json();
-      res.json({ client_secret: tokenData.value ?? tokenData.client_secret });
+      const secret = tokenData.value ?? tokenData.client_secret;
+      if (!secret) return res.status(502).json({ message: `No secret in xAI response: ${JSON.stringify(tokenData)}` });
+      res.json({ client_secret: secret, instructions, tools: SAFI_TOOLS });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 

@@ -99,7 +99,9 @@ export default function Safi() {
     try {
       const tokenData = await apiRequest("POST", "/api/safi/realtime-token", {}) as any;
       const secret = tokenData.client_secret ?? tokenData.value;
-      if (!secret) throw new Error(`Token error: ${JSON.stringify(tokenData)}`);
+      if (!secret) throw new Error(tokenData.message ?? `Token error: ${JSON.stringify(tokenData)}`);
+      const sessionInstructions = tokenData.instructions as string | undefined;
+      const sessionTools = tokenData.tools as any[] | undefined;
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -112,7 +114,7 @@ export default function Safi() {
 
       ws.onopen = () => {
         setConnState("connected");
-        ws.send(JSON.stringify({
+        const sessionUpdate: any = {
           type: "session.update",
           session: {
             voice: "eve",
@@ -122,7 +124,10 @@ export default function Safi() {
               output: { format: { type: "audio/pcm", rate: 24000 } },
             },
           },
-        }));
+        };
+        if (sessionInstructions) sessionUpdate.session.instructions = sessionInstructions;
+        if (sessionTools?.length) sessionUpdate.session.tools = sessionTools;
+        ws.send(JSON.stringify(sessionUpdate));
 
         // Wire mic
         const micCtx = new AudioContext({ sampleRate: 24000 });
