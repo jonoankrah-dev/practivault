@@ -1291,7 +1291,7 @@ Respond ONLY with a JSON object (no markdown, no code blocks) with exactly these
   });
 
   // ---- SOCIAL POSTS ----
-  app.get("/api/social-posts", async (req: AuthedRequest, res) => {
+  app.get("/api/social-posts", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { data, error } = await db
       .from("social_posts")
@@ -1302,7 +1302,7 @@ Respond ONLY with a JSON object (no markdown, no code blocks) with exactly these
     res.json(data || []);
   });
 
-  app.post("/api/social-posts", async (req: AuthedRequest, res) => {
+  app.post("/api/social-posts", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const parsed = socialPostInsertSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
@@ -1319,7 +1319,7 @@ Respond ONLY with a JSON object (no markdown, no code blocks) with exactly these
     res.json(data);
   });
 
-  app.patch("/api/social-posts/:id", async (req: AuthedRequest, res) => {
+  app.patch("/api/social-posts/:id", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const updates: any = { ...(req.body || {}) };
     if (updates.status === "posted" && !updates.posted_at) {
@@ -1336,7 +1336,7 @@ Respond ONLY with a JSON object (no markdown, no code blocks) with exactly these
     res.json(data);
   });
 
-  app.delete("/api/social-posts/:id", async (req: AuthedRequest, res) => {
+  app.delete("/api/social-posts/:id", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { error } = await db
       .from("social_posts")
@@ -1347,7 +1347,7 @@ Respond ONLY with a JSON object (no markdown, no code blocks) with exactly these
     res.json({ ok: true });
   });
 
-  app.post("/api/social-posts/generate", async (req: AuthedRequest, res) => {
+  app.post("/api/social-posts/generate", requireAuth, async (req: AuthedRequest, res) => {
     const parsed = socialPostGenerateSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const { post_type, platform, topic, extra_context } = parsed.data;
@@ -1453,7 +1453,7 @@ Respond ONLY with a JSON object (no markdown, no code blocks):
   });
 
   // ---- SOCIAL REEL GENERATOR ----
-  app.post("/api/social-posts/generate-reel", async (req: AuthedRequest, res: Response) => {
+  app.post("/api/social-posts/generate-reel", requireAuth, async (req: AuthedRequest, res: Response) => {
     const { reel_type, duration, style, topic } = req.body || {};
 
     const apiKey = process.env.GROQ_API_KEY;
