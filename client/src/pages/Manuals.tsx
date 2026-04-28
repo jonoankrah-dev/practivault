@@ -16,7 +16,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
-import { getAuthToken } from "@/lib/queryClient";
+import { apiRequest, getAuthToken } from "@/lib/queryClient";
 
 const CATEGORIES = [
   "aesthetics", "cpd", "endopulse", "health",
@@ -79,10 +79,7 @@ export default function Manuals() {
   const { data: manuals = [], isLoading } = useQuery<Manual[]>({
     queryKey: ["/api/manuals"],
     queryFn: async () => {
-      const token = getAuthToken();
-      const res = await fetch("/api/manuals", {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const res = await apiRequest("GET", "/api/manuals");
       if (!res.ok) throw new Error("Failed to load manuals");
       return res.json();
     },
