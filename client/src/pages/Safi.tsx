@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getAuthToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -107,7 +107,8 @@ export default function Safi() {
       streamRef.current = stream;
 
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(`${protocol}//${window.location.host}/ws/safi/realtime?token=${encodeURIComponent(secret)}`);
+      const jwt = getAuthToken() ?? "";
+      const ws = new WebSocket(`${protocol}//${window.location.host}/ws/safi/realtime?token=${encodeURIComponent(secret)}&auth=${encodeURIComponent(jwt)}`);
       ws.binaryType = "arraybuffer";
       wsRef.current = ws;
       playerRef.current = new AudioPlayer(24000);

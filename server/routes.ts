@@ -2815,9 +2815,8 @@ Key business facts:
     const clientSecret = url.searchParams.get("token");
     if (!clientSecret) { browserWs.close(1008, "Missing token"); return; }
 
-    // Parse user JWT to get a DB client for tool execution
-    const authHeader = request.headers["authorization"] ?? request.headers["Authorization"] ?? "";
-    const jwtToken = authHeader.replace("Bearer ", "");
+    // Parse user JWT from query param (browsers can't set headers on WS upgrade)
+    const jwtToken = url.searchParams.get("auth") ?? "";
     const toolDb = jwtToken ? supabaseForUser(jwtToken) : null;
 
     // Track in-progress tool calls
@@ -2825,7 +2824,7 @@ Key business facts:
 
     const xaiWs = new WS(
       "wss://api.x.ai/v1/realtime?model=grok-voice-think-fast-1.0",
-      { headers: { Authorization: `xai-client-secret.${clientSecret}` } }
+      { headers: { Authorization: `Bearer ${clientSecret}` } }
     );
 
     xaiWs.on("open", () => {
