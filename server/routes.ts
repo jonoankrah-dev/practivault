@@ -2614,6 +2614,93 @@ Rules:
         required: [],
       },
     },
+    {
+      type: "function",
+      name: "create_lead",
+      description: "Create a new lead/enquiry. Use when user wants to add a lead.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Lead name (required)" },
+          source: { type: "string", enum: ["instagram","facebook","referral","website","walk_in","manual","other"], description: "Where the lead came from" },
+          status: { type: "string", enum: ["new","contacted","qualified","converted","lost"], description: "Lead status, default new" },
+          notes: { type: "string", description: "Any notes about this lead" },
+        },
+        required: ["name"],
+      },
+    },
+    {
+      type: "function",
+      name: "update_lead",
+      description: "Update an existing lead's status or notes.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Lead name to search for" },
+          status: { type: "string", enum: ["new","contacted","qualified","converted","lost"], description: "New status" },
+          notes: { type: "string", description: "Updated notes" },
+        },
+        required: ["name"],
+      },
+    },
+    {
+      type: "function",
+      name: "create_quote",
+      description: "Create a new quote/estimate for a client.",
+      parameters: {
+        type: "object",
+        properties: {
+          client_name: { type: "string", description: "Client name" },
+          items: { type: "string", description: "Description of items/services being quoted" },
+          amount: { type: "number", description: "Total quote amount in GBP" },
+          notes: { type: "string", description: "Additional notes" },
+        },
+        required: ["client_name", "items", "amount"],
+      },
+    },
+    {
+      type: "function",
+      name: "update_quote",
+      description: "Update a quote status (e.g. mark as sent, accepted).",
+      parameters: {
+        type: "object",
+        properties: {
+          quote_number: { type: "string", description: "Quote number e.g. QUO-001" },
+          status: { type: "string", enum: ["draft","sent","viewed","accepted","rejected","expired","invoiced"], description: "New status" },
+          notes: { type: "string", description: "Updated notes" },
+        },
+        required: ["quote_number", "status"],
+      },
+    },
+    {
+      type: "function",
+      name: "create_invoice",
+      description: "Create a new invoice for a client.",
+      parameters: {
+        type: "object",
+        properties: {
+          client_name: { type: "string", description: "Client name" },
+          description: { type: "string", description: "What the invoice is for" },
+          amount: { type: "number", description: "Total invoice amount in GBP" },
+          due_days: { type: "number", description: "Days until due from today, default 30" },
+        },
+        required: ["client_name", "description", "amount"],
+      },
+    },
+    {
+      type: "function",
+      name: "update_invoice",
+      description: "Update an invoice status — e.g. mark as paid, send reminder.",
+      parameters: {
+        type: "object",
+        properties: {
+          invoice_number: { type: "string", description: "Invoice number e.g. INV-001" },
+          status: { type: "string", enum: ["draft","unpaid","paid","cancelled"], description: "New status" },
+          notes: { type: "string", description: "Notes to add" },
+        },
+        required: ["invoice_number", "status"],
+      },
+    },
   ];
 
   // ── Safi tool executor — runs when xAI calls a function mid-conversation ───
@@ -2691,9 +2778,84 @@ Rules:
           return `${label} report:\n• Revenue collected: £${revenue.toFixed(2)}\n• Outstanding invoices: £${outstanding.toFixed(2)}\n• Jobs/appointments: ${jobs}\n• New clients: ${newClients}`;
         }
         case "get_leads": {
-          const { data } = await db.from("leads").select("name, source, status, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(args.limit ?? 10);
+          const { data } = await db.from("leads").select("id, name, source, status, notes, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(args.limit ?? 10);
           if (!data?.length) return "No leads found.";
-          return data.map((l: any) => `${l.name} — ${l.source ?? "unknown source"} — ${l.status ?? "new"}`).join("\n");
+          return data.map((l: any) => `${l.name} — ${l.source ?? "unknown"} — ${l.status ?? "new"}${l.notes ? ` — ${l.notes}` : ""}`).join("\n");
+        }
+        case "create_lead": {
+          if (!args.name) return "Lead name is required.";
+          const { data, error } = await db.from("leads").insert({
+            user_id: userId,
+            name: args.name,
+            source: args.source ?? "manual",
+            status: args.status ?? "new",
+            notes: args.notes ?? null,
+          }).select().single();
+          if (error) return `Failed to create lead: ${error.message}`;
+          return `Lead created: ${data.name} — ${data.source} — ${data.status}`;
+        }
+        case "update_lead": {
+          const { data: found } = await db.from("leads").select("id, name, status, notes").eq("user_id", userId).ilike("name", `%${args.name}%`).limit(1).single();
+          if (!found) return `No lead found matching "${args.name}".`;
+          const updates: any = {};
+          if (args.status) updates.status = args.status;
+          if (args.notes) updates.notes = args.notes;
+          const { data, error } = await db.from("leads").update(updates).eq("id", found.id).select().single();
+          if (error) return `Failed to update lead: ${error.message}`;
+          return `Lead updated: ${data.name} — now ${data.status}${data.notes ? ` — ${data.notes}` : ""}`;
+        }
+        case "create_quote": {
+          if (!args.client_name || !args.amount) return "Client name and amount are required.";
+          const countRes = await db.from("quotes").select("id", { count: "exact", head: true }).eq("user_id", userId);
+          const num = (countRes.count ?? 0) + 1;
+          const quoteNumber = `QUO-${String(num).padStart(3, "0")}`;
+          const { data, error } = await db.from("quotes").insert({
+            user_id: userId,
+            quote_number: quoteNumber,
+            amount: args.amount,
+            status: "draft",
+            notes: args.notes ?? null,
+            description: args.items,
+          }).select().single();
+          if (error) return `Failed to create quote: ${error.message}`;
+          return `Quote created: ${quoteNumber} — ${args.client_name} — £${args.amount} — draft`;
+        }
+        case "update_quote": {
+          const { data: found } = await db.from("quotes").select("id, quote_number, status").eq("user_id", userId).ilike("quote_number", `%${args.quote_number}%`).limit(1).single();
+          if (!found) return `No quote found matching "${args.quote_number}".`;
+          const updates: any = { status: args.status };
+          if (args.notes) updates.notes = args.notes;
+          const { data, error } = await db.from("quotes").update(updates).eq("id", found.id).select().single();
+          if (error) return `Failed to update quote: ${error.message}`;
+          return `Quote ${data.quote_number} updated to ${data.status}.`;
+        }
+        case "create_invoice": {
+          if (!args.client_name || !args.amount) return "Client name and amount are required.";
+          const countRes = await db.from("invoices").select("id", { count: "exact", head: true }).eq("user_id", userId);
+          const num = (countRes.count ?? 0) + 1;
+          const invoiceNumber = `INV-${String(num).padStart(3, "0")}`;
+          const dueDate = new Date();
+          dueDate.setDate(dueDate.getDate() + (args.due_days ?? 30));
+          const { data, error } = await db.from("invoices").insert({
+            user_id: userId,
+            invoice_number: invoiceNumber,
+            total: args.amount,
+            status: "unpaid",
+            description: args.description,
+            due_date: dueDate.toISOString().split("T")[0],
+            issue_date: new Date().toISOString().split("T")[0],
+          }).select().single();
+          if (error) return `Failed to create invoice: ${error.message}`;
+          return `Invoice created: ${invoiceNumber} — ${args.client_name} — £${args.amount} — due ${dueDate.toLocaleDateString("en-GB")}`;
+        }
+        case "update_invoice": {
+          const { data: found } = await db.from("invoices").select("id, invoice_number, status").eq("user_id", userId).ilike("invoice_number", `%${args.invoice_number}%`).limit(1).single();
+          if (!found) return `No invoice found matching "${args.invoice_number}".`;
+          const updates: any = { status: args.status };
+          if (args.notes) updates.notes = args.notes;
+          const { data, error } = await db.from("invoices").update(updates).eq("id", found.id).select().single();
+          if (error) return `Failed to update invoice: ${error.message}`;
+          return `Invoice ${data.invoice_number} updated to ${data.status}.`;
         }
         default:
           return `Unknown tool: ${toolName}`;
@@ -2705,7 +2867,7 @@ Rules:
 
   // ── /api/safi/chat — agentic text chat with full tool loop ─────────────────
   app.post("/api/safi/chat", requireAuth, async (req: AuthedRequest, res: Response) => {
-    const { message, history = [] } = req.body as { message: string; history?: {role:string;content:string}[] };
+    const { message, history = [], sectionContext = "" } = req.body as { message: string; history?: {role:string;content:string}[]; sectionContext?: string };
     if (!message?.trim()) return res.status(400).json({ message: "No message" });
 
     const db = req.db!;
@@ -2750,7 +2912,7 @@ When you retrieve data, summarise it clearly.
 Key business facts:
 - All courses are 100% online, CPD accredited, no UK licence required
 - Payment plans via Clearpay and Klarna
-- Website: ${bizInfo?.website_url ?? "your website"}`;
+- Website: ${bizInfo?.website_url ?? "your website"}${sectionContext ? `\n\n--- CURRENT SECTION ---\n${sectionContext}` : ""}`;
 
     // Convert OpenAI-style tools for xAI
     const xaiTools = SAFI_TOOLS.map(t => ({
