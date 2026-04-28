@@ -1,43 +1,312 @@
 /**
- * Training Videos — fully managed by Safi AI
+ * Training Videos — add video form (link or upload) + Safi AI chat
  */
-import { Video } from "lucide-react";
+import { useState, useRef } from "react";
+import { Video, Upload, Link2, X, Loader2, Trash2, ExternalLink, Play, ChevronDown, ChevronUp } from "lucide-react";
 import SafiSectionChat from "@/components/SafiSectionChat";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+const CATEGORIES = ["aesthetics", "beauty", "hair", "health", "cpd", "trades", "general"];
+const VIDEO_LINK_TYPES = ["youtube", "vimeo", "link"];
 
 const SUGGESTIONS = [
   "Show all training videos",
   "What free videos do I have?",
   "Show all aesthetics training videos",
-  "How many videos are in my library?",
-  "List paid videos with their categories",
-  "Show YouTube videos I've added",
+  "Which videos aren't in any package?",
+  "How many paid videos are in my library?",
+  "Show videos by category",
 ];
 
-const SECTION_CONTEXT = `You are in the Training Videos section — managing the training video library.
+const SECTION_CONTEXT = `You are Safi, the practice manager for this business. You are in the Training Videos section.
 
-What you can do here:
-- List and search all training videos (use get_videos tool — no approval needed for reading)
+When this section opens, immediately call get_videos and show a summary grouped by category. Don't wait to be asked.
 
-Video types: youtube, vimeo, link (external URL), upload (hosted file)
-Video access: free or paid
-Categories: aesthetics, cpd, beauty, hair, health, trades, general
+Your job:
+- Show the full video library grouped by category
+- Flag which videos are free vs paid
+- Spot videos not yet included in any package (bundling opportunities)
+- Suggest categories that are missing
 
-Important limitations:
-- Safi cannot add or delete videos — adding new videos requires the upload/link form in the app
-- Safi CAN browse, filter and describe all existing videos clearly
+Tools available:
+- get_videos — list all videos, filter by category, free/paid (use immediately, no approval needed)
 
-When showing videos, group by category if showing the full library.
-Always show the type (YouTube/Vimeo/etc.) and whether it's free or paid.
-If someone asks about a specific video's content, describe what you know from the title and category — be honest if you don't have more detail.`;
+For adding videos: the owner uses the form panel on the left — they can add YouTube/Vimeo/external links or upload video files directly.
+
+Be proactive about spotting gaps and opportunities. If the library is empty, encourage adding content.`;
+
+interface TrainingVideo {
+  id: string;
+  title: string;
+  description?: string;
+  category: string;
+  video_type: string;
+  video_url?: string;
+  file_url?: string;
+  is_free: boolean;
+  duration_mins?: number;
+  created_at: string;
+}
 
 export default function Videos() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const [addMode, setAddMode] = useState<"link" | "upload">("link");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("general");
+  const [videoType, setVideoType] = useState("youtube");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [isFree, setIsFree] = useState(true);
+  const [price, setPrice] = useState("0");
+  const [durationMins, setDurationMins] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [showAdd, setShowAdd] = useState(true);
+
+  const { data: videos = [], isLoading } = useQuery<TrainingVideo[]>({
+    queryKey: ["/api/videos"],
+    queryFn: async () => {
+      const r = await apiRequest("GET", "/api/videos");
+      return r.json();
+    },
+  });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    setFile(f);
+    if (f && !title) setTitle(f.name.replace(/\.[^.]+$/, "").replace(/[_-]/g, " "));
+  };
+
+  const handleSave = async () => {
+    if (!title.trim()) {
+      toast({ title: "Title required", description: "Please give this video a title.", variant: "destructive" });
+      return;
+    }
+    if (addMode === "link" && !videoUrl.trim()) {
+      toast({ title: "URL required", description: "Please paste a video URL.", variant: "destructive" });
+      return;
+    }
+    if (addMode === "upload" && !file) {
+      toast({ title: "No file chosen", description: "Please select a video file to upload.", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const fd = new FormData();
+      fd.append("title", title.trim());
+      fd.append("description", description.trim());
+      fd.append("category", category);
+      fd.append("is_free", String(isFree));
+      fd.append("price", isFree ? "0" : price);
+      if (durationMins) fd.append("duration_mins", durationMins);
+
+      if (addMode === "link") {
+        fd.append("video_type", videoType);
+        fd.append("video_url", videoUrl.trim());
+      } else {
+        fd.append("video_type", "upload");
+        fd.append("file", file!);
+      }
+
+      const res = await fetch("/api/videos", { method: "POST", body: fd, credentials: "include" });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.message || "Failed"); }
+
+      toast({ title: "Video added", description: `${title} is now in your library.` });
+      setTitle(""); setDescription(""); setVideoUrl(""); setFile(null); setIsFree(true); setPrice("0"); setDurationMins("");
+      if (fileRef.current) fileRef.current.value = "";
+      qc.invalidateQueries({ queryKey: ["/api/videos"] });
+    } catch (e: any) {
+      toast({ title: "Failed", description: e.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string, videoTitle: string) => {
+    if (!confirm(`Delete "${videoTitle}"? This cannot be undone.`)) return;
+    try {
+      await apiRequest("DELETE", `/api/videos/${id}`);
+      toast({ title: "Deleted", description: `${videoTitle} removed.` });
+      qc.invalidateQueries({ queryKey: ["/api/videos"] });
+    } catch {
+      toast({ title: "Error", description: "Could not delete this video.", variant: "destructive" });
+    }
+  };
+
+  const getVideoIcon = (type: string) => {
+    if (type === "youtube") return <span className="text-[9px] font-bold text-red-500 bg-red-50 px-1 rounded">YT</span>;
+    if (type === "vimeo") return <span className="text-[9px] font-bold text-blue-500 bg-blue-50 px-1 rounded">VM</span>;
+    if (type === "upload") return <span className="text-[9px] font-bold text-[#b1306f] bg-[#b1306f]/10 px-1 rounded">UP</span>;
+    return <span className="text-[9px] font-bold text-muted-foreground bg-muted px-1 rounded">LK</span>;
+  };
+
   return (
-    <SafiSectionChat
-      section="Training Videos"
-      description="Safi manages your training video library"
-      icon={<Video className="h-4 w-4 text-[#b1306f]" />}
-      suggestions={SUGGESTIONS}
-      sectionContext={SECTION_CONTEXT}
-    />
+    <div className="flex h-full max-h-screen overflow-hidden">
+      {/* LEFT — Add video panel */}
+      <div className="w-[340px] shrink-0 border-r bg-background flex flex-col overflow-hidden">
+        {/* Add form */}
+        <div className="border-b">
+          <button
+            onClick={() => setShowAdd(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-muted/50 transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <Play className="h-4 w-4 text-[#b1306f]" />
+              Add Training Video
+            </span>
+            {showAdd ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          </button>
+
+          {showAdd && (
+            <div className="px-4 pb-4 space-y-3">
+              <Tabs value={addMode} onValueChange={v => setAddMode(v as "link" | "upload")}>
+                <TabsList className="w-full h-8">
+                  <TabsTrigger value="link" className="flex-1 text-xs gap-1"><Link2 className="h-3 w-3" />Link / URL</TabsTrigger>
+                  <TabsTrigger value="upload" className="flex-1 text-xs gap-1"><Upload className="h-3 w-3" />Upload File</TabsTrigger>
+                </TabsList>
+              </Tabs>
+
+              <div className="space-y-1">
+                <Label className="text-xs">Title *</Label>
+                <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Lip Filler Technique Guide" className="h-8 text-sm" />
+              </div>
+
+              {addMode === "link" ? (
+                <>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Platform</Label>
+                    <Select value={videoType} onValueChange={setVideoType}>
+                      <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {VIDEO_LINK_TYPES.map(t => <SelectItem key={t} value={t} className="text-sm capitalize">{t}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Video URL *</Label>
+                    <Input value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=…" className="h-8 text-sm" />
+                  </div>
+                </>
+              ) : (
+                <div
+                  onClick={() => fileRef.current?.click()}
+                  className="border-2 border-dashed border-[#b1306f]/30 rounded-xl p-4 text-center cursor-pointer hover:border-[#b1306f]/60 hover:bg-[#b1306f]/5 transition-colors"
+                >
+                  {file ? (
+                    <div className="flex items-center gap-2 justify-center text-sm">
+                      <Video className="h-4 w-4 text-[#b1306f]" />
+                      <span className="font-medium truncate max-w-[160px]">{file.name}</span>
+                      <button onClick={e => { e.stopPropagation(); setFile(null); if (fileRef.current) fileRef.current.value = ""; }}
+                        className="text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
+                    </div>
+                  ) : (
+                    <div className="text-muted-foreground text-xs space-y-1">
+                      <Upload className="h-6 w-6 mx-auto text-[#b1306f]/50" />
+                      <p className="font-medium text-foreground">Click to choose video</p>
+                      <p>MP4, MOV, AVI · up to 500MB</p>
+                    </div>
+                  )}
+                  <input ref={fileRef} type="file" accept="video/*" className="hidden" onChange={handleFileChange} />
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Category</Label>
+                  <Select value={category} onValueChange={setCategory}>
+                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map(c => <SelectItem key={c} value={c} className="text-sm capitalize">{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Duration (mins)</Label>
+                  <Input value={durationMins} onChange={e => setDurationMins(e.target.value)} type="number" min="1" placeholder="e.g. 45" className="h-8 text-sm" />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border px-3 py-2">
+                <Label className="text-xs cursor-pointer">Free to access</Label>
+                <Switch checked={isFree} onCheckedChange={setIsFree} className="data-[state=checked]:bg-[#b1306f]" />
+              </div>
+
+              {!isFree && (
+                <div className="space-y-1">
+                  <Label className="text-xs">Price (£)</Label>
+                  <Input value={price} onChange={e => setPrice(e.target.value)} type="number" min="0" step="0.01" placeholder="29.99" className="h-8 text-sm" />
+                </div>
+              )}
+
+              <Button onClick={handleSave} disabled={saving} className="w-full h-8 text-sm bg-[#b1306f] hover:bg-[#9a2860] text-white">
+                {saving ? <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />Saving…</> : <><Play className="h-3.5 w-3.5 mr-2" />Add to Library</>}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Library list */}
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Library ({videos.length})</p>
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…</div>
+          ) : videos.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No videos yet. Add your first one above.</p>
+          ) : (
+            <div className="space-y-2">
+              {videos.map(v => (
+                <div key={v.id} className="group flex items-start gap-2 p-2 rounded-lg border bg-muted/30 hover:bg-muted/60 transition-colors">
+                  <Video className="h-4 w-4 text-[#b1306f] shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{v.title}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      {getVideoIcon(v.video_type)}
+                      <Badge variant="outline" className="text-[9px] px-1 py-0 capitalize border-[#b1306f]/20 text-[#b1306f]">{v.category}</Badge>
+                      <span className="text-[9px] text-muted-foreground">{v.is_free ? "Free" : `£${v.price ?? 0}`}</span>
+                      {v.duration_mins && <span className="text-[9px] text-muted-foreground">{v.duration_mins}min</span>}
+                    </div>
+                  </div>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    {(v.video_url || v.file_url) && (
+                      <a href={v.video_url || v.file_url} target="_blank" rel="noopener noreferrer"
+                        className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground">
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                    <button onClick={() => handleDelete(v.id, v.title)}
+                      className="h-6 w-6 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* RIGHT — Safi chat */}
+      <div className="flex-1 min-w-0">
+        <SafiSectionChat
+          section="Training Videos"
+          description="Safi manages your training video library"
+          icon={<Video className="h-4 w-4 text-[#b1306f]" />}
+          suggestions={SUGGESTIONS}
+          sectionContext={SECTION_CONTEXT}
+        />
+      </div>
+    </div>
   );
 }
