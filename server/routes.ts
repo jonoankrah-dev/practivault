@@ -2834,6 +2834,135 @@ Rules:
         required: [],
       },
     },
+    {
+      type: "function",
+      name: "get_team",
+      description: "List all team members — their name, role, and status (active/pending invite).",
+      parameters: { type: "object", properties: { status: { type: "string", enum: ["all","active","pending"], description: "Filter by status" } }, required: [] },
+    },
+    {
+      type: "function",
+      name: "invite_team_member",
+      description: "Send an invite to a new team member by email. Roles: practitioner, receptionist.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Full name" },
+          email: { type: "string", description: "Email address" },
+          role: { type: "string", enum: ["practitioner","receptionist"], description: "Role to assign" },
+        },
+        required: ["name","email","role"],
+      },
+    },
+    {
+      type: "function",
+      name: "get_manuals",
+      description: "List all uploaded manuals/documents. Shows name, category, and upload date.",
+      parameters: { type: "object", properties: { category: { type: "string", description: "Filter by category e.g. endopulse, cpd, aesthetics" }, search: { type: "string", description: "Search by name" } }, required: [] },
+    },
+    {
+      type: "function",
+      name: "get_videos",
+      description: "List all training videos. Shows title, category, type (youtube/vimeo/upload), and access (free/paid).",
+      parameters: { type: "object", properties: { category: { type: "string", description: "Filter by category" }, search: { type: "string", description: "Search by title" } }, required: [] },
+    },
+    {
+      type: "function",
+      name: "get_packages",
+      description: "List all training packages — bundles of videos and manuals. Shows title, price, and contents.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+    {
+      type: "function",
+      name: "create_package",
+      description: "Create a new training package. Can bundle existing videos and manuals together.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Package title" },
+          description: { type: "string", description: "What the package includes" },
+          price: { type: "number", description: "Price in GBP. Use 0 if free." },
+          is_free: { type: "boolean", description: "True if the package is free" },
+        },
+        required: ["title"],
+      },
+    },
+    {
+      type: "function",
+      name: "get_stock_full",
+      description: "List all stock items with full detail — quantity, category, unit, cost price, supplier, low stock threshold.",
+      parameters: {
+        type: "object",
+        properties: {
+          low_stock_only: { type: "boolean", description: "If true, only return items at or below their low stock threshold" },
+          category: { type: "string", description: "Filter by category" },
+        },
+        required: [],
+      },
+    },
+    {
+      type: "function",
+      name: "add_stock_item",
+      description: "Add a new stock item to the inventory.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Item name" },
+          category: { type: "string", description: "Category" },
+          unit: { type: "string", description: "Unit of measurement e.g. units, litres, kg" },
+          quantity: { type: "number", description: "Starting quantity" },
+          low_stock_threshold: { type: "number", description: "Alert when quantity falls to this level" },
+          cost_price: { type: "number", description: "Cost price per unit in GBP" },
+          supplier: { type: "string", description: "Supplier name" },
+        },
+        required: ["name"],
+      },
+    },
+    {
+      type: "function",
+      name: "update_stock_quantity",
+      description: "Record stock coming in (delivery) or going out (used/sold). Updates the item's quantity.",
+      parameters: {
+        type: "object",
+        properties: {
+          item_name: { type: "string", description: "Stock item name to search for" },
+          movement_type: { type: "string", enum: ["in","out"], description: "in = stock received, out = stock used/sold" },
+          quantity: { type: "number", description: "Amount to add or subtract" },
+          notes: { type: "string", description: "Reason or notes for this movement" },
+        },
+        required: ["item_name","movement_type","quantity"],
+      },
+    },
+    {
+      type: "function",
+      name: "get_cpd_log",
+      description: "List CPD log entries — completed training courses with hours, dates, and categories.",
+      parameters: {
+        type: "object",
+        properties: {
+          year_filter: { type: "string", description: "Tax year filter e.g. 2024/2025 or 'all'" },
+          category: { type: "string", description: "Filter by CPD category" },
+        },
+        required: [],
+      },
+    },
+    {
+      type: "function",
+      name: "add_cpd_entry",
+      description: "Add a new CPD log entry for a completed course.",
+      parameters: {
+        type: "object",
+        properties: {
+          course_name: { type: "string", description: "Name of the course or training" },
+          provider: { type: "string", description: "Training provider name" },
+          date: { type: "string", description: "Completion date in YYYY-MM-DD format" },
+          hours: { type: "number", description: "CPD hours completed" },
+          category: { type: "string", description: "CPD category e.g. Aesthetics & Beauty, First Aid, Legal & Compliance" },
+          notes: { type: "string", description: "Any additional notes" },
+        },
+        required: ["course_name","date","hours"],
+      },
+    },
   ];
 
   // ── Safi tool executor — runs when xAI calls a function mid-conversation ───
@@ -3161,6 +3290,94 @@ Rules:
           const { data } = await q;
           if (!data?.length) return "No before & after photos found.";
           return data.map((p: any) => `${(p.clients as any)?.name ?? "Unknown"} — ${p.treatment_type ?? "treatment"} — ${new Date(p.taken_at).toLocaleDateString("en-GB")}${p.notes ? ` — ${p.notes}` : ""} — before: ${p.before_url ? "yes" : "no"}, after: ${p.after_url ? "yes" : "no"}`).join("\n");
+        }
+        case "get_team": {
+          const { data } = await db.from("team_members").select("id, name, email, role, status, joined_at, created_at").eq("owner_id", userId).order("created_at", { ascending: true });
+          if (!data?.length) return "No team members found.";
+          const filtered = args.status && args.status !== "all" ? data.filter((m: any) => m.status === args.status) : data;
+          if (!filtered.length) return `No ${args.status} team members found.`;
+          return filtered.map((m: any) => `${m.name} — ${m.role} — ${m.status === "active" ? "Active" : "Invite pending (not yet joined)"}${m.joined_at ? ` (joined ${new Date(m.joined_at).toLocaleDateString("en-GB")})` : ""} — ${m.email}`).join("\n");
+        }
+        case "invite_team_member": {
+          const token = require("crypto").randomBytes(24).toString("hex");
+          const { data, error } = await db.from("team_members").insert({ owner_id: userId, name: args.name, email: args.email, role: args.role, status: "pending", invite_token: token }).select("id, name, email, role").single();
+          if (error) return `Failed to send invite: ${error.message}`;
+          return `Invite sent to ${data.name} (${data.email}) as ${data.role}. They'll receive a join link to activate their account.`;
+        }
+        case "get_manuals": {
+          let q = db.from("manuals").select("id, name, description, category, file_name, file_url, created_at").eq("user_id", userId).order("created_at", { ascending: false });
+          if (args.category) q = q.ilike("category", `%${args.category}%`);
+          if (args.search) q = q.ilike("name", `%${args.search}%`);
+          const { data } = await q;
+          if (!data?.length) return "No manuals found.";
+          return data.map((m: any) => `${m.name} — ${m.category} — uploaded ${new Date(m.created_at).toLocaleDateString("en-GB")}${m.description ? ` — ${m.description}` : ""}`).join("\n");
+        }
+        case "get_videos": {
+          let q = db.from("training_videos").select("id, title, description, category, video_type, is_free, duration_seconds, created_at").eq("user_id", userId).order("created_at", { ascending: false });
+          if (args.category) q = q.ilike("category", `%${args.category}%`);
+          if (args.search) q = q.ilike("title", `%${args.search}%`);
+          const { data } = await q;
+          if (!data?.length) return "No videos found.";
+          return data.map((v: any) => `${v.title} — ${v.category} — ${v.video_type} — ${v.is_free ? "Free" : "Paid"}${v.duration_seconds ? ` — ${Math.round(v.duration_seconds / 60)}min` : ""}`).join("\n");
+        }
+        case "get_packages": {
+          const { data } = await db.from("training_packages").select("id, title, description, price, is_free, video_ids, manual_ids, created_at").eq("user_id", userId).order("created_at", { ascending: false });
+          if (!data?.length) return "No training packages found.";
+          return data.map((p: any) => {
+            const vids = (() => { try { return JSON.parse(p.video_ids || "[]").length; } catch { return 0; } })();
+            const mans = (() => { try { return JSON.parse(p.manual_ids || "[]").length; } catch { return 0; } })();
+            return `${p.title} — ${p.is_free ? "Free" : `£${Number(p.price || 0).toFixed(2)}`} — ${vids} video(s), ${mans} manual(s)${p.description ? ` — ${p.description}` : ""}`;
+          }).join("\n");
+        }
+        case "create_package": {
+          const { data, error } = await db.from("training_packages").insert({ user_id: userId, title: args.title, description: args.description ?? null, price: Number(args.price ?? 0), is_free: args.is_free ?? (Number(args.price ?? 0) === 0), video_ids: "[]", manual_ids: "[]" }).select("id, title, price, is_free").single();
+          if (error) return `Failed to create package: ${error.message}`;
+          return `Package created: "${data.title}" — ${data.is_free ? "Free" : `£${Number(data.price).toFixed(2)}`}`;
+        }
+        case "get_stock_full": {
+          let q = db.from("stock_items").select("id, name, category, unit, quantity, low_stock_threshold, cost_price, supplier, notes").eq("user_id", userId).order("category").order("name");
+          if (args.category) q = q.ilike("category", `%${args.category}%`);
+          const { data } = await q;
+          if (!data?.length) return "No stock items found.";
+          const items = args.low_stock_only ? data.filter((s: any) => s.quantity <= (s.low_stock_threshold ?? 5)) : data;
+          if (!items.length) return "All stock levels are healthy — nothing below threshold.";
+          return items.map((s: any) => `[${s.id}] ${s.name} — ${s.quantity} ${s.unit}${s.quantity <= (s.low_stock_threshold ?? 5) ? " ⚠️ LOW" : ""} — threshold: ${s.low_stock_threshold} — cost: £${Number(s.cost_price || 0).toFixed(2)}${s.supplier ? ` — supplier: ${s.supplier}` : ""}`).join("\n");
+        }
+        case "add_stock_item": {
+          const { data, error } = await db.from("stock_items").insert({ user_id: userId, name: args.name, category: args.category ?? "General", unit: args.unit ?? "units", quantity: Number(args.quantity ?? 0), low_stock_threshold: Number(args.low_stock_threshold ?? 5), cost_price: Number(args.cost_price ?? 0), supplier: args.supplier ?? null, notes: null }).select("id, name, quantity, unit").single();
+          if (error) return `Failed to add stock item: ${error.message}`;
+          return `Stock item added: ${data.name} — ${data.quantity} ${data.unit} — ID: ${data.id}`;
+        }
+        case "update_stock_quantity": {
+          const { data: found } = await db.from("stock_items").select("id, name, quantity, unit").eq("user_id", userId).ilike("name", `%${args.item_name}%`).limit(1).single();
+          if (!found) return `No stock item found matching "${args.item_name}".`;
+          const delta = args.movement_type === "in" ? Number(args.quantity) : -Number(args.quantity);
+          const newQty = Math.max(0, Number(found.quantity) + delta);
+          await db.from("stock_items").update({ quantity: newQty }).eq("id", found.id);
+          await db.from("stock_movements").insert({ user_id: userId, stock_item_id: found.id, movement_type: args.movement_type, quantity: Number(args.quantity), notes: args.notes ?? null }).catch(() => {});
+          return `${found.name}: ${args.movement_type === "in" ? "+" : "-"}${args.quantity} ${found.unit}. New quantity: ${newQty} ${found.unit}.`;
+        }
+        case "get_cpd_log": {
+          let q = db.from("cpd_logs").select("id, course_name, provider, date, hours, category, notes, certificate_url").order("date", { ascending: false });
+          if (args.category) q = q.ilike("category", `%${args.category}%`);
+          if (args.year_filter && args.year_filter !== "all") {
+            const parts = args.year_filter.split("/");
+            if (parts.length === 2) {
+              const from = `${parts[0]}-04-06`;
+              const to = `${parts[1]}-04-05`;
+              q = q.gte("date", from).lte("date", to);
+            }
+          }
+          const { data } = await q;
+          if (!data?.length) return "No CPD log entries found.";
+          const totalHours = data.reduce((s: number, e: any) => s + (e.hours || 0), 0);
+          const entries = data.map((e: any) => `${new Date(e.date).toLocaleDateString("en-GB")} — ${e.course_name}${e.provider ? ` (${e.provider})` : ""} — ${e.hours}h${e.category ? ` — ${e.category}` : ""}${e.notes ? ` — ${e.notes}` : ""}`).join("\n");
+          return `${data.length} CPD entries, ${totalHours} total hours:\n${entries}`;
+        }
+        case "add_cpd_entry": {
+          const { data, error } = await db.from("cpd_logs").insert({ user_id: userId, course_name: args.course_name, provider: args.provider ?? null, date: args.date, hours: Number(args.hours), category: args.category ?? null, notes: args.notes ?? null, certificate_url: null }).select("id, course_name, date, hours").single();
+          if (error) return `Failed to add CPD entry: ${error.message}`;
+          return `CPD entry logged: ${data.course_name} — ${new Date(data.date).toLocaleDateString("en-GB")} — ${data.hours} hours`;
         }
         default:
           return `Unknown tool: ${toolName}`;
