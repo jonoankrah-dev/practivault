@@ -2836,9 +2836,9 @@ Rules:
     },
     {
       type: "function",
-      name: "get_team",
-      description: "List all team members — their name, role, and status (active/pending invite).",
-      parameters: { type: "object", properties: { status: { type: "string", enum: ["all","active","pending"], description: "Filter by status" } }, required: [] },
+      name: "get_team_analysis",
+      description: "Get the full team roster with rich analysis — who is active, who has a pending invite (and how long it has been pending), role breakdown, and any team gaps worth flagging. Always call this proactively when in the Team section.",
+      parameters: { type: "object", properties: { status: { type: "string", enum: ["all","active","pending"], description: "Filter by status, default all" } }, required: [] },
     },
     {
       type: "function",
@@ -2868,8 +2868,8 @@ Rules:
     },
     {
       type: "function",
-      name: "get_packages",
-      description: "List all training packages — bundles of videos and manuals. Shows title, price, and contents.",
+      name: "get_packages_analysis",
+      description: "Get all training packages with full content analysis — what videos and manuals are in each, pricing breakdown, and gaps. Also shows available videos and manuals that are NOT yet in any package. Call this to get a complete picture of the training offering.",
       parameters: { type: "object", properties: {}, required: [] },
     },
     {
@@ -2889,13 +2889,14 @@ Rules:
     },
     {
       type: "function",
-      name: "get_stock_full",
-      description: "List all stock items with full detail — quantity, category, unit, cost price, supplier, low stock threshold.",
+      name: "get_stock_analysis",
+      description: "Get full stock inventory with analysis — total inventory value, items below threshold, usage rate from movement history, reorder recommendations. Proactively surface insights. Call this when the user opens Stock or asks about their inventory.",
       parameters: {
         type: "object",
         properties: {
           low_stock_only: { type: "boolean", description: "If true, only return items at or below their low stock threshold" },
           category: { type: "string", description: "Filter by category" },
+          include_movements: { type: "boolean", description: "If true, include recent movement history for each item" },
         },
         required: [],
       },
@@ -2921,7 +2922,7 @@ Rules:
     {
       type: "function",
       name: "update_stock_quantity",
-      description: "Record stock coming in (delivery) or going out (used/sold). Updates the item's quantity.",
+      description: "Record stock coming in (delivery) or going out (used/sold). Updates the item's quantity. Can handle multiple items in notes.",
       parameters: {
         type: "object",
         properties: {
@@ -2935,13 +2936,13 @@ Rules:
     },
     {
       type: "function",
-      name: "get_cpd_log",
-      description: "List CPD log entries — completed training courses with hours, dates, and categories.",
+      name: "get_cpd_analysis",
+      description: "Get full CPD log with rich analysis — total hours by category and tax year, progress toward annual target, category gaps, longest gap since last training, and suggested areas to focus on. Always call this proactively when the user opens CPD Log.",
       parameters: {
         type: "object",
         properties: {
           year_filter: { type: "string", description: "Tax year filter e.g. 2024/2025 or 'all'" },
-          category: { type: "string", description: "Filter by CPD category" },
+          annual_target_hours: { type: "number", description: "Target CPD hours per year (default 35 for aesthetics practitioners)" },
         },
         required: [],
       },
@@ -3291,12 +3292,44 @@ Rules:
           if (!data?.length) return "No before & after photos found.";
           return data.map((p: any) => `${(p.clients as any)?.name ?? "Unknown"} — ${p.treatment_type ?? "treatment"} — ${new Date(p.taken_at).toLocaleDateString("en-GB")}${p.notes ? ` — ${p.notes}` : ""} — before: ${p.before_url ? "yes" : "no"}, after: ${p.after_url ? "yes" : "no"}`).join("\n");
         }
-        case "get_team": {
+        case "get_team_analysis": {
           const { data } = await db.from("team_members").select("id, name, email, role, status, joined_at, created_at").eq("owner_id", userId).order("created_at", { ascending: true });
-          if (!data?.length) return "No team members found.";
-          const filtered = args.status && args.status !== "all" ? data.filter((m: any) => m.status === args.status) : data;
-          if (!filtered.length) return `No ${args.status} team members found.`;
-          return filtered.map((m: any) => `${m.name} — ${m.role} — ${m.status === "active" ? "Active" : "Invite pending (not yet joined)"}${m.joined_at ? ` (joined ${new Date(m.joined_at).toLocaleDateString("en-GB")})` : ""} — ${m.email}`).join("\n");
+          if (!data?.length) return "No team members found. You have no team set up yet — would you like to invite your first member?";
+          const now = new Date();
+          const active = data.filter((m: any) => m.status === "active");
+          const pending = data.filter((m: any) => m.status === "pending");
+          // Flag stale invites (>7 days)
+          const staleThreshold = 7 * 24 * 60 * 60 * 1000;
+          const stale = pending.filter((m: any) => {
+            const created = new Date(m.created_at);
+            return (now.getTime() - created.getTime()) > staleThreshold;
+          });
+          // Role coverage analysis
+          const roles = data.map((m: any) => m.role.toLowerCase());
+          const hasReceptionist = roles.includes("receptionist");
+          const hasPractitioner = roles.includes("practitioner");
+          const roleCounts: Record<string, number> = {};
+          for (const r of roles) roleCounts[r] = (roleCounts[r] || 0) + 1;
+          const rolesSummary = Object.entries(roleCounts).map(([r, c]) => `${r}: ${c}`).join(", ");
+          let analysis = `TEAM ANALYSIS\n============\n`;
+          analysis += `Total members: ${data.length} (${active.length} active, ${pending.length} pending invite)\n`;
+          analysis += `Roles: ${rolesSummary}\n`;
+          if (!hasReceptionist) analysis += `⚠️ No receptionist on your team — consider adding one to manage bookings and enquiries.\n`;
+          if (!hasPractitioner) analysis += `⚠️ No practitioners on your team yet.\n`;
+          if (stale.length > 0) {
+            analysis += `\n⚠️ STALE INVITES (sent >7 days ago, not yet accepted):\n`;
+            for (const m of stale) {
+              const daysSince = Math.floor((now.getTime() - new Date(m.created_at).getTime()) / (1000 * 60 * 60 * 24));
+              analysis += `  • ${m.name} (${m.email}) — ${m.role} — invite sent ${daysSince} days ago\n`;
+            }
+            analysis += `  → Consider re-sending invites to these members.\n`;
+          }
+          analysis += `\nFULL TEAM LIST:\n`;
+          analysis += data.map((m: any) => {
+            const daysPending = m.status === "pending" ? Math.floor((now.getTime() - new Date(m.created_at).getTime()) / (1000 * 60 * 60 * 24)) : null;
+            return `  • ${m.name} — ${m.role} — ${m.status === "active" ? `✅ Active${m.joined_at ? ` (joined ${new Date(m.joined_at).toLocaleDateString("en-GB")})` : ""}` : `⏳ Pending${daysPending !== null ? ` (${daysPending}d ago)` : ""}`} — ${m.email}`;
+          }).join("\n");
+          return analysis;
         }
         case "invite_team_member": {
           const token = require("crypto").randomBytes(24).toString("hex");
@@ -3320,28 +3353,121 @@ Rules:
           if (!data?.length) return "No videos found.";
           return data.map((v: any) => `${v.title} — ${v.category} — ${v.video_type} — ${v.is_free ? "Free" : "Paid"}${v.duration_seconds ? ` — ${Math.round(v.duration_seconds / 60)}min` : ""}`).join("\n");
         }
-        case "get_packages": {
-          const { data } = await db.from("training_packages").select("id, title, description, price, is_free, video_ids, manual_ids, created_at").eq("user_id", userId).order("created_at", { ascending: false });
-          if (!data?.length) return "No training packages found.";
-          return data.map((p: any) => {
-            const vids = (() => { try { return JSON.parse(p.video_ids || "[]").length; } catch { return 0; } })();
-            const mans = (() => { try { return JSON.parse(p.manual_ids || "[]").length; } catch { return 0; } })();
-            return `${p.title} — ${p.is_free ? "Free" : `£${Number(p.price || 0).toFixed(2)}`} — ${vids} video(s), ${mans} manual(s)${p.description ? ` — ${p.description}` : ""}`;
+        case "get_packages_analysis": {
+          const [pkgRes, vidRes, manRes] = await Promise.all([
+            db.from("training_packages").select("id, title, description, price, is_free, video_ids, manual_ids, created_at").eq("user_id", userId).order("created_at", { ascending: false }),
+            db.from("training_videos").select("id, title, category, is_free").eq("user_id", userId),
+            db.from("manuals").select("id, name, category").eq("user_id", userId),
+          ]);
+          const packages = pkgRes.data ?? [];
+          const allVideos = vidRes.data ?? [];
+          const allManuals = manRes.data ?? [];
+          // Collect all video/manual IDs that are already in packages
+          const bundledVideoIds = new Set<string>();
+          const bundledManualIds = new Set<string>();
+          let totalRevenuePotential = 0;
+          for (const p of packages) {
+            const vids: string[] = (() => { try { return JSON.parse(p.video_ids || "[]"); } catch { return []; } })();
+            const mans: string[] = (() => { try { return JSON.parse(p.manual_ids || "[]"); } catch { return []; } })();
+            vids.forEach((id: string) => bundledVideoIds.add(id));
+            mans.forEach((id: string) => bundledManualIds.add(id));
+            if (!p.is_free) totalRevenuePotential += Number(p.price || 0);
+          }
+          const unbundledVideos = allVideos.filter((v: any) => !bundledVideoIds.has(v.id));
+          const unbundledManuals = allManuals.filter((m: any) => !bundledManualIds.has(m.id));
+          let analysis = `PACKAGES ANALYSIS\n================\n`;
+          analysis += `Total packages: ${packages.length} (${packages.filter((p: any) => !p.is_free).length} paid, ${packages.filter((p: any) => p.is_free).length} free)\n`;
+          analysis += `Total videos in library: ${allVideos.length} | Manuals: ${allManuals.length}\n`;
+          analysis += `Combined price of paid packages: £${totalRevenuePotential.toFixed(2)}\n`;
+          if (unbundledVideos.length > 0) {
+            analysis += `\n⭐️ UNBUNDLED VIDEOS (${unbundledVideos.length} not in any package — bundling opportunity!):\n`;
+            analysis += unbundledVideos.map((v: any) => `  • ${v.title} — ${v.category} — ${v.is_free ? "Free" : "Paid"}`).join("\n") + "\n";
+          }
+          if (unbundledManuals.length > 0) {
+            analysis += `\n⭐️ UNBUNDLED MANUALS (${unbundledManuals.length} not in any package):\n`;
+            analysis += unbundledManuals.map((m: any) => `  • ${m.name} — ${m.category}`).join("\n") + "\n";
+          }
+          if (unbundledVideos.length === 0 && unbundledManuals.length === 0 && packages.length > 0) {
+            analysis += `\n✅ Great — every video and manual is included in at least one package.\n`;
+          }
+          if (packages.length === 0) return `No training packages yet. You have ${allVideos.length} video(s) and ${allManuals.length} manual(s) in your library — I can help you bundle these into packages. Would you like me to suggest one?`;
+          analysis += `\nPACKAGES:\n`;
+          analysis += packages.map((p: any) => {
+            const vids: string[] = (() => { try { return JSON.parse(p.video_ids || "[]"); } catch { return []; } })();
+            const mans: string[] = (() => { try { return JSON.parse(p.manual_ids || "[]"); } catch { return []; } })();
+            return `  • ${p.title} — ${p.is_free ? "Free" : `£${Number(p.price || 0).toFixed(2)}`} — ${vids.length} video(s), ${mans.length} manual(s)${p.description ? `\n    ${p.description}` : ""}`;
           }).join("\n");
+          return analysis;
         }
         case "create_package": {
           const { data, error } = await db.from("training_packages").insert({ user_id: userId, title: args.title, description: args.description ?? null, price: Number(args.price ?? 0), is_free: args.is_free ?? (Number(args.price ?? 0) === 0), video_ids: "[]", manual_ids: "[]" }).select("id, title, price, is_free").single();
           if (error) return `Failed to create package: ${error.message}`;
           return `Package created: "${data.title}" — ${data.is_free ? "Free" : `£${Number(data.price).toFixed(2)}`}`;
         }
-        case "get_stock_full": {
+        case "get_stock_analysis": {
           let q = db.from("stock_items").select("id, name, category, unit, quantity, low_stock_threshold, cost_price, supplier, notes").eq("user_id", userId).order("category").order("name");
           if (args.category) q = q.ilike("category", `%${args.category}%`);
-          const { data } = await q;
-          if (!data?.length) return "No stock items found.";
-          const items = args.low_stock_only ? data.filter((s: any) => s.quantity <= (s.low_stock_threshold ?? 5)) : data;
-          if (!items.length) return "All stock levels are healthy — nothing below threshold.";
-          return items.map((s: any) => `[${s.id}] ${s.name} — ${s.quantity} ${s.unit}${s.quantity <= (s.low_stock_threshold ?? 5) ? " ⚠️ LOW" : ""} — threshold: ${s.low_stock_threshold} — cost: £${Number(s.cost_price || 0).toFixed(2)}${s.supplier ? ` — supplier: ${s.supplier}` : ""}`).join("\n");
+          const { data: items } = await q;
+          if (!items?.length) return "No stock items found. Your stock list is empty — would you like me to help you add your first items?";
+          // Recent movements for usage insights
+          const { data: movements } = await db.from("stock_movements").select("stock_item_id, movement_type, quantity, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(200);
+          // Calculate per-item usage (last 30 days)
+          const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+          const usageMap: Record<string, number> = {};
+          if (movements) {
+            for (const mv of movements) {
+              if (mv.movement_type === "out" && new Date(mv.created_at) >= thirtyDaysAgo) {
+                usageMap[mv.stock_item_id] = (usageMap[mv.stock_item_id] || 0) + mv.quantity;
+              }
+            }
+          }
+          const lowStock = items.filter((s: any) => s.quantity <= (s.low_stock_threshold ?? 5));
+          const totalInventoryValue = items.reduce((sum: number, s: any) => sum + (Number(s.cost_price || 0) * Number(s.quantity || 0)), 0);
+          const reorderCost = lowStock.reduce((sum: number, s: any) => {
+            const toOrder = Math.max(0, (Number(s.low_stock_threshold ?? 5) * 2) - Number(s.quantity));
+            return sum + (Number(s.cost_price || 0) * toOrder);
+          }, 0);
+          // Group by category
+          const categories: Record<string, any[]> = {};
+          for (const s of items) {
+            const cat = s.category || "Uncategorised";
+            if (!categories[cat]) categories[cat] = [];
+            categories[cat].push(s);
+          }
+          let analysis = `STOCK ANALYSIS\n=============\n`;
+          analysis += `Total items: ${items.length} across ${Object.keys(categories).length} categor${Object.keys(categories).length === 1 ? "y" : "ies"}\n`;
+          analysis += `📦 Total inventory value: £${totalInventoryValue.toFixed(2)}\n`;
+          if (lowStock.length > 0) {
+            analysis += `\n⚠️ LOW STOCK ALERTS (${lowStock.length} item${lowStock.length === 1 ? "" : "s"} at or below threshold):\n`;
+            for (const s of lowStock) {
+              const usage30 = usageMap[s.id] || 0;
+              const toOrder = Math.max(0, (Number(s.low_stock_threshold ?? 5) * 2) - Number(s.quantity));
+              analysis += `  • ${s.name}: ${s.quantity} ${s.unit} remaining (threshold: ${s.low_stock_threshold})`;
+              if (usage30 > 0) analysis += ` — used ${usage30} ${s.unit} in last 30 days`;
+              if (toOrder > 0) analysis += ` → suggest ordering ${toOrder} ${s.unit} (est. £${(toOrder * Number(s.cost_price || 0)).toFixed(2)})`;
+              if (s.supplier) analysis += ` — supplier: ${s.supplier}`;
+              analysis += "\n";
+            }
+            analysis += `  💰 Estimated reorder cost for all low stock: £${reorderCost.toFixed(2)}\n`;
+          } else {
+            analysis += `\n✅ All stock levels are healthy — nothing below threshold.\n`;
+          }
+          if (!args.low_stock_only) {
+            analysis += `\nFULL STOCK LIST BY CATEGORY:\n`;
+            for (const [cat, catItems] of Object.entries(categories)) {
+              const catValue = catItems.reduce((s: number, i: any) => s + (Number(i.cost_price || 0) * Number(i.quantity || 0)), 0);
+              analysis += `\n${cat} (£${catValue.toFixed(2)} value):\n`;
+              for (const s of catItems as any[]) {
+                const usage30 = usageMap[s.id] || 0;
+                analysis += `  • ${s.name}: ${s.quantity} ${s.unit}${s.quantity <= (s.low_stock_threshold ?? 5) ? " ⚠️" : ""}`;
+                analysis += ` — £${Number(s.cost_price || 0).toFixed(2)}/unit`;
+                if (usage30 > 0) analysis += ` — ${usage30} used last 30d`;
+                if (s.supplier) analysis += ` — ${s.supplier}`;
+                analysis += "\n";
+              }
+            }
+          }
+          return analysis;
         }
         case "add_stock_item": {
           const { data, error } = await db.from("stock_items").insert({ user_id: userId, name: args.name, category: args.category ?? "General", unit: args.unit ?? "units", quantity: Number(args.quantity ?? 0), low_stock_threshold: Number(args.low_stock_threshold ?? 5), cost_price: Number(args.cost_price ?? 0), supplier: args.supplier ?? null, notes: null }).select("id, name, quantity, unit").single();
@@ -3357,8 +3483,15 @@ Rules:
           await db.from("stock_movements").insert({ user_id: userId, stock_item_id: found.id, movement_type: args.movement_type, quantity: Number(args.quantity), notes: args.notes ?? null }).catch(() => {});
           return `${found.name}: ${args.movement_type === "in" ? "+" : "-"}${args.quantity} ${found.unit}. New quantity: ${newQty} ${found.unit}.`;
         }
-        case "get_cpd_log": {
-          let q = db.from("cpd_logs").select("id, course_name, provider, date, hours, category, notes, certificate_url").order("date", { ascending: false });
+        case "get_cpd_analysis": {
+          // Determine current CPD year (April 6 to April 5)
+          const now2 = new Date();
+          const currentYear = now2.getFullYear();
+          const cpdYearStart = now2 >= new Date(`${currentYear}-04-06`) ? new Date(`${currentYear}-04-06`) : new Date(`${currentYear - 1}-04-06`);
+          const cpdYearEnd = new Date(cpdYearStart);
+          cpdYearEnd.setFullYear(cpdYearEnd.getFullYear() + 1);
+          const cpdYearLabel = `${cpdYearStart.getFullYear()}/${cpdYearEnd.getFullYear()}`;
+          let q = db.from("cpd_logs").select("id, course_name, provider, date, hours, category, notes, certificate_url").eq("user_id", userId).order("date", { ascending: false });
           if (args.category) q = q.ilike("category", `%${args.category}%`);
           if (args.year_filter && args.year_filter !== "all") {
             const parts = args.year_filter.split("/");
@@ -3368,11 +3501,72 @@ Rules:
               q = q.gte("date", from).lte("date", to);
             }
           }
-          const { data } = await q;
-          if (!data?.length) return "No CPD log entries found.";
-          const totalHours = data.reduce((s: number, e: any) => s + (e.hours || 0), 0);
-          const entries = data.map((e: any) => `${new Date(e.date).toLocaleDateString("en-GB")} — ${e.course_name}${e.provider ? ` (${e.provider})` : ""} — ${e.hours}h${e.category ? ` — ${e.category}` : ""}${e.notes ? ` — ${e.notes}` : ""}`).join("\n");
-          return `${data.length} CPD entries, ${totalHours} total hours:\n${entries}`;
+          const { data: allEntries } = await q;
+          const entries = allEntries ?? [];
+          // Current year entries
+          const currentYearEntries = entries.filter((e: any) => {
+            const d = new Date(e.date);
+            return d >= cpdYearStart && d < cpdYearEnd;
+          });
+          const annualTarget = 35;
+          const currentYearHours = currentYearEntries.reduce((s: number, e: any) => s + Number(e.hours || 0), 0);
+          const hoursRemaining = Math.max(0, annualTarget - currentYearHours);
+          const pctComplete = Math.min(100, Math.round((currentYearHours / annualTarget) * 100));
+          // Days left in CPD year
+          const msLeft = cpdYearEnd.getTime() - now2.getTime();
+          const daysLeft = Math.max(0, Math.floor(msLeft / (1000 * 60 * 60 * 24)));
+          // Category breakdown for current year
+          const catTotals: Record<string, number> = {};
+          for (const e of currentYearEntries) {
+            const cat = e.category || "Uncategorised";
+            catTotals[cat] = (catTotals[cat] || 0) + Number(e.hours || 0);
+          }
+          // Check for important category gaps (looking at ALL entries, not just current year)
+          const allCategories = new Set(entries.map((e: any) => (e.category || "").toLowerCase()));
+          const importantCats = ["first aid", "safeguarding", "legal & compliance"];
+          const missingImportant: string[] = [];
+          for (const cat of importantCats) {
+            if (!Array.from(allCategories).some((c: any) => c.includes(cat.split(" ")[0]))) {
+              missingImportant.push(cat);
+            }
+          }
+          // Last training date
+          const lastEntry = currentYearEntries[0] ?? entries[0];
+          const lastTrainingDate = lastEntry ? new Date(lastEntry.date) : null;
+          const daysSinceLast = lastTrainingDate ? Math.floor((now2.getTime() - lastTrainingDate.getTime()) / (1000 * 60 * 60 * 24)) : null;
+          let analysis = `CPD ANALYSIS — ${cpdYearLabel}\n${"=".repeat(30)}\n`;
+          analysis += `Progress: ${currentYearHours}h / ${annualTarget}h target (${pctComplete}%)\n`;
+          const bar = "█".repeat(Math.round(pctComplete / 5)) + "░".repeat(20 - Math.round(pctComplete / 5));
+          analysis += `[${bar}] ${hoursRemaining > 0 ? `${hoursRemaining}h still needed` : "🎉 Target reached!"}\n`;
+          analysis += `CPD year ends: ${cpdYearEnd.toLocaleDateString("en-GB")} (${daysLeft} days left)\n`;
+          if (hoursRemaining > 0 && daysLeft > 0) {
+            const hrsPerMonth = (hoursRemaining / (daysLeft / 30)).toFixed(1);
+            analysis += `→ You need approx. ${hrsPerMonth}h/month to hit your target.\n`;
+          }
+          if (daysSinceLast !== null) {
+            analysis += `\nLast training: ${lastTrainingDate!.toLocaleDateString("en-GB")} (${daysSinceLast} days ago)\n`;
+            if (daysSinceLast > 60) analysis += `⚠️ It's been over 2 months since your last CPD — worth scheduling something soon.\n`;
+          }
+          if (missingImportant.length > 0) {
+            analysis += `\n⚠️ CATEGORY GAPS (no record found for these important areas):\n`;
+            for (const cat of missingImportant) analysis += `  • ${cat}\n`;
+          }
+          if (Object.keys(catTotals).length > 0) {
+            analysis += `\nCURRENT YEAR BREAKDOWN BY CATEGORY:\n`;
+            const sorted = Object.entries(catTotals).sort((a, b) => (b[1] as number) - (a[1] as number));
+            for (const [cat, hrs] of sorted) {
+              analysis += `  • ${cat}: ${hrs}h\n`;
+            }
+          }
+          if (!entries.length) return `No CPD entries logged yet for ${cpdYearLabel}. Your annual target is ${annualTarget} hours. Would you like me to log your first entry?`;
+          analysis += `\nRECENT ENTRIES (this CPD year):\n`;
+          if (currentYearEntries.length === 0) {
+            analysis += `  None yet this CPD year (${cpdYearLabel}).\n`;
+          } else {
+            analysis += currentYearEntries.slice(0, 10).map((e: any) => `  • ${new Date(e.date).toLocaleDateString("en-GB")} — ${e.course_name}${e.provider ? ` (${e.provider})` : ""} — ${e.hours}h${e.category ? ` — ${e.category}` : ""}`).join("\n") + "\n";
+            if (currentYearEntries.length > 10) analysis += `  ... and ${currentYearEntries.length - 10} more entries this year.\n`;
+          }
+          return analysis;
         }
         case "add_cpd_entry": {
           const { data, error } = await db.from("cpd_logs").insert({ user_id: userId, course_name: args.course_name, provider: args.provider ?? null, date: args.date, hours: Number(args.hours), category: args.category ?? null, notes: args.notes ?? null, certificate_url: null }).select("id, course_name, date, hours").single();
