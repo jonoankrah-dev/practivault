@@ -159,7 +159,7 @@ export default function Manuals() {
       }
 
       queryClient.invalidateQueries({ queryKey: ["/api/manuals"] });
-      toast({ title: "Manual uploaded", description: "Saphie can now answer questions from it." });
+      toast({ title: "Manual uploaded", description: "Safi can now answer questions from it." });
       setUploadOpen(false);
       setUploadName("");
       setUploadDesc("");
@@ -304,7 +304,7 @@ export default function Manuals() {
                           </Badge>
                           {m.extracted_text && (
                             <Badge className="text-[10px] px-2 py-0.5 font-medium border-0 bg-[#b1306f]/10 text-[#b1306f]">
-                              Saphie ✓
+                              Safi ✓
                             </Badge>
                           )}
                           {m.file_size && (

@@ -1,6 +1,6 @@
 /**
  * BusinessInfo — Mayfair Aesthetics Academy business profile
- * Stores products/services, social links, and FAQs for Saphie to use
+ * Stores products/services, social links, and FAQs for Safi to use
  */
 
 import { useState, useEffect } from "react";
@@ -176,7 +176,7 @@ function FaqDialog({
             <Textarea
               value={form.answer}
               onChange={e => setForm(f => ({ ...f, answer: e.target.value }))}
-              placeholder="Saphie will use this to answer clients…"
+              placeholder="Safi will use this to answer clients…"
               rows={4}
               className="resize-none text-sm"
             />
@@ -217,7 +217,7 @@ export default function BusinessInfo() {
     mutationFn: (data: BusinessInfoData) => apiRequest("POST", "/api/business-info", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/business-info"] });
-      toast({ title: "Business info saved", description: "Saphie is up to date." });
+      toast({ title: "Business info saved", description: "Safi is up to date." });
     },
     onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
@@ -279,7 +279,7 @@ export default function BusinessInfo() {
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <PageHeader
         title="Business Info"
-        subtitle="Everything Saphie needs to represent Mayfair Aesthetics Academy perfectly"
+        subtitle="Everything Safi needs to represent Mayfair Aesthetics Academy perfectly"
         actions={
           <Button
             onClick={handleSave}
@@ -508,7 +508,7 @@ export default function BusinessInfo() {
             <div className="text-center py-8 text-sm text-muted-foreground">
               <HelpCircle className="h-8 w-8 mx-auto mb-2 opacity-30" />
               <p>No FAQs yet.</p>
-              <p className="text-xs mt-1">Add questions Saphie should know how to answer.</p>
+              <p className="text-xs mt-1">Add questions Safi should know how to answer.</p>
             </div>
           ) : (
             <div className="space-y-2">

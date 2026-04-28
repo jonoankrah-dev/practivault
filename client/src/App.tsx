@@ -33,7 +33,7 @@ import Pricing from "@/pages/Pricing";
 import CpdLog from "@/pages/CpdLog";
 import Locations from "@/pages/Locations";
 import Stock from "@/pages/Stock";
-import Saphie from "@/pages/Saphie";
+import Safi from "@/pages/Safi";
 
 import SetupAssistant from "@/pages/SetupAssistant";
 import NotFound from "@/pages/not-found";
@@ -204,10 +204,17 @@ function AppRouter() {
           <Stock />
         </Protected>
       </Route>
+      <Route path="/safi">
+        <Protected><Safi /></Protected>
+      </Route>
       <Route path="/saphie">
-        <Protected>
-          <Saphie />
-        </Protected>
+        <Protected><Safi /></Protected>
+      </Route>
+      <Route path="/ai-front-desk">
+        <Protected><Safi /></Protected>
+      </Route>
+      <Route path="/phone-receptionist">
+        <Protected><Safi /></Protected>
       </Route>
       <Route component={NotFound} />
     </Switch>

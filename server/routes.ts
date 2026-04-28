@@ -282,14 +282,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       } catch {}
 
       const assistantConfig = {
-        name: "Saphie — Mayfair Aesthetics Academy",
+        name: "Safi — Mayfair Aesthetics Academy",
         model: {
           provider: "openai",
           model: "gpt-4o-mini",
           messages: [
             {
               role: "system",
-              content: `You are Saphie, the friendly AI phone assistant for Mayfair Aesthetics Academy — a UK-based provider of premium CPD-accredited online training courses for aesthetic and wellness practitioners.
+              content: `You are Safi, the friendly AI phone assistant for Mayfair Aesthetics Academy — a UK-based provider of premium CPD-accredited online training courses for aesthetic and wellness practitioners.
 
 YOUR PERSONALITY:
 - Warm, confident, professional. Short conversational sentences — this is a phone call.
@@ -323,7 +323,7 @@ ${bizProducts || `- Nose Slimming Course — £499
 ${bizFaqs ? `\nFREQUENTLY ASKED QUESTIONS:\n${bizFaqs}` : ""}
 
 CALL HANDLING:
-1. Greet warmly: "Hi, thanks for calling Mayfair Aesthetics Academy! I'm Saphie, how can I help you today?"
+1. Greet warmly: "Hi, thanks for calling Mayfair Aesthetics Academy! I'm Safi, how can I help you today?"
 2. Answer their question directly using the knowledge above
 3. If they ask about a course — give the name, price, one sentence on what it covers, and direct them to the website to purchase
 4. If they want to know more — offer to go through the details with them
@@ -347,7 +347,7 @@ IMPORTANT:
           similarityBoost: 0.75,
         },
         firstMessage:
-          "Hi, thanks for calling Mayfair Aesthetics Academy! I'm Saphie, how can I help you today?",
+          "Hi, thanks for calling Mayfair Aesthetics Academy! I'm Safi, how can I help you today?",
         endCallMessage:
           "Brilliant! Thanks so much for calling. Have a lovely day!",
         transcriber: {
@@ -2560,7 +2560,7 @@ Rules:
         manualContext = `\n\nManuals:\n${sections.join("\n\n")}`;
       }
 
-      const instructions = `You are Saphie, the AI voice assistant for ${userData?.business_name ?? "Mayfair Aesthetics Academy"}.${bizContext}${manualContext}
+      const instructions = `You are Safi, the AI voice assistant for ${userData?.business_name ?? "Mayfair Aesthetics Academy"}.${bizContext}${manualContext}
 
 You speak your replies aloud — keep them concise, warm, and conversational (2-3 sentences max).
 You are a knowledgeable sales assistant. Give prices confidently and directly when asked.
@@ -2723,7 +2723,7 @@ Direct people to the website to purchase. Never be vague about pricing.`;
       }
     }
 
-    const systemPrompt = `You are Saphie, the AI assistant for ${userData?.business_name ?? "Mayfair Aesthetics Academy"}.${bizContext}
+    const systemPrompt = `You are Safi, the AI assistant for ${userData?.business_name ?? "Mayfair Aesthetics Academy"}.${bizContext}
 
 IMPORTANT: You have a real voice. You speak your replies aloud. Never say you are text-only or cannot speak.
 
