@@ -67,8 +67,12 @@ class AudioPlayer {
     this.nextTime = t + buf.duration;
   }
   clear() { this.nextTime = 0; }
-  close() { this.ctx.close(); }
+  close() { try { this.ctx.close(); } catch {} }
 }
+
+// ── Mic resampler — browser mic is often 48kHz, xAI needs 16kHz PCM16 ────────
+// We use AudioContext at 16kHz to capture + resample in one step
+const MIC_SAMPLE_RATE = 16000;
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function Safi() {
@@ -88,6 +92,7 @@ export default function Safi() {
   const mutedRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const assistantDraftRef = useRef("");
+  const assistantResponseIdRef = useRef<string | null>(null);
 
   useEffect(() => { mutedRef.current = muted; }, [muted]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [items]);
@@ -104,7 +109,16 @@ export default function Safi() {
       const sessionInstructions = tokenData.instructions as string | undefined;
       const sessionTools = tokenData.tools as any[] | undefined;
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Get mic stream first — request 16kHz mono if supported
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          sampleRate: MIC_SAMPLE_RATE,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
+      });
       streamRef.current = stream;
 
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -116,43 +130,56 @@ export default function Safi() {
 
       ws.onopen = () => {
         setConnState("connected");
+
+        // xAI session.update — use flat format (not OpenAI nested format)
         const sessionUpdate: any = {
           type: "session.update",
           session: {
             voice: "eve",
             turn_detection: { type: "server_vad" },
-            audio: {
-              input:  { format: { type: "audio/pcm", rate: 24000 } },
-              output: { format: { type: "audio/pcm", rate: 24000 } },
-            },
+            input_audio_format: "pcm16",
+            output_audio_format: "pcm16",
+            input_audio_transcription: { model: "default" },
           },
         };
         if (sessionInstructions) sessionUpdate.session.instructions = sessionInstructions;
         if (sessionTools?.length) sessionUpdate.session.tools = sessionTools;
         ws.send(JSON.stringify(sessionUpdate));
 
-        // Wire mic
-        const micCtx = new AudioContext({ sampleRate: 24000 });
-        audioCtxRef.current = micCtx;
-        const source = micCtx.createMediaStreamSource(stream);
-        const processor = micCtx.createScriptProcessor(4096, 1, 1);
-        processorRef.current = processor;
-        source.connect(processor);
-        processor.connect(micCtx.destination);
-        processor.onaudioprocess = (e) => {
-          if (mutedRef.current || ws.readyState !== WebSocket.OPEN) return;
-          ws.send(JSON.stringify({
-            type: "input_audio_buffer.append",
-            audio: float32ToBase64Pcm16(e.inputBuffer.getChannelData(0)),
-          }));
-        };
+        // Wire mic — use AudioContext resampled to MIC_SAMPLE_RATE
+        try {
+          const micCtx = new AudioContext({ sampleRate: MIC_SAMPLE_RATE });
+          audioCtxRef.current = micCtx;
+          const source = micCtx.createMediaStreamSource(stream);
+          // ScriptProcessor at 4096 frames = ~256ms of audio per chunk
+          const processor = micCtx.createScriptProcessor(4096, 1, 1);
+          processorRef.current = processor;
+          source.connect(processor);
+          // Connect to destination to keep processor alive (required in some browsers)
+          processor.connect(micCtx.destination);
+          processor.onaudioprocess = (e) => {
+            if (mutedRef.current || ws.readyState !== WebSocket.OPEN) return;
+            const pcmData = e.inputBuffer.getChannelData(0);
+            ws.send(JSON.stringify({
+              type: "input_audio_buffer.append",
+              audio: float32ToBase64Pcm16(pcmData),
+            }));
+          };
+        } catch (micErr) {
+          console.error("Mic setup error:", micErr);
+        }
       };
 
       ws.onmessage = (event) => {
         try { handleServerEvent(JSON.parse(event.data as string)); } catch {}
       };
-      ws.onclose = () => { setConnState("idle"); cleanup(false); };
-      ws.onerror = () => {
+      ws.onclose = (e) => {
+        console.log("WS closed:", e.code, e.reason);
+        setConnState("idle");
+        cleanup(false);
+      };
+      ws.onerror = (e) => {
+        console.error("WS error:", e);
         setConnState("error");
         toast({ title: "Connection error", description: "Couldn't connect to Safi.", variant: "destructive" });
         cleanup(false);
@@ -167,14 +194,18 @@ export default function Safi() {
   // ── Server events ────────────────────────────────────────────────────────
   const handleServerEvent = useCallback((msg: any) => {
     switch (msg.type) {
+      // User speech transcription (xAI event name)
       case "conversation.item.input_audio_transcription.completed": {
-        const text = msg.transcript?.trim();
+        const text = (msg.transcript ?? "").trim();
         if (text) setItems(prev => [...prev.filter(i => i.id !== "user-draft"), { id: `u-${Date.now()}`, role: "user", text }]);
         break;
       }
-      case "response.audio_transcript.delta": {
+
+      // Assistant audio transcript — xAI uses "output_audio_transcript" not "audio_transcript"
+      case "response.output_audio_transcript.delta": {
         assistantDraftRef.current += msg.delta ?? "";
         const id = `a-${msg.response_id ?? "draft"}`;
+        assistantResponseIdRef.current = id;
         setItems(prev => {
           const last = prev[prev.length - 1];
           if (last?.id === id) return [...prev.slice(0, -1), { ...last, text: assistantDraftRef.current }];
@@ -183,39 +214,51 @@ export default function Safi() {
         setSpeaking(true);
         break;
       }
-      case "response.audio_transcript.done":
+      case "response.output_audio_transcript.done":
         assistantDraftRef.current = "";
+        assistantResponseIdRef.current = null;
         setSpeaking(false);
         break;
+
+      // Audio output from Safi — base64 PCM16 at 24kHz
       case "response.output_audio.delta":
-        if (msg.delta && playerRef.current) playerRef.current.enqueue(base64Pcm16ToFloat32(msg.delta));
+        if (msg.delta && playerRef.current) {
+          try {
+            playerRef.current.enqueue(base64Pcm16ToFloat32(msg.delta));
+          } catch (e) {
+            console.error("Audio decode error:", e);
+          }
+        }
         break;
       case "response.output_audio.done":
         setSpeaking(false);
         break;
+
+      // User started speaking — interrupt Safi
       case "input_audio_buffer.speech_started":
         playerRef.current?.clear();
         setSpeaking(false);
         break;
-      // Tool call started
+
+      // Tool call
       case "response.function_call_arguments.done": {
         const toolName = msg.name ?? "tool";
         setToolRunning(toolName);
         setItems(prev => [...prev, {
-          id: `tool-${msg.call_id}`,
+          id: `tool-${msg.call_id ?? Date.now()}`,
           role: "tool",
           text: `Running: ${toolName.replace(/_/g, " ")}…`,
           toolName,
         }]);
         break;
       }
-      // Tool result confirmed
       case "conversation.item.added":
         if (msg.item?.type === "function_call_output") setToolRunning(null);
         break;
+
       case "error":
-        console.error("Safi error:", msg);
-        toast({ title: "Safi error", description: msg.error?.message ?? "Unknown error", variant: "destructive" });
+        console.error("Safi xAI error:", msg);
+        toast({ title: "Safi error", description: msg.error?.message ?? JSON.stringify(msg.error) ?? "Unknown error", variant: "destructive" });
         break;
     }
   }, []);
@@ -224,19 +267,30 @@ export default function Safi() {
   const cleanup = useCallback((closeWs = true) => {
     if (closeWs && wsRef.current) { wsRef.current.close(); wsRef.current = null; }
     processorRef.current?.disconnect(); processorRef.current = null;
-    audioCtxRef.current?.close(); audioCtxRef.current = null;
+    audioCtxRef.current?.close().catch(() => {}); audioCtxRef.current = null;
     streamRef.current?.getTracks().forEach(t => t.stop()); streamRef.current = null;
     playerRef.current?.close(); playerRef.current = null;
   }, []);
 
-  const disconnect = useCallback(() => { cleanup(true); setConnState("idle"); setSpeaking(false); setToolRunning(null); }, [cleanup]);
+  const disconnect = useCallback(() => {
+    cleanup(true);
+    setConnState("idle");
+    setSpeaking(false);
+    setToolRunning(null);
+  }, [cleanup]);
+
   const toggleMute = useCallback(() => setMuted(m => !m), []);
 
+  // Unlock AudioContext on first user interaction
   useEffect(() => {
     const unlock = () => playerRef.current?.unlock();
     window.addEventListener("click", unlock, { once: true });
     window.addEventListener("keydown", unlock, { once: true });
-    return () => { window.removeEventListener("click", unlock); window.removeEventListener("keydown", unlock); cleanup(true); };
+    return () => {
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("keydown", unlock);
+      cleanup(true);
+    };
   }, []);
 
   const isConnected = connState === "connected";
@@ -256,8 +310,11 @@ export default function Safi() {
           <p className="text-xs text-muted-foreground">
             {connState === "idle"       && "Press Start — Safi can act, not just answer"}
             {connState === "connecting" && "Connecting…"}
-            {connState === "connected"  && toolRunning ? `Running ${toolRunning.replace(/_/g, " ")}…` :
-              connState === "connected" && (speaking ? "Speaking…" : muted ? "Muted" : "Listening…")}
+            {connState === "connected"  && (toolRunning
+              ? `Running ${toolRunning.replace(/_/g, " ")}…`
+              : speaking ? "Speaking…"
+              : muted ? "Muted"
+              : "Listening…")}
             {connState === "error"      && "Connection failed — try again"}
           </p>
         </div>
@@ -268,7 +325,13 @@ export default function Safi() {
             </Button>
           )}
           {isConnected && (
-            <Button variant={muted ? "destructive" : "outline"} size="icon" className="h-8 w-8" onClick={toggleMute} data-testid="button-mute">
+            <Button
+              variant={muted ? "destructive" : "outline"}
+              size="icon"
+              className="h-8 w-8"
+              onClick={toggleMute}
+              data-testid="button-mute"
+            >
               {muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
             </Button>
           )}
@@ -282,7 +345,8 @@ export default function Safi() {
             )}
             data-testid="button-connect"
           >
-            {isConnecting ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Connecting…</>
+            {isConnecting
+              ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Connecting…</>
               : isConnected ? "End"
               : <><Mic className="h-3.5 w-3.5 mr-1.5" />Start</>}
           </Button>
@@ -300,10 +364,11 @@ export default function Safi() {
               : "bg-emerald-500 animate-pulse"
           )} />
           <span className={cn(toolRunning ? "text-amber-600" : "text-[#b1306f]")}>
-            {toolRunning ? `Safi is working — ${toolRunning.replace(/_/g, " ")}` :
-              speaking ? "Safi is speaking" :
-              muted ? "Microphone muted" :
-              "Microphone live — speak naturally"}
+            {toolRunning
+              ? `Safi is working — ${toolRunning.replace(/_/g, " ")}`
+              : speaking ? "Safi is speaking"
+              : muted ? "Microphone muted"
+              : "Microphone live — speak naturally"}
           </span>
           {speaking && <Volume2 className="h-3.5 w-3.5 ml-1 text-[#b1306f]" />}
         </div>
