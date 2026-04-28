@@ -43,7 +43,7 @@ function KpiCard({
           <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
             {label}
           </div>
-          <div className="text-2xl font-semibold mt-1 tracking-tight" data-testid={`kpi-${label}`}>
+          <div className="text-xl font-semibold mt-1 tracking-tight" data-testid={`kpi-${label}`}>
             {value}
           </div>
           {sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}

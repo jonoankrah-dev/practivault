@@ -169,7 +169,7 @@ export default function Photos() {
 
   const FilePickerZone = ({
     file, inputRef, label, onChange,
-  }: { file: File | null; inputRef: React.RefObject<HTMLInputElement | null>; label: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void }) => (
+  }: { file: File | null; inputRef: React.RefObject<HTMLInputElement>; label: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void }) => (
     <div className="flex-1 space-y-1">
       <Label className="text-xs">{label}</Label>
       <div
