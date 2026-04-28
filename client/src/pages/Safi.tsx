@@ -1,8 +1,16 @@
 /**
  * Safi — Fully Agentic AI Assistant
  * xAI grok-voice-think-fast-1.0 realtime WebSocket
- * Audio: native mic → resample to 24kHz PCM16 → xAI
- * Output: xAI 24kHz PCM16 base64 → AudioContext playback
+ *
+ * KEY FIX: AudioContext must be created at NATIVE sample rate.
+ * Forcing 24kHz on a MediaStreamSource causes Chrome/Safari to
+ * pass silence or garbage to the processor — the browser does NOT
+ * reliably resample MediaStream inputs in a forced-rate AudioContext.
+ * Solution: capture at native rate, resample manually to 24kHz.
+ *
+ * Pipeline:
+ *   AudioWorklet (primary) → inline blob worker → native rate → resample → PCM16 → WS
+ *   ScriptProcessor (fallback) → native rate → resample → PCM16 → WS
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -23,10 +31,12 @@ type ConvoItem = {
 };
 type ConnState = "idle" | "connecting" | "connected" | "error";
 
-// ── xAI expects 24kHz PCM16 ───────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 const XAI_SAMPLE_RATE = 24000;
+// Chunk size for ScriptProcessor fallback (frames at native rate)
+const SP_BUFFER_SIZE = 4096;
 
-// ── PCM16 encode ──────────────────────────────────────────────────────────────
+// ── PCM16 encode: Float32Array → base64 string ────────────────────────────────
 function encodePcm16(float32: Float32Array): string {
   const int16 = new Int16Array(float32.length);
   for (let i = 0; i < float32.length; i++) {
@@ -39,7 +49,7 @@ function encodePcm16(float32: Float32Array): string {
   return btoa(bin);
 }
 
-// ── PCM16 decode ──────────────────────────────────────────────────────────────
+// ── PCM16 decode: base64 → Float32Array ──────────────────────────────────────
 function decodePcm16(b64: string): Float32Array {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
@@ -50,7 +60,7 @@ function decodePcm16(b64: string): Float32Array {
   return f32;
 }
 
-// ── Linear resampler: any rate → 24kHz ───────────────────────────────────────
+// ── Linear resampler: fromRate → toRate ──────────────────────────────────────
 function resample(input: Float32Array, fromRate: number, toRate: number): Float32Array {
   if (fromRate === toRate) return input;
   const ratio = fromRate / toRate;
@@ -73,6 +83,7 @@ class AudioPlayer {
   private nextTime = 0;
 
   constructor() {
+    // Output at 24kHz matches xAI output — fine for playback AudioContext
     this.ctx = new AudioContext({ sampleRate: XAI_SAMPLE_RATE });
   }
 
@@ -102,45 +113,118 @@ class AudioPlayer {
   }
 }
 
-// ── Mic capture using ScriptProcessor (widely supported) ─────────────────────
-// AudioContext at XAI_SAMPLE_RATE auto-resamples from native mic rate
+// ── AudioWorklet processor source (runs in audio thread) ─────────────────────
+// This is compiled to a Blob URL and registered as an AudioWorklet module.
+// It receives raw float32 audio at native sample rate and posts it to main thread.
+const WORKLET_SOURCE = `
+class MicProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this._buf = [];
+    this._bufLen = 0;
+    // Accumulate ~100ms worth of frames before posting (at 48kHz: 4800 samples)
+    this._chunkSize = 4800;
+  }
+  process(inputs) {
+    const ch = inputs[0]?.[0];
+    if (!ch || ch.length === 0) return true;
+    // Copy to internal buffer
+    for (let i = 0; i < ch.length; i++) this._buf.push(ch[i]);
+    this._bufLen += ch.length;
+    if (this._bufLen >= this._chunkSize) {
+      const arr = new Float32Array(this._buf);
+      this.port.postMessage(arr, [arr.buffer]);
+      this._buf = [];
+      this._bufLen = 0;
+    }
+    return true;
+  }
+}
+registerProcessor('mic-processor', MicProcessor);
+`;
+
+// ── Mic capture class ─────────────────────────────────────────────────────────
+// Strategy: try AudioWorklet first, fall back to ScriptProcessor.
+// CRITICAL: AudioContext is created at NATIVE sample rate (undefined = browser default).
+// Manual resampling to 24kHz is done on the main thread.
 class MicCapture {
   private ctx: AudioContext | null = null;
-  private processor: ScriptProcessorNode | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
+  private workletNode: AudioWorkletNode | null = null;
+  private scriptNode: ScriptProcessorNode | null = null;
+  private blobUrl: string | null = null;
 
-  async start(stream: MediaStream, onChunk: (b64: string) => void) {
-    // Use XAI_SAMPLE_RATE so the AudioContext handles resampling
-    this.ctx = new AudioContext({ sampleRate: XAI_SAMPLE_RATE });
+  async start(stream: MediaStream, onChunk: (b64: string) => void): Promise<void> {
+    // Native sample rate — do NOT force 24kHz here
+    this.ctx = new AudioContext();
     await this.ctx.resume();
+
+    const nativeRate = this.ctx.sampleRate;
+    console.log("[MicCapture] AudioContext sample rate:", nativeRate);
 
     this.source = this.ctx.createMediaStreamSource(stream);
 
-    // 2048 frames @ 24kHz = ~85ms per chunk — good balance
-    this.processor = this.ctx.createScriptProcessor(2048, 1, 1);
+    // Try AudioWorklet first
+    let workletOk = false;
+    try {
+      const blob = new Blob([WORKLET_SOURCE], { type: "application/javascript" });
+      this.blobUrl = URL.createObjectURL(blob);
+      await this.ctx.audioWorklet.addModule(this.blobUrl);
 
-    this.processor.onaudioprocess = (e) => {
-      const data = e.inputBuffer.getChannelData(0);
-      // Data is already at 24kHz (AudioContext resamples for us)
-      onChunk(encodePcm16(data));
-    };
+      this.workletNode = new AudioWorkletNode(this.ctx, "mic-processor");
+      this.workletNode.port.onmessage = (e: MessageEvent<Float32Array>) => {
+        const resampled = resample(e.data, nativeRate, XAI_SAMPLE_RATE);
+        onChunk(encodePcm16(resampled));
+      };
 
-    this.source.connect(this.processor);
-    // IMPORTANT: connect to a silent gain node, NOT to destination
-    // This keeps the processor alive without echoing mic to speakers
-    const silent = this.ctx.createGain();
-    silent.gain.value = 0;
-    this.processor.connect(silent);
-    silent.connect(this.ctx.destination);
+      this.source.connect(this.workletNode);
+      // Connect worklet to a silent destination to keep it running
+      const silent = this.ctx.createGain();
+      silent.gain.value = 0;
+      this.workletNode.connect(silent);
+      silent.connect(this.ctx.destination);
+
+      workletOk = true;
+      console.log("[MicCapture] Using AudioWorklet");
+    } catch (err) {
+      console.warn("[MicCapture] AudioWorklet failed, using ScriptProcessor fallback:", err);
+      // Clean up failed worklet attempt
+      try { this.workletNode?.disconnect(); } catch {}
+      this.workletNode = null;
+      if (this.blobUrl) { URL.revokeObjectURL(this.blobUrl); this.blobUrl = null; }
+    }
+
+    if (!workletOk) {
+      // ScriptProcessor fallback — native rate, manual resample
+      this.scriptNode = this.ctx.createScriptProcessor(SP_BUFFER_SIZE, 1, 1);
+      this.scriptNode.onaudioprocess = (e: AudioProcessingEvent) => {
+        const data = e.inputBuffer.getChannelData(0);
+        const resampled = resample(data, nativeRate, XAI_SAMPLE_RATE);
+        onChunk(encodePcm16(resampled));
+      };
+
+      this.source.connect(this.scriptNode);
+      const silent = this.ctx.createGain();
+      silent.gain.value = 0;
+      this.scriptNode.connect(silent);
+      silent.connect(this.ctx.destination);
+
+      console.log("[MicCapture] Using ScriptProcessor fallback");
+    }
   }
 
   stop() {
-    try { this.processor?.disconnect(); } catch {}
+    try { this.workletNode?.port.close(); } catch {}
+    try { this.workletNode?.disconnect(); } catch {}
+    try { this.scriptNode?.disconnect(); } catch {}
     try { this.source?.disconnect(); } catch {}
     try { this.ctx?.close(); } catch {}
-    this.processor = null;
+    if (this.blobUrl) { try { URL.revokeObjectURL(this.blobUrl); } catch {} }
+    this.workletNode = null;
+    this.scriptNode = null;
     this.source = null;
     this.ctx = null;
+    this.blobUrl = null;
   }
 }
 
@@ -169,6 +253,10 @@ export default function Safi() {
   // ── Server event handler ──────────────────────────────────────────────────
   const onEvent = useCallback((msg: any) => {
     switch (msg.type) {
+      case "session.created":
+      case "session.updated":
+        console.log("[Safi] Session ready:", msg.type);
+        break;
       case "conversation.item.input_audio_transcription.completed": {
         const text = (msg.transcript ?? "").trim();
         if (text) setItems(p => [...p.filter(i => i.id !== "u-draft"), { id: `u-${Date.now()}`, role: "user", text }]);
@@ -200,8 +288,12 @@ export default function Safi() {
         setSpeaking(false);
         break;
       case "input_audio_buffer.speech_started":
+        console.log("[Safi] Speech detected");
         playerRef.current?.flush();
         setSpeaking(false);
+        break;
+      case "input_audio_buffer.speech_stopped":
+        console.log("[Safi] Speech stopped");
         break;
       case "response.function_call_arguments.done": {
         const name = msg.name ?? "tool";
@@ -213,9 +305,14 @@ export default function Safi() {
         if (msg.item?.type === "function_call_output") setToolRunning(null);
         break;
       case "error":
-        console.error("Safi WS error event:", msg);
+        console.error("[Safi] WS error event:", msg);
         toast({ title: "Safi error", description: msg.error?.message ?? "Unknown error", variant: "destructive" });
         break;
+      default:
+        // Log unhandled events in dev
+        if (msg.type && !msg.type.startsWith("response.audio.")) {
+          console.debug("[Safi] event:", msg.type);
+        }
     }
   }, []);
 
@@ -231,13 +328,14 @@ export default function Safi() {
       const secret = tokenData.client_secret ?? tokenData.value;
       if (!secret) throw new Error(tokenData.message ?? `No token: ${JSON.stringify(tokenData)}`);
 
-      // 2. Request mic — let browser use native rate, we'll resample
+      // 2. Request mic at NATIVE rate — browser default, do NOT force sampleRate here
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
+          // Do NOT set sampleRate constraint — let browser use hardware native rate
         }
       });
       streamRef.current = stream;
@@ -251,9 +349,10 @@ export default function Safi() {
       playerRef.current = new AudioPlayer();
 
       ws.onopen = async () => {
+        console.log("[Safi] WS connected");
         setConnState("connected");
 
-        // 4. Configure xAI session — flat pcm16 format, 24kHz
+        // 4. Configure xAI session
         ws.send(JSON.stringify({
           type: "session.update",
           session: {
@@ -268,7 +367,8 @@ export default function Safi() {
           },
         }));
 
-        // 5. Start mic capture — AudioContext at 24kHz auto-resamples
+        // 5. Start mic capture
+        // IMPORTANT: MicCapture creates AudioContext at native rate and resamples manually
         const mic = new MicCapture();
         micRef.current = mic;
         await mic.start(stream, (b64) => {
@@ -276,6 +376,8 @@ export default function Safi() {
             ws.send(JSON.stringify({ type: "input_audio_buffer.append", audio: b64 }));
           }
         });
+
+        console.log("[Safi] Mic capture started, sending audio to xAI");
       };
 
       ws.onmessage = (e) => {
@@ -283,7 +385,7 @@ export default function Safi() {
       };
 
       ws.onclose = (e) => {
-        console.log("WS closed", e.code, e.reason);
+        console.log("[Safi] WS closed", e.code, e.reason);
         doCleanup(false);
         setConnState("idle");
       };
@@ -295,6 +397,7 @@ export default function Safi() {
       };
 
     } catch (err: any) {
+      console.error("[Safi] Connect error:", err);
       toast({ title: "Couldn't start Safi", description: err.message, variant: "destructive" });
       doCleanup(false);
       setConnState("error");
