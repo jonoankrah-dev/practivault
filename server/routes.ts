@@ -2512,130 +2512,377 @@ Rules:
     res.json({ ok: true, new_quantity: newQty, movement });
   });
 
-  // ─── Saphie Realtime — xAI grok-voice-think-fast-1.0 WebSocket proxy ────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SAFI — Fully Agentic AI (xAI grok-voice-think-fast-1.0 Realtime)
+  // ═══════════════════════════════════════════════════════════════════════════
 
-  // 1. Ephemeral token — browser uses this so xAI API key stays server-side
-  app.post("/api/saphie/realtime-token", requireAuth, async (req: AuthedRequest, res: Response) => {
+  // ── Safi tool definitions (sent to xAI in session config) ─────────────────
+  const SAFI_TOOLS = [
+    {
+      type: "function",
+      name: "get_appointments",
+      description: "List upcoming or recent appointments/bookings. Use to answer 'what jobs do I have today', 'show upcoming bookings' etc.",
+      parameters: {
+        type: "object",
+        properties: {
+          filter: { type: "string", enum: ["upcoming", "today", "recent", "all"], description: "Which appointments to fetch" },
+          limit: { type: "number", description: "Max number to return, default 10" },
+        },
+        required: [],
+      },
+    },
+    {
+      type: "function",
+      name: "get_clients",
+      description: "Search or list clients/customers. Use to look up a specific client or show recent clients.",
+      parameters: {
+        type: "object",
+        properties: {
+          search: { type: "string", description: "Name, email or phone to search for" },
+          limit: { type: "number", description: "Max results, default 10" },
+        },
+        required: [],
+      },
+    },
+    {
+      type: "function",
+      name: "get_invoices",
+      description: "List invoices. Can filter by status (overdue, unpaid, paid). Use for 'show overdue invoices', 'who owes me money' etc.",
+      parameters: {
+        type: "object",
+        properties: {
+          status: { type: "string", enum: ["all", "unpaid", "paid", "overdue"], description: "Invoice status filter" },
+          limit: { type: "number", description: "Max results, default 10" },
+        },
+        required: [],
+      },
+    },
+    {
+      type: "function",
+      name: "get_quotes",
+      description: "List quotes/estimates. Use for 'show pending quotes', 'any quotes outstanding' etc.",
+      parameters: {
+        type: "object",
+        properties: {
+          status: { type: "string", enum: ["all", "draft", "sent", "accepted", "declined"], description: "Quote status filter" },
+          limit: { type: "number", description: "Max results, default 10" },
+        },
+        required: [],
+      },
+    },
+    {
+      type: "function",
+      name: "get_stock",
+      description: "Check stock levels. Use for 'what stock do I have', 'anything running low' etc.",
+      parameters: {
+        type: "object",
+        properties: {
+          low_stock_only: { type: "boolean", description: "If true, only return items below their low stock threshold" },
+        },
+        required: [],
+      },
+    },
+    {
+      type: "function",
+      name: "get_report",
+      description: "Generate a business summary report — revenue, jobs completed, outstanding invoices, new clients.",
+      parameters: {
+        type: "object",
+        properties: {
+          period: { type: "string", enum: ["today", "this_week", "this_month", "last_month"], description: "Report period" },
+        },
+        required: ["period"],
+      },
+    },
+    {
+      type: "function",
+      name: "get_leads",
+      description: "List leads or enquiries. Use for 'show new leads', 'any new enquiries' etc.",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: { type: "number", description: "Max results, default 10" },
+        },
+        required: [],
+      },
+    },
+  ];
+
+  // ── Safi tool executor — runs when xAI calls a function mid-conversation ───
+  async function executeSafiTool(toolName: string, args: any, db: any): Promise<string> {
+    const userId = db._userId;
     try {
-      // Fetch business info + user data in parallel for session instructions
-      const [userRes, bizRes, manualsRes] = await Promise.all([
-        req.db!.from("users").select("name, business_name, industry").eq("id", req.user!.id).single(),
-        req.db!.from("business_info").select("*").eq("user_id", req.user!.id).single(),
-        req.db!.from("manuals").select("name, extracted_text").eq("user_id", req.user!.id).not("extracted_text", "is", null).order("created_at", { ascending: true }),
-      ]);
-      const userData = userRes.data;
-      const bizInfo = bizRes.data;
-      const manuals = manualsRes.data;
-
-      // Build instructions
-      let bizContext = "";
-      if (bizInfo) {
-        if (bizInfo.tagline) bizContext += `\nTagline: ${bizInfo.tagline}`;
-        if (bizInfo.about) bizContext += `\nAbout: ${bizInfo.about}`;
-        if (bizInfo.website_url) bizContext += `\nWebsite: ${bizInfo.website_url}`;
-        if (bizInfo.instagram_url) bizContext += `\nInstagram: ${bizInfo.instagram_url}`;
-        if (bizInfo.tiktok_url) bizContext += `\nTikTok: ${bizInfo.tiktok_url}`;
-        if (bizInfo.products && (bizInfo.products as any[]).length > 0) {
-          const lines = (bizInfo.products as any[]).map((p: any) =>
-            `- ${p.name}${p.price ? ` — ${p.price}` : ""}${p.description ? `: ${p.description}` : ""}`
-          ).join("\n");
-          bizContext += `\n\nProducts & Services:\n${lines}`;
+      switch (toolName) {
+        case "get_appointments": {
+          let q = db.from("bookings")
+            .select("*, clients(name), treatments(name,price)")
+            .eq("user_id", userId)
+            .order("start_time", { ascending: true })
+            .limit(args.limit ?? 10);
+          if (args.filter === "today") {
+            const today = new Date(); today.setHours(0,0,0,0);
+            const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate()+1);
+            q = q.gte("start_time", today.toISOString()).lt("start_time", tomorrow.toISOString());
+          } else if (args.filter === "upcoming") {
+            q = q.gte("start_time", new Date().toISOString());
+          }
+          const { data } = await q;
+          if (!data?.length) return "No appointments found.";
+          return data.map((b: any) => `${new Date(b.start_time).toLocaleString("en-GB")} — ${(b.clients as any)?.name ?? "Unknown"} — ${(b.treatments as any)?.name ?? "Unknown"} — ${b.status ?? "booked"}`).join("\n");
         }
-        if (bizInfo.faqs && (bizInfo.faqs as any[]).length > 0) {
-          bizContext += `\n\nFAQs:\n${(bizInfo.faqs as any[]).map((f: any) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n")}`;
+        case "get_clients": {
+          let q = db.from("clients").select("name, email, phone, stage").eq("user_id", userId).limit(args.limit ?? 10);
+          if (args.search) q = q.ilike("name", `%${args.search}%`);
+          const { data } = await q;
+          if (!data?.length) return "No clients found.";
+          return data.map((c: any) => `${c.name} — ${c.email ?? "no email"} — ${c.phone ?? "no phone"} — ${c.stage ?? ""}`).join("\n");
         }
+        case "get_invoices": {
+          let q = db.from("invoices").select("invoice_number, total, status, due_date, clients(name)").eq("user_id", userId).limit(args.limit ?? 10);
+          if (args.status === "unpaid" || args.status === "overdue") q = q.eq("status", "unpaid");
+          else if (args.status === "paid") q = q.eq("status", "paid");
+          const { data } = await q;
+          if (!data?.length) return "No invoices found.";
+          const now = new Date();
+          return data.map((inv: any) => {
+            const overdue = inv.status === "unpaid" && inv.due_date && new Date(inv.due_date) < now;
+            return `${inv.invoice_number ?? "INV"} — ${(inv.clients as any)?.name ?? "Unknown"} — £${inv.total ?? 0} — ${overdue ? "OVERDUE" : inv.status}`;
+          }).join("\n");
+        }
+        case "get_quotes": {
+          let q = db.from("quotes").select("quote_number, amount, status, clients(name)").eq("user_id", userId).limit(args.limit ?? 10);
+          if (args.status && args.status !== "all") q = q.eq("status", args.status);
+          const { data } = await q;
+          if (!data?.length) return "No quotes found.";
+          return data.map((qt: any) => `${qt.quote_number ?? "QUO"} — ${(qt.clients as any)?.name ?? "Unknown"} — £${qt.amount ?? 0} — ${qt.status}`).join("\n");
+        }
+        case "get_stock": {
+          const { data } = await db.from("stock_items").select("name, quantity, low_stock_threshold, unit, category").eq("user_id", userId);
+          if (!data?.length) return "No stock items found.";
+          const items = args.low_stock_only ? data.filter((s: any) => s.quantity <= (s.low_stock_threshold ?? 0)) : data;
+          if (!items.length) return "All stock levels are healthy.";
+          return items.map((s: any) => `${s.name} — ${s.quantity} ${s.unit ?? "units"}${s.quantity <= (s.low_stock_threshold ?? 0) ? " ⚠️ LOW" : ""}`).join("\n");
+        }
+        case "get_report": {
+          const now = new Date();
+          let from: Date;
+          let label: string;
+          if (args.period === "today") { from = new Date(now); from.setHours(0,0,0,0); label = "Today"; }
+          else if (args.period === "this_week") { from = new Date(now); from.setDate(now.getDate() - now.getDay()); from.setHours(0,0,0,0); label = "This week"; }
+          else if (args.period === "last_month") { from = new Date(now.getFullYear(), now.getMonth()-1, 1); label = "Last month"; }
+          else { from = new Date(now.getFullYear(), now.getMonth(), 1); label = "This month"; }
+          const [invRes, bookRes, clientRes] = await Promise.all([
+            db.from("invoices").select("total, status").eq("user_id", userId).gte("issue_date", from.toISOString()),
+            db.from("bookings").select("id, status").eq("user_id", userId).gte("start_time", from.toISOString()),
+            db.from("clients").select("id").eq("user_id", userId).gte("created_at", from.toISOString()),
+          ]);
+          const revenue = (invRes.data ?? []).filter((i: any) => i.status === "paid").reduce((s: number, i: any) => s + (i.total ?? 0), 0);
+          const outstanding = (invRes.data ?? []).filter((i: any) => i.status === "unpaid").reduce((s: number, i: any) => s + (i.total ?? 0), 0);
+          const jobs = (bookRes.data ?? []).length;
+          const newClients = (clientRes.data ?? []).length;
+          return `${label} report:\n• Revenue collected: £${revenue.toFixed(2)}\n• Outstanding invoices: £${outstanding.toFixed(2)}\n• Jobs/appointments: ${jobs}\n• New clients: ${newClients}`;
+        }
+        case "get_leads": {
+          const { data } = await db.from("leads").select("name, source, status, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(args.limit ?? 10);
+          if (!data?.length) return "No leads found.";
+          return data.map((l: any) => `${l.name} — ${l.source ?? "unknown source"} — ${l.status ?? "new"}`).join("\n");
+        }
+        default:
+          return `Unknown tool: ${toolName}`;
       }
-      let manualContext = "";
-      if (manuals && manuals.length > 0) {
-        let totalChars = 0;
-        const MAX = 8000;
-        const sections: string[] = [];
-        for (const m of manuals) {
-          if (totalChars >= MAX) break;
-          const text = (m.extracted_text as string) || "";
-          const chunk = text.slice(0, MAX - totalChars);
-          sections.push(`=== ${m.name} ===\n${chunk}`);
-          totalChars += chunk.length;
-        }
-        manualContext = `\n\nManuals:\n${sections.join("\n\n")}`;
+    } catch (e: any) {
+      return `Error running ${toolName}: ${e.message}`;
+    }
+  }
+
+  // ── /api/safi/realtime-token — issues ephemeral token with agentic session ──
+  const buildSafiInstructions = async (db: any, userId: string): Promise<string> => {
+    const [userRes, bizRes, manualsRes] = await Promise.all([
+      db.from("users").select("name, business_name, industry").eq("id", userId).single(),
+      db.from("business_info").select("*").eq("user_id", userId).single(),
+      db.from("manuals").select("name, extracted_text").eq("user_id", userId).not("extracted_text", "is", null).order("created_at", { ascending: true }),
+    ]);
+    const userData = userRes.data;
+    const bizInfo = bizRes.data;
+    const manuals = manualsRes.data;
+
+    let bizContext = "";
+    if (bizInfo) {
+      if (bizInfo.tagline) bizContext += `\nTagline: ${bizInfo.tagline}`;
+      if (bizInfo.about) bizContext += `\nAbout: ${bizInfo.about}`;
+      if (bizInfo.website_url) bizContext += `\nWebsite: ${bizInfo.website_url}`;
+      if (bizInfo.products?.length) {
+        bizContext += `\n\nProducts & Services:\n${(bizInfo.products as any[]).map((p: any) => `- ${p.name}${p.price ? ` — ${p.price}` : ""}${p.description ? `: ${p.description}` : ""}`).join("\n")}`;
       }
+      if (bizInfo.faqs?.length) {
+        bizContext += `\n\nFAQs:\n${(bizInfo.faqs as any[]).map((f: any) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n")}`;
+      }
+    }
+    let manualContext = "";
+    if (manuals?.length) {
+      let total = 0;
+      const sections: string[] = [];
+      for (const m of manuals) {
+        if (total >= 8000) break;
+        const chunk = ((m.extracted_text as string) || "").slice(0, 8000 - total);
+        sections.push(`=== ${m.name} ===\n${chunk}`);
+        total += chunk.length;
+      }
+      manualContext = `\n\nManuals:\n${sections.join("\n\n")}`;
+    }
 
-      const instructions = `You are Safi, the AI voice assistant for ${userData?.business_name ?? "Mayfair Aesthetics Academy"}.${bizContext}${manualContext}
+    return `You are Safi, the fully agentic AI assistant for ${userData?.business_name ?? "this business"}.${bizContext}${manualContext}
 
-You speak your replies aloud — keep them concise, warm, and conversational (2-3 sentences max).
-You are a knowledgeable sales assistant. Give prices confidently and directly when asked.
-All courses are 100% online, CPD accredited, no UK licence required, no consultation needed.
-Payment plans via Clearpay and Klarna. All sales non-refundable.
-Direct people to the website to purchase. Never be vague about pricing.`;
+You are not just a chatbot — you are a fully autonomous business AI. You can look up and act on real data in this business using your tools.
 
-      // Request ephemeral token from xAI
+Your capabilities:
+- Look up appointments, jobs, and schedules
+- Find client records and history
+- Check invoices and identify overdue payments
+- Review quotes and estimates
+- Check stock levels and flag low stock
+- Generate business reports (revenue, jobs, new clients)
+- Review leads and enquiries
+
+Personality:
+- Warm, professional, direct. Short sentences — this is a voice interface.
+- When asked to do something, USE YOUR TOOLS — don't just describe what you could do.
+- Always confirm before taking any action that creates, modifies, or sends anything.
+- When you retrieve data, summarise it clearly and concisely.
+- If you can't do something yet (e.g. send an actual email), say what you've prepared and ask them to confirm.
+
+Key business facts:
+- All courses are 100% online, CPD accredited, no UK licence required
+- Payment plans available via Clearpay and Klarna
+- Website: ${bizInfo?.website_url ?? "https://mayfair.bigcartel.com"}`;
+  };
+
+  app.post("/api/safi/realtime-token", requireAuth, async (req: AuthedRequest, res: Response) => {
+    try {
+      const db = req.db!;
+      const userId = req.user!.id;
+      const instructions = await buildSafiInstructions(db, userId);
+
       const tokenRes = await fetch("https://api.x.ai/v1/realtime/client_secrets", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.XAI_API_KEY}`,
-        },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${process.env.XAI_API_KEY}` },
         body: JSON.stringify({
           model: "grok-voice-think-fast-1.0",
           voice: "eve",
           instructions,
           turn_detection: { type: "server_vad" },
+          tools: SAFI_TOOLS,
         }),
       });
-      if (!tokenRes.ok) {
-        const err = await tokenRes.text();
-        return res.status(502).json({ message: `xAI token error: ${err}` });
-      }
+      if (!tokenRes.ok) return res.status(502).json({ message: `xAI token error: ${await tokenRes.text()}` });
       const tokenData = await tokenRes.json();
-      // xAI returns { value: "xai-realtime-client-secret-...", expires_at: ... }
       const secret = tokenData.value ?? tokenData.client_secret;
-      res.json({ client_secret: secret, instructions });
+      res.json({ client_secret: secret });
     } catch (e: any) {
       res.status(500).json({ message: e.message });
     }
   });
 
-  // 2. WebSocket proxy — relay between browser and xAI realtime
-  const realtimeWss = new WebSocketServer({ noServer: true });
-  httpServer.on("upgrade", (request, socket, head) => {
-    const url = new URL(request.url ?? "", `http://${request.headers.host}`);
-    if (url.pathname !== "/ws/saphie/realtime") return;
-    realtimeWss.handleUpgrade(request, socket as any, head, (browserWs) => {
-      realtimeWss.emit("connection", browserWs, request);
-    });
+  // Keep old endpoint as alias for any cached references
+  app.post("/api/saphie/realtime-token", requireAuth, async (req: AuthedRequest, res: Response) => {
+    req.url = "/api/safi/realtime-token";
+    try {
+      const db = req.db!;
+      const userId = req.user!.id;
+      const instructions = await buildSafiInstructions(db, userId);
+      const tokenRes = await fetch("https://api.x.ai/v1/realtime/client_secrets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${process.env.XAI_API_KEY}` },
+        body: JSON.stringify({ model: "grok-voice-think-fast-1.0", voice: "eve", instructions, turn_detection: { type: "server_vad" }, tools: SAFI_TOOLS }),
+      });
+      if (!tokenRes.ok) return res.status(502).json({ message: `xAI token error: ${await tokenRes.text()}` });
+      const tokenData = await tokenRes.json();
+      res.json({ client_secret: tokenData.value ?? tokenData.client_secret });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  realtimeWss.on("connection", async (browserWs: WS, request: any) => {
-    // Extract token from query param
+  // ── Safi WebSocket proxy — relays browser ↔ xAI + handles tool calls ───────
+  const safiWss = new WebSocketServer({ noServer: true });
+  httpServer.on("upgrade", (request, socket, head) => {
+    const url = new URL(request.url ?? "", `http://${request.headers.host}`);
+    if (url.pathname === "/ws/safi/realtime" || url.pathname === "/ws/saphie/realtime") {
+      safiWss.handleUpgrade(request, socket as any, head, (browserWs) => {
+        safiWss.emit("connection", browserWs, request);
+      });
+    }
+  });
+
+  safiWss.on("connection", async (browserWs: WS, request: any) => {
     const url = new URL(request.url ?? "", "http://localhost");
     const clientSecret = url.searchParams.get("token");
-    if (!clientSecret) {
-      browserWs.close(1008, "Missing token");
-      return;
-    }
+    if (!clientSecret) { browserWs.close(1008, "Missing token"); return; }
 
-    // Connect to xAI realtime
+    // Parse user JWT to get a DB client for tool execution
+    const authHeader = request.headers["authorization"] ?? request.headers["Authorization"] ?? "";
+    const jwtToken = authHeader.replace("Bearer ", "");
+    const toolDb = jwtToken ? supabaseForUser(jwtToken) : null;
+
+    // Track in-progress tool calls
+    const pendingTools = new Map<string, { name: string; argsBuffer: string }>();
+
     const xaiWs = new WS(
       "wss://api.x.ai/v1/realtime?model=grok-voice-think-fast-1.0",
       { headers: { Authorization: `xai-client-secret.${clientSecret}` } }
     );
 
     xaiWs.on("open", () => {
-      // Relay browser → xAI
       browserWs.on("message", (data) => {
         if (xaiWs.readyState === WS.OPEN) xaiWs.send(data);
       });
     });
 
-    // Relay xAI → browser
-    xaiWs.on("message", (data) => {
-      if (browserWs.readyState === WS.OPEN) browserWs.send(data);
+    xaiWs.on("message", async (rawData) => {
+      // Forward to browser
+      if (browserWs.readyState === WS.OPEN) browserWs.send(rawData);
+
+      // Intercept tool calls
+      let msg: any;
+      try { msg = JSON.parse(rawData.toString()); } catch { return; }
+
+      if (msg.type === "response.function_call_arguments.delta") {
+        const entry = pendingTools.get(msg.call_id) ?? { name: msg.name ?? "", argsBuffer: "" };
+        entry.argsBuffer += msg.delta ?? "";
+        pendingTools.set(msg.call_id, entry);
+      }
+
+      if (msg.type === "response.function_call_arguments.done") {
+        const callId = msg.call_id;
+        const toolName = msg.name ?? pendingTools.get(callId)?.name ?? "unknown";
+        let args: any = {};
+        try { args = JSON.parse(msg.arguments ?? pendingTools.get(callId)?.argsBuffer ?? "{}"); } catch {}
+        pendingTools.delete(callId);
+
+        // Grab user_id from the JWT for tool execution
+        let userId = "";
+        try {
+          const payload = JSON.parse(atob(jwtToken.split(".")[1]));
+          userId = payload.id ?? payload.sub ?? "";
+        } catch {}
+
+        // Create a db proxy with userId attached for the executor
+        const dbWithUser = toolDb ? Object.assign(Object.create(Object.getPrototypeOf(toolDb)), toolDb, { _userId: userId }) : null;
+        const result = dbWithUser ? await executeSafiTool(toolName, args, dbWithUser) : "Tool unavailable — not authenticated.";
+
+        // Send result back to xAI so it can continue speaking
+        if (xaiWs.readyState === WS.OPEN) {
+          xaiWs.send(JSON.stringify({
+            type: "conversation.item.create",
+            item: { type: "function_call_output", call_id: callId, output: result },
+          }));
+          xaiWs.send(JSON.stringify({ type: "response.create" }));
+        }
+      }
     });
 
     xaiWs.on("close", (code, reason) => browserWs.close(code, reason));
-    xaiWs.on("error", (err) => { console.error("xAI WS error:", err); browserWs.close(1011, "xAI error"); });
+    xaiWs.on("error", (err) => { console.error("Safi xAI WS error:", err); browserWs.close(1011, "xAI error"); });
     browserWs.on("close", () => { if (xaiWs.readyState === WS.OPEN) xaiWs.close(); });
-    browserWs.on("error", (err) => { console.error("Browser WS error:", err); });
+    browserWs.on("error", (err) => console.error("Safi browser WS error:", err));
   });
 
   // ─── Saphie AI — chat + voice transcription + manuals ──────────────────────
