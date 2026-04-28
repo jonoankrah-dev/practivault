@@ -13,6 +13,7 @@ function useSidebarCounts() {
   const { data: consent } = useQuery<any[]>({ queryKey: ["/api/consent"], staleTime: 60_000 });
   const { data: afd } = useQuery<any[]>({ queryKey: ["/api/ai-front-desk"], staleTime: 60_000 });
   const { data: calls } = useQuery<any[]>({ queryKey: ["/api/calls"], staleTime: 60_000 });
+  const { data: waCount } = useQuery<{ count: number }>({ queryKey: ["/api/whatsapp/unread-count"], staleTime: 30_000, refetchInterval: 30_000 });
 
   const newLeads = leads?.filter((l) => l.status === "new").length || 0;
   const pipelineValue =
@@ -27,8 +28,9 @@ function useSidebarCounts() {
     calls?.filter(
       (c) => c.status === "missed" && new Date(c.created_at).toDateString() === today,
     ).length || 0;
+  const unreadWhatsApp = waCount?.count || 0;
 
-  return { newLeads, pipelineValue, pendingConsent, afdToday, missedCallsToday };
+  return { newLeads, pipelineValue, pendingConsent, afdToday, missedCallsToday, unreadWhatsApp };
 }
 
 function formatMoney(n: number) {

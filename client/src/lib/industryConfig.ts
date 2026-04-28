@@ -9,14 +9,14 @@ import {
   ShieldCheck, Settings, MessageSquare, Camera, Phone, BookOpen,
   ImageIcon, Receipt, Users2, Video, Package, GraduationCap,
   MapPin, Warehouse, Wrench, HardHat, Zap, Leaf, ClipboardList,
-  HeartPulse, Hammer, Wind, Bot, Building2,
+  HeartPulse, Hammer, Wind, Bot, Building2, MessageCircle,
 } from "lucide-react";
 
 export type NavItemDef = {
   href: string;
   label: string;
   icon: any;
-  badgeKey?: "newLeads" | "pipelineValue" | "pendingConsent" | "afdToday" | "missedCallsToday";
+  badgeKey?: "newLeads" | "pipelineValue" | "pendingConsent" | "afdToday" | "missedCallsToday" | "unreadWhatsApp";
 };
 
 export interface IndustryConfig {
@@ -80,6 +80,7 @@ const NAV = {
   locations:   { href: "/locations",        label: "Locations",       icon: MapPin },
   settings:    { href: "/settings",         label: "Settings",        icon: Settings },
   businessInfo:{ href: "/business-info",    label: "Business Info",   icon: Building2 },
+  whatsapp:    { href: "/whatsapp",          label: "WhatsApp",        icon: MessageCircle, badgeKey: "unreadWhatsApp" },
 } as const;
 
 // ─── Industry configs ─────────────────────────────────────────────────────────
@@ -99,7 +100,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
     },
     nav: [
       NAV.dashboard, NAV.appointments, NAV.clients,
-      NAV.safi, NAV.social,
+      NAV.safi, NAV.social, NAV.whatsapp,
       NAV.leads, NAV.quotes, NAV.consent,
       NAV.team, NAV.invoices, NAV.photos,
       NAV.manuals, NAV.videos, NAV.packages,
@@ -121,7 +122,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
     },
     nav: [
       NAV.dashboard, NAV.appointments, NAV.clients,
-      NAV.safi, NAV.social,
+      NAV.safi, NAV.social, NAV.whatsapp,
       NAV.leads, NAV.quotes, NAV.consent,
       NAV.team, NAV.invoices, NAV.photos,
       NAV.stock, NAV.cpd, NAV.locations, NAV.settings,
@@ -302,7 +303,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
     },
     nav: [
       NAV.dashboard, NAV.bookings, NAV.clients,
-      NAV.safi, NAV.social,
+      NAV.safi, NAV.social, NAV.whatsapp,
       NAV.leads, NAV.quotes, NAV.consent,
       NAV.team, NAV.invoices, NAV.photos,
       NAV.manuals, NAV.videos, NAV.packages,

@@ -2970,6 +2970,32 @@ Rules:
         required: ["course_name","date","hours"],
       },
     },
+    {
+      type: "function",
+      name: "get_whatsapp_threads",
+      description: "List all WhatsApp conversations grouped by contact. Shows the last message and unread count for each thread.",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: { type: "number", description: "Max number of threads to return (default 20)" },
+        },
+        required: [],
+      },
+    },
+    {
+      type: "function",
+      name: "send_whatsapp_message",
+      description: "Send a WhatsApp message to a contact. REQUIRES USER APPROVAL before calling — always show the full message draft and ask for confirmation first.",
+      parameters: {
+        type: "object",
+        properties: {
+          to: { type: "string", description: "Recipient phone number in international format e.g. 447537167007" },
+          body: { type: "string", description: "The message text to send" },
+          contact_name: { type: "string", description: "Name of the contact for display purposes" },
+        },
+        required: ["to", "body"],
+      },
+    },
   ];
 
   // ── Safi tool executor — runs when xAI calls a function mid-conversation ───
@@ -3579,6 +3605,45 @@ Rules:
           if (error) return `Failed to add CPD entry: ${error.message}`;
           return `CPD entry logged: ${data.course_name} — ${new Date(data.date).toLocaleDateString("en-GB")} — ${data.hours} hours`;
         }
+        case "get_whatsapp_threads": {
+          const { data: msgs } = await db.from("whatsapp_messages").select("*").eq("user_id", userId).order("sent_at", { ascending: false }).limit(200);
+          if (!msgs?.length) return "No WhatsApp conversations yet. Once your number is connected and clients message you, threads will appear here.";
+          const threadMap: Record<string, any> = {};
+          for (const msg of msgs) {
+            const key = msg.contact_phone;
+            if (!threadMap[key]) {
+              threadMap[key] = { name: msg.contact_name || msg.contact_phone, phone: msg.contact_phone, last_msg: msg.body, last_at: msg.sent_at, unread: 0, total: 0 };
+            }
+            if (!msg.is_read && msg.direction === "inbound") threadMap[key].unread++;
+            threadMap[key].total++;
+          }
+          const threads = Object.values(threadMap).slice(0, args.limit ?? 20);
+          const totalUnread = threads.reduce((s: number, t: any) => s + t.unread, 0);
+          let out = `WhatsApp Inbox — ${threads.length} conversation${threads.length !== 1 ? "s" : ""}${totalUnread > 0 ? `, ${totalUnread} unread` : ", all read"}:\n\n`;
+          for (const t of threads as any[]) {
+            const ago = new Date(t.last_at).toLocaleDateString("en-GB");
+            out += `• **${t.name}** (${t.phone})${t.unread > 0 ? ` — 🔴 ${t.unread} unread` : ""}\n  Last: "${t.last_msg?.slice(0, 80)}${(t.last_msg?.length ?? 0) > 80 ? "…" : ""}" (${ago})\n`;
+          }
+          return out;
+        }
+        case "send_whatsapp_message": {
+          const { to, body: msgBody } = args;
+          const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+          const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+          if (!phoneNumberId || !accessToken) {
+            await db.from("whatsapp_messages").insert({ user_id: userId, contact_phone: to, contact_name: args.contact_name ?? null, direction: "outbound", body: msgBody, sent_at: new Date().toISOString(), is_read: true, status: "pending_credentials" });
+            return `Message saved but not sent — WhatsApp credentials (WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN) are not yet configured on the server. Add them to Railway and it will send live.`;
+          }
+          const metaRes = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ messaging_product: "whatsapp", to, type: "text", text: { body: msgBody } }),
+          });
+          const metaData = await metaRes.json() as any;
+          if (!metaRes.ok) return `WhatsApp send failed: ${metaData.error?.message || "Unknown error"}`;
+          await db.from("whatsapp_messages").insert({ user_id: userId, contact_phone: to, contact_name: args.contact_name ?? null, direction: "outbound", body: msgBody, wa_message_id: metaData.messages?.[0]?.id, sent_at: new Date().toISOString(), is_read: true, status: "sent" });
+          return `WhatsApp message sent to ${args.contact_name || to}: "${msgBody}"`;
+        }
         default:
           return `Unknown tool: ${toolName}`;
       }
@@ -3924,6 +3989,211 @@ Key facts:
     res.setHeader("Cache-Control", "no-cache");
     const arrayBuffer = await ttsRes.arrayBuffer();
     res.end(Buffer.from(arrayBuffer));
+  });
+
+  // ============================================================
+  // WHATSAPP INTEGRATION
+  // ============================================================
+
+  // GET webhook verification (Meta handshake)
+  app.get("/api/whatsapp/webhook", (req: Request, res: Response) => {
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
+    if (mode === "subscribe" && token === (process.env.WHATSAPP_VERIFY_TOKEN || "practivault-verify")) {
+      return res.status(200).send(challenge);
+    }
+    res.sendStatus(403);
+  });
+
+  // POST webhook — receives inbound messages from Meta
+  app.post("/api/whatsapp/webhook", async (req: Request, res: Response) => {
+    try {
+      const body = req.body;
+      if (body.object !== "whatsapp_business_account") return res.sendStatus(200);
+
+      for (const entry of body.entry || []) {
+        for (const change of entry.changes || []) {
+          const value = change.value;
+          if (!value?.messages) continue;
+
+          for (const msg of value.messages) {
+            const from = msg.from; // phone number e.g. 447911123456
+            const text = msg.type === "text" ? msg.text?.body : `[${msg.type} message]`;
+            const waMessageId = msg.id;
+            const ts = new Date(Number(msg.timestamp) * 1000).toISOString();
+
+            // Find matching user by WhatsApp phone number ID in settings
+            const phoneNumberId = value.metadata?.phone_number_id;
+            if (!phoneNumberId) continue;
+
+            // Find the PractiVault user who owns this phone number ID
+            const { data: settingsRows } = await supabase
+              .from("user_settings")
+              .select("user_id")
+              .eq("key", "whatsapp_phone_number_id")
+              .eq("value", phoneNumberId)
+              .limit(1);
+
+            const userId = settingsRows?.[0]?.user_id;
+            if (!userId) continue;
+
+            const db = supabaseForUser(null); // use service role for webhook inserts
+
+            // Try to match phone to an existing client
+            const { data: clientMatch } = await supabase
+              .from("clients")
+              .select("id, name")
+              .eq("user_id", userId)
+              .or(`phone.eq.${from},phone.eq.+${from}`)
+              .limit(1)
+              .single();
+
+            await supabase.from("whatsapp_messages").insert({
+              user_id: userId,
+              client_id: clientMatch?.id || null,
+              contact_name: clientMatch?.name || null,
+              contact_phone: from,
+              direction: "inbound",
+              body: text || "",
+              wa_message_id: waMessageId,
+              sent_at: ts,
+              is_read: false,
+            });
+          }
+        }
+      }
+      res.sendStatus(200);
+    } catch (e) {
+      console.error("WhatsApp webhook error:", e);
+      res.sendStatus(200); // always 200 to avoid Meta retries
+    }
+  });
+
+  // GET /api/whatsapp/threads — list all conversations grouped by contact
+  app.get("/api/whatsapp/threads", requireAuth, async (req: AuthedRequest, res: Response) => {
+    const { data, error } = await req.db!
+      .from("whatsapp_messages")
+      .select("*")
+      .eq("user_id", req.user!.id)
+      .order("sent_at", { ascending: false });
+    if (error) return res.status(500).json({ message: error.message });
+
+    // Group into threads by contact_phone
+    const threadMap: Record<string, any> = {};
+    for (const msg of data || []) {
+      const key = msg.contact_phone;
+      if (!threadMap[key]) {
+        threadMap[key] = {
+          contact_phone: msg.contact_phone,
+          contact_name: msg.contact_name,
+          client_id: msg.client_id,
+          last_message: msg.body,
+          last_message_at: msg.sent_at,
+          unread_count: 0,
+          messages: [],
+        };
+      }
+      if (!msg.is_read && msg.direction === "inbound") threadMap[key].unread_count++;
+      threadMap[key].messages.push(msg);
+    }
+
+    const threads = Object.values(threadMap).sort(
+      (a: any, b: any) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
+    );
+    res.json(threads);
+  });
+
+  // GET /api/whatsapp/messages/:phone — get messages for a specific contact
+  app.get("/api/whatsapp/messages/:phone", requireAuth, async (req: AuthedRequest, res: Response) => {
+    const phone = req.params.phone;
+    const { data, error } = await req.db!
+      .from("whatsapp_messages")
+      .select("*")
+      .eq("user_id", req.user!.id)
+      .eq("contact_phone", phone)
+      .order("sent_at", { ascending: true });
+    if (error) return res.status(500).json({ message: error.message });
+
+    // Mark inbound messages as read
+    await req.db!
+      .from("whatsapp_messages")
+      .update({ is_read: true })
+      .eq("user_id", req.user!.id)
+      .eq("contact_phone", phone)
+      .eq("direction", "inbound")
+      .eq("is_read", false);
+
+    res.json(data || []);
+  });
+
+  // POST /api/whatsapp/send — send a message to a contact
+  app.post("/api/whatsapp/send", requireAuth, async (req: AuthedRequest, res: Response) => {
+    const { to, body } = req.body;
+    if (!to || !body?.trim()) return res.status(400).json({ message: "to and body are required" });
+
+    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+
+    if (!phoneNumberId || !accessToken) {
+      // Store the message as pending even without live credentials (dev mode)
+      const { data: stored } = await req.db!.from("whatsapp_messages").insert({
+        user_id: req.user!.id,
+        contact_phone: to,
+        direction: "outbound",
+        body: body.trim(),
+        sent_at: new Date().toISOString(),
+        is_read: true,
+        status: "pending_credentials",
+      }).select().single();
+      return res.json({ ok: true, message: stored, warning: "WhatsApp credentials not yet configured — message saved but not sent." });
+    }
+
+    // Send via Meta Cloud API
+    const metaRes = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to,
+        type: "text",
+        text: { body: body.trim() },
+      }),
+    });
+
+    const metaData = await metaRes.json() as any;
+    if (!metaRes.ok) {
+      return res.status(500).json({ message: metaData.error?.message || "WhatsApp send failed" });
+    }
+
+    // Store the sent message
+    const { data: stored } = await req.db!.from("whatsapp_messages").insert({
+      user_id: req.user!.id,
+      contact_phone: to,
+      direction: "outbound",
+      body: body.trim(),
+      wa_message_id: metaData.messages?.[0]?.id,
+      sent_at: new Date().toISOString(),
+      is_read: true,
+      status: "sent",
+    }).select().single();
+
+    res.json({ ok: true, message: stored });
+  });
+
+  // GET /api/whatsapp/unread-count — badge count for sidebar
+  app.get("/api/whatsapp/unread-count", requireAuth, async (req: AuthedRequest, res: Response) => {
+    const { count, error } = await req.db!
+      .from("whatsapp_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", req.user!.id)
+      .eq("direction", "inbound")
+      .eq("is_read", false);
+    if (error) return res.status(500).json({ message: error.message });
+    res.json({ count: count || 0 });
   });
 
   return httpServer;
