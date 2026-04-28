@@ -42,7 +42,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { user, signOut } = useAuth();
   const { config, businessName } = useIndustry();
-  const { newLeads, pipelineValue, pendingConsent, afdToday, missedCallsToday } = useSidebarCounts();
+  const { newLeads, pipelineValue, pendingConsent, afdToday, missedCallsToday, unreadWhatsApp } = useSidebarCounts();
 
   const badgeValues: Record<string, string | number | undefined> = {
     newLeads: newLeads > 0 ? newLeads : undefined,
@@ -50,6 +50,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     pendingConsent: pendingConsent > 0 ? pendingConsent : undefined,
     afdToday: afdToday > 0 ? afdToday : undefined,
     missedCallsToday: missedCallsToday > 0 ? missedCallsToday : undefined,
+    unreadWhatsApp: unreadWhatsApp > 0 ? unreadWhatsApp : undefined,
   };
 
   const displayName = businessName

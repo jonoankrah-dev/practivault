@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import PageHeader from "@/components/PageHeader";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getAuthToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -103,9 +103,10 @@ export default function SettingsPage() {
 
   const uploadLogo = useMutation({
     mutationFn: async (file: File) => {
+      const token = getAuthToken();
       const res = await fetch(`/api/me/logo`, {
         method: "POST",
-        headers: { "Content-Type": file.type },
+        headers: { "Content-Type": file.type, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: file,
       });
       if (!res.ok) throw new Error("Upload failed");
