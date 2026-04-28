@@ -2701,6 +2701,137 @@ Rules:
         required: ["invoice_number", "status"],
       },
     },
+    {
+      type: "function",
+      name: "get_bookings",
+      description: "List bookings/appointments. Can filter by date range, status, or client name.",
+      parameters: {
+        type: "object",
+        properties: {
+          filter: { type: "string", enum: ["upcoming", "today", "all", "past"], description: "Which bookings to fetch" },
+          client_name: { type: "string", description: "Filter by client name" },
+          limit: { type: "number", description: "Max results, default 15" },
+        },
+        required: [],
+      },
+    },
+    {
+      type: "function",
+      name: "create_booking",
+      description: "Create a new booking/appointment. Requires client name, treatment name, date and time.",
+      parameters: {
+        type: "object",
+        properties: {
+          client_name: { type: "string", description: "Client name to search for" },
+          treatment_name: { type: "string", description: "Treatment name to search for" },
+          date: { type: "string", description: "Date in YYYY-MM-DD format" },
+          time: { type: "string", description: "Time in HH:MM format" },
+          status: { type: "string", enum: ["pending","confirmed","completed","cancelled"], description: "Booking status, default confirmed" },
+          notes: { type: "string", description: "Optional notes" },
+        },
+        required: ["client_name", "treatment_name", "date", "time"],
+      },
+    },
+    {
+      type: "function",
+      name: "update_booking",
+      description: "Update an existing booking status — e.g. mark as completed, cancelled, no-show.",
+      parameters: {
+        type: "object",
+        properties: {
+          booking_id: { type: "string", description: "Booking ID (use get_bookings to find it)" },
+          status: { type: "string", enum: ["pending","confirmed","completed","cancelled","no_show"], description: "New status" },
+          notes: { type: "string", description: "Updated notes" },
+        },
+        required: ["booking_id", "status"],
+      },
+    },
+    {
+      type: "function",
+      name: "get_clients_detail",
+      description: "List or search clients with full details — contact info, stage, booking history. Use for 'show all clients', 'find client X', 'who are my VIP clients' etc.",
+      parameters: {
+        type: "object",
+        properties: {
+          search: { type: "string", description: "Name, email or phone to search for" },
+          stage: { type: "string", enum: ["all","lead","prospect","active","vip","lapsed","archived"], description: "Filter by client stage" },
+          limit: { type: "number", description: "Max results, default 15" },
+        },
+        required: [],
+      },
+    },
+    {
+      type: "function",
+      name: "create_client",
+      description: "Create a new client record.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Client full name (required)" },
+          email: { type: "string", description: "Email address" },
+          phone: { type: "string", description: "Phone number" },
+          stage: { type: "string", enum: ["lead","prospect","active","vip","lapsed","archived"], description: "Client stage, default active" },
+          notes: { type: "string", description: "Any notes about this client" },
+        },
+        required: ["name"],
+      },
+    },
+    {
+      type: "function",
+      name: "update_client",
+      description: "Update a client's details or stage.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Client name to search for" },
+          new_stage: { type: "string", enum: ["lead","prospect","active","vip","lapsed","archived"], description: "New stage" },
+          new_email: { type: "string", description: "New email address" },
+          new_phone: { type: "string", description: "New phone number" },
+          notes: { type: "string", description: "Updated notes" },
+        },
+        required: ["name"],
+      },
+    },
+    {
+      type: "function",
+      name: "get_consent_forms",
+      description: "List consent forms. Can filter by status — pending, signed, overdue.",
+      parameters: {
+        type: "object",
+        properties: {
+          status: { type: "string", enum: ["all","pending","signed","overdue"], description: "Filter by status" },
+          client_name: { type: "string", description: "Filter by client name" },
+          limit: { type: "number", description: "Max results, default 15" },
+        },
+        required: [],
+      },
+    },
+    {
+      type: "function",
+      name: "create_consent_form",
+      description: "Create and send a consent form to a client. Generates a unique signing link.",
+      parameters: {
+        type: "object",
+        properties: {
+          client_name: { type: "string", description: "Client name to search for" },
+          form_type: { type: "string", enum: ["general_consent","laser_treatment","fat_melting","skin_tightening","medical_history","patch_test"], description: "Type of consent form" },
+        },
+        required: ["client_name", "form_type"],
+      },
+    },
+    {
+      type: "function",
+      name: "get_before_after_photos",
+      description: "List before & after photo records for clients. Shows treatment type and dates.",
+      parameters: {
+        type: "object",
+        properties: {
+          client_name: { type: "string", description: "Filter by client name" },
+          limit: { type: "number", description: "Max results, default 10" },
+        },
+        required: [],
+      },
+    },
   ];
 
   // ── Safi tool executor — runs when xAI calls a function mid-conversation ───
@@ -2856,6 +2987,129 @@ Rules:
           const { data, error } = await db.from("invoices").update(updates).eq("id", found.id).select().single();
           if (error) return `Failed to update invoice: ${error.message}`;
           return `Invoice ${data.invoice_number} updated to ${data.status}.`;
+        }
+        case "get_bookings": {
+          let q = db.from("bookings")
+            .select("id, date, time, status, notes, clients(name, phone), treatments(name, price, duration_mins)")
+            .eq("user_id", userId)
+            .order("date", { ascending: true })
+            .order("time", { ascending: true })
+            .limit(args.limit ?? 15);
+          if (args.filter === "today") {
+            const today = new Date().toISOString().split("T")[0];
+            q = q.eq("date", today);
+          } else if (args.filter === "upcoming") {
+            q = q.gte("date", new Date().toISOString().split("T")[0]).not("status", "eq", "cancelled");
+          } else if (args.filter === "past") {
+            q = q.lt("date", new Date().toISOString().split("T")[0]);
+          }
+          if (args.client_name) {
+            const { data: cl } = await db.from("clients").select("id").eq("user_id", userId).ilike("name", `%${args.client_name}%`).limit(1).single();
+            if (cl) q = q.eq("client_id", cl.id);
+          }
+          const { data } = await q;
+          if (!data?.length) return "No bookings found.";
+          return data.map((b: any) => `[${b.id}] ${b.date} ${b.time} — ${(b.clients as any)?.name ?? "Unknown"} — ${(b.treatments as any)?.name ?? "Unknown"} — ${b.status}${b.notes ? ` — Note: ${b.notes}` : ""}`).join("\n");
+        }
+        case "create_booking": {
+          const { data: cl } = await db.from("clients").select("id, name").eq("user_id", userId).ilike("name", `%${args.client_name}%`).limit(1).single();
+          if (!cl) return `No client found matching "${args.client_name}". Please create the client first.`;
+          const { data: tr } = await db.from("treatments").select("id, name, price").eq("user_id", userId).ilike("name", `%${args.treatment_name}%`).limit(1).single();
+          if (!tr) return `No treatment found matching "${args.treatment_name}". Please check treatment names in Settings.`;
+          const startTime = new Date(`${args.date}T${args.time}:00`);
+          const { data, error } = await db.from("bookings").insert({
+            user_id: userId,
+            client_id: cl.id,
+            treatment_id: tr.id,
+            date: args.date,
+            time: args.time,
+            start_time: startTime.toISOString(),
+            status: args.status ?? "confirmed",
+            notes: args.notes ?? null,
+          }).select("id, date, time, status").single();
+          if (error) return `Failed to create booking: ${error.message}`;
+          return `Booking created: [${data.id}] ${cl.name} — ${tr.name} — ${args.date} at ${args.time} — ${data.status}`;
+        }
+        case "update_booking": {
+          const updates: any = { status: args.status };
+          if (args.notes) updates.notes = args.notes;
+          const { data, error } = await db.from("bookings").update(updates).eq("id", args.booking_id).eq("user_id", userId).select("id, date, time, status").single();
+          if (error || !data) return `Failed to update booking: ${error?.message ?? "not found"}`;
+          return `Booking [${data.id}] on ${data.date} at ${data.time} updated to ${data.status}.`;
+        }
+        case "get_clients_detail": {
+          let q = db.from("clients").select("id, name, email, phone, stage, notes, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(args.limit ?? 15);
+          if (args.search) q = q.or(`name.ilike.%${args.search}%,email.ilike.%${args.search}%,phone.ilike.%${args.search}%`);
+          if (args.stage && args.stage !== "all") q = q.eq("stage", args.stage);
+          const { data } = await q;
+          if (!data?.length) return "No clients found.";
+          return data.map((c: any) => `[${c.id}] ${c.name} — ${c.email ?? "no email"} — ${c.phone ?? "no phone"} — ${c.stage ?? "active"}${c.notes ? ` — ${c.notes}` : ""}`).join("\n");
+        }
+        case "create_client": {
+          if (!args.name) return "Client name is required.";
+          const { data, error } = await db.from("clients").insert({
+            user_id: userId,
+            name: args.name,
+            email: args.email ?? null,
+            phone: args.phone ?? null,
+            stage: args.stage ?? "active",
+            notes: args.notes ?? null,
+          }).select("id, name, stage").single();
+          if (error) return `Failed to create client: ${error.message}`;
+          return `Client created: ${data.name} — stage: ${data.stage} — ID: ${data.id}`;
+        }
+        case "update_client": {
+          const { data: found } = await db.from("clients").select("id, name, stage").eq("user_id", userId).ilike("name", `%${args.name}%`).limit(1).single();
+          if (!found) return `No client found matching "${args.name}".`;
+          const updates: any = {};
+          if (args.new_stage) updates.stage = args.new_stage;
+          if (args.new_email) updates.email = args.new_email;
+          if (args.new_phone) updates.phone = args.new_phone;
+          if (args.notes) updates.notes = args.notes;
+          if (!Object.keys(updates).length) return "No updates provided.";
+          const { data, error } = await db.from("clients").update(updates).eq("id", found.id).select("name, stage, email, phone").single();
+          if (error) return `Failed to update client: ${error.message}`;
+          return `Client updated: ${data.name} — stage: ${data.stage} — email: ${data.email ?? "unchanged"} — phone: ${data.phone ?? "unchanged"}`;
+        }
+        case "get_consent_forms": {
+          let q = db.from("consent_forms").select("id, form_type, status, created_at, signed_at, token, clients(name, email)").eq("user_id", userId).order("created_at", { ascending: false }).limit(args.limit ?? 15);
+          if (args.status === "signed") q = q.eq("status", "signed");
+          else if (args.status === "pending") q = q.in("status", ["sent", "pending", "viewed"]);
+          else if (args.status === "overdue") {
+            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+            q = q.not("status", "eq", "signed").lt("created_at", sevenDaysAgo);
+          }
+          if (args.client_name) {
+            const { data: cl } = await db.from("clients").select("id").eq("user_id", userId).ilike("name", `%${args.client_name}%`).limit(1).single();
+            if (cl) q = q.eq("client_id", cl.id);
+          }
+          const { data } = await q;
+          if (!data?.length) return "No consent forms found.";
+          return data.map((f: any) => `${(f.clients as any)?.name ?? "Unknown"} — ${f.form_type.replace(/_/g, " ")} — ${f.status}${f.signed_at ? ` (signed ${new Date(f.signed_at).toLocaleDateString("en-GB")})` : ` (sent ${new Date(f.created_at).toLocaleDateString("en-GB")})`}`).join("\n");
+        }
+        case "create_consent_form": {
+          const { data: cl } = await db.from("clients").select("id, name").eq("user_id", userId).ilike("name", `%${args.client_name}%`).limit(1).single();
+          if (!cl) return `No client found matching "${args.client_name}".`;
+          const token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+          const { data, error } = await db.from("consent_forms").insert({
+            user_id: userId,
+            client_id: cl.id,
+            form_type: args.form_type,
+            status: "sent",
+            token,
+          }).select("id, token, form_type, status").single();
+          if (error) return `Failed to create consent form: ${error.message}`;
+          return `Consent form created for ${cl.name} — ${data.form_type.replace(/_/g, " ")} — status: sent. Signing link token: ${data.token}`;
+        }
+        case "get_before_after_photos": {
+          let q = db.from("photos").select("id, treatment_type, notes, taken_at, before_url, after_url, clients(name)").eq("user_id", userId).order("taken_at", { ascending: false }).limit(args.limit ?? 10);
+          if (args.client_name) {
+            const { data: cl } = await db.from("clients").select("id").eq("user_id", userId).ilike("name", `%${args.client_name}%`).limit(1).single();
+            if (cl) q = q.eq("client_id", cl.id);
+          }
+          const { data } = await q;
+          if (!data?.length) return "No before & after photos found.";
+          return data.map((p: any) => `${(p.clients as any)?.name ?? "Unknown"} — ${p.treatment_type ?? "treatment"} — ${new Date(p.taken_at).toLocaleDateString("en-GB")}${p.notes ? ` — ${p.notes}` : ""} — before: ${p.before_url ? "yes" : "no"}, after: ${p.after_url ? "yes" : "no"}`).join("\n");
         }
         default:
           return `Unknown tool: ${toolName}`;
