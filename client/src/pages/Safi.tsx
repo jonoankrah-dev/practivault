@@ -1,431 +1,217 @@
 /**
- * Safi — Agentic AI Assistant
- * Voice pipeline: mic → AudioWorklet (native rate) → resample to 24kHz → PCM16 → xAI
- * Output: xAI 24kHz PCM16 base64 → AudioContext → speakers
+ * Safi — Agentic AI Assistant (text chat)
+ * Fully autonomous business AI powered by xAI Grok via /api/safi/chat
  */
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { apiRequest, getAuthToken } from "@/lib/queryClient";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Mic, MicOff, Loader2, Volume2, Trash2, Zap } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
+import { Zap, Send, Trash2, Loader2, Bot, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type ConvoItem = { id: string; role: "user" | "assistant" | "tool"; text: string; toolName?: string };
-type ConnState = "idle" | "connecting" | "connected" | "error";
+type Role = "user" | "assistant" | "tool";
+type Message = { id: string; role: Role; text: string };
 
-// xAI sends and receives 24kHz PCM16
-const XAI_RATE = 24000;
+const SUGGESTIONS = [
+  "Show me today's appointments",
+  "Any overdue invoices?",
+  "How many new clients this month?",
+  "Check stock levels",
+  "Generate a monthly report",
+  "Show recent leads",
+];
 
-// ── PCM16 helpers ─────────────────────────────────────────────────────────────
-function f32ToB64(f32: Float32Array): string {
-  const i16 = new Int16Array(f32.length);
-  for (let i = 0; i < f32.length; i++) {
-    const s = Math.max(-1, Math.min(1, f32[i]));
-    i16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-  }
-  return btoa(String.fromCharCode(...new Uint8Array(i16.buffer)));
-}
-
-function b64ToF32(b64: string): Float32Array {
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const i16 = new Int16Array(bytes.buffer);
-  const f32 = new Float32Array(i16.length);
-  for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 0x8000;
-  return f32;
-}
-
-// ── Linear resampler ──────────────────────────────────────────────────────────
-function resampleTo24k(input: Float32Array, fromRate: number): Float32Array {
-  if (fromRate === XAI_RATE) return input;
-  const ratio = fromRate / XAI_RATE;
-  const len = Math.floor(input.length / ratio);
-  const out = new Float32Array(len);
-  for (let i = 0; i < len; i++) {
-    const pos = i * ratio;
-    const lo = Math.floor(pos);
-    const hi = Math.min(lo + 1, input.length - 1);
-    out[i] = input[lo] + (pos - lo) * (input[hi] - input[lo]);
-  }
-  return out;
-}
-
-// ── AudioPlayer — queued 24kHz playback ───────────────────────────────────────
-class AudioPlayer {
-  ctx: AudioContext;
-  private tail = 0;
-
-  constructor() {
-    this.ctx = new AudioContext({ sampleRate: XAI_RATE });
-  }
-
-  resume() { if (this.ctx.state !== "running") this.ctx.resume(); }
-
-  play(f32: Float32Array) {
-    this.resume();
-    const buf = this.ctx.createBuffer(1, f32.length, XAI_RATE);
-    buf.copyToChannel(f32, 0);
-    const src = this.ctx.createBufferSource();
-    src.buffer = buf;
-    src.connect(this.ctx.destination);
-    const now = this.ctx.currentTime;
-    const start = Math.max(now, this.tail);
-    src.start(start);
-    this.tail = start + buf.duration;
-  }
-
-  interrupt() { this.tail = 0; }
-  close() { try { this.ctx.close(); } catch {} }
-}
-
-// ── MicRecorder — captures mic and streams PCM16 base64 chunks ───────────────
-class MicRecorder {
-  private ctx: AudioContext | null = null;
-  private worklet: AudioWorkletNode | null = null;
-  private script: ScriptProcessorNode | null = null;
-  private source: MediaStreamAudioSourceNode | null = null;
-  private rate = 48000;
-
-  async start(stream: MediaStream, onChunk: (b64: string) => void) {
-    // MUST use native rate — forcing a non-native rate on MediaStreamSource
-    // causes Chrome/Safari to deliver silence
-    this.ctx = new AudioContext();
-    this.rate = this.ctx.sampleRate;
-    await this.ctx.resume();
-
-    this.source = this.ctx.createMediaStreamSource(stream);
-
-    // Try AudioWorklet (served as a real file at /mic-processor.js)
-    try {
-      await this.ctx.audioWorklet.addModule("/mic-processor.js");
-      this.worklet = new AudioWorkletNode(this.ctx, "mic-processor");
-      this.worklet.port.onmessage = (e: MessageEvent) => {
-        const resampled = resampleTo24k(e.data.audio as Float32Array, this.rate);
-        onChunk(f32ToB64(resampled));
-      };
-      // Route: mic → worklet → silent sink (no echo, keeps processor alive)
-      const sink = this.ctx.createGain();
-      sink.gain.value = 0;
-      this.source.connect(this.worklet);
-      this.worklet.connect(sink);
-      sink.connect(this.ctx.destination);
-      console.log("[Safi mic] Using AudioWorklet at", this.rate, "Hz");
-      return;
-    } catch (e) {
-      console.warn("[Safi mic] AudioWorklet unavailable, using ScriptProcessor:", e);
-    }
-
-    // Fallback: ScriptProcessor (deprecated but widely supported)
-    this.script = this.ctx.createScriptProcessor(4096, 1, 1);
-    this.script.onaudioprocess = (e) => {
-      const raw = e.inputBuffer.getChannelData(0).slice();
-      const resampled = resampleTo24k(raw, this.rate);
-      onChunk(f32ToB64(resampled));
-    };
-    const sink = this.ctx.createGain();
-    sink.gain.value = 0;
-    this.source.connect(this.script);
-    this.script.connect(sink);
-    sink.connect(this.ctx.destination);
-    console.log("[Safi mic] Using ScriptProcessor at", this.rate, "Hz");
-  }
-
-  stop() {
-    try { this.worklet?.disconnect(); } catch {}
-    try { this.script?.disconnect(); } catch {}
-    try { this.source?.disconnect(); } catch {}
-    try { this.ctx?.close(); } catch {}
-    this.worklet = null; this.script = null; this.source = null; this.ctx = null;
-  }
-}
-
-// ── Component ─────────────────────────────────────────────────────────────────
 export default function Safi() {
   const { toast } = useToast();
-  const [state, setState] = useState<ConnState>("idle");
-  const [muted, setMuted] = useState(false);
-  const [speaking, setSpeaking] = useState(false);
-  const [tool, setTool] = useState<string | null>(null);
-  const [items, setItems] = useState<ConvoItem[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const historyRef = useRef<{ role: string; content: string }[]>([]);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const ws = useRef<WebSocket | null>(null);
-  const player = useRef<AudioPlayer | null>(null);
-  const mic = useRef<MicRecorder | null>(null);
-  const stream = useRef<MediaStream | null>(null);
-  const mutedRef = useRef(false);
-  const draftRef = useRef("");
-  const draftId = useRef<string | null>(null);
-  const bottom = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
 
-  useEffect(() => { mutedRef.current = muted; }, [muted]);
-  useEffect(() => { bottom.current?.scrollIntoView({ behavior: "smooth" }); }, [items]);
+  const send = useCallback(async (text: string) => {
+    const msg = text.trim();
+    if (!msg || loading) return;
 
-  // ── Event handler ─────────────────────────────────────────────────────────
-  const onMsg = useCallback((raw: string) => {
-    let msg: any;
-    try { msg = JSON.parse(raw); } catch { return; }
+    const userMsg: Message = { id: `u-${Date.now()}`, role: "user", text: msg };
+    setMessages(p => [...p, userMsg]);
+    setInput("");
+    setLoading(true);
 
-    switch (msg.type) {
-      // User speech transcript
-      case "conversation.item.input_audio_transcription.completed": {
-        const t = (msg.transcript ?? "").trim();
-        if (t) setItems(p => [...p.filter(i => i.id !== "u-live"), { id: `u-${Date.now()}`, role: "user", text: t }]);
-        break;
-      }
-      // Safi speech transcript (streaming)
-      case "response.output_audio_transcript.delta": {
-        draftRef.current += msg.delta ?? "";
-        const id = `a-${msg.response_id ?? "x"}`;
-        draftId.current = id;
-        setSpeaking(true);
-        setItems(p => {
-          const last = p[p.length - 1];
-          if (last?.id === id) return [...p.slice(0, -1), { ...last, text: draftRef.current }];
-          return [...p, { id, role: "assistant", text: draftRef.current }];
-        });
-        break;
-      }
-      case "response.output_audio_transcript.done":
-        draftRef.current = ""; draftId.current = null; setSpeaking(false);
-        break;
-      // Audio chunks from Safi
-      case "response.output_audio.delta":
-        if (msg.delta) { try { player.current?.play(b64ToF32(msg.delta)); } catch {} }
-        break;
-      case "response.output_audio.done":
-        setSpeaking(false);
-        break;
-      // User started speaking — stop Safi mid-sentence
-      case "input_audio_buffer.speech_started":
-        player.current?.interrupt();
-        setSpeaking(false);
-        break;
-      // Tool calls
-      case "response.function_call_arguments.done": {
-        const name = msg.name ?? "tool";
-        setTool(name);
-        setItems(p => [...p, { id: `t-${msg.call_id ?? Date.now()}`, role: "tool", text: `Running: ${name.replace(/_/g, " ")}…`, toolName: name }]);
-        break;
-      }
-      case "conversation.item.added":
-        if (msg.item?.type === "function_call_output") setTool(null);
-        break;
-      case "error":
-        console.error("[Safi] xAI error:", msg);
-        toast({ title: "Safi error", description: msg.error?.message ?? "Unknown", variant: "destructive" });
-        break;
-    }
-  }, []);
-
-  // ── Connect ───────────────────────────────────────────────────────────────
-  const connect = useCallback(async () => {
-    if (ws.current) return;
-    setState("connecting");
+    // Add to history for context
+    historyRef.current = [...historyRef.current.slice(-9), { role: "user", content: msg }];
 
     try {
-      // 1. Fetch ephemeral token
-      const res = await apiRequest("POST", "/api/safi/realtime-token", {});
-      const data = await res.json() as any;
-      const secret = data.client_secret ?? data.value;
-      if (!secret) throw new Error(data.message ?? `No token: ${JSON.stringify(data)}`);
-
-      // 2. Mic permission
-      const s = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      const res = await apiRequest("POST", "/api/safi/chat", {
+        message: msg,
+        history: historyRef.current.slice(0, -1), // exclude the message we just added
       });
-      stream.current = s;
+      const data = await res.json() as any;
 
-      // 3. Open WebSocket
-      const proto = location.protocol === "https:" ? "wss:" : "ws:";
-      const jwt = getAuthToken() ?? "";
-      const socket = new WebSocket(
-        `${proto}//${location.host}/ws/safi/realtime?token=${encodeURIComponent(secret)}&auth=${encodeURIComponent(jwt)}`
-      );
-      ws.current = socket;
-      player.current = new AudioPlayer();
+      if (data.message) throw new Error(data.message);
 
-      socket.onopen = async () => {
-        setState("connected");
+      const reply = (data.reply as string) ?? "";
+      const assistantMsg: Message = { id: `a-${Date.now()}`, role: "assistant", text: reply };
+      setMessages(p => [...p, assistantMsg]);
 
-        // 4. Configure session
-        socket.send(JSON.stringify({
-          type: "session.update",
-          session: {
-            voice: "eve",
-            turn_detection: { type: "server_vad" },
-            input_audio_format: "pcm16",
-            output_audio_format: "pcm16",
-            input_audio_transcription: { model: "default" },
-            modalities: ["audio"],
-            ...(data.instructions ? { instructions: data.instructions } : {}),
-            ...(data.tools?.length ? { tools: data.tools, tool_choice: "auto" } : {}),
-          },
-        }));
-
-        // 5. Start mic — audio flows continuously to xAI
-        const recorder = new MicRecorder();
-        mic.current = recorder;
-        await recorder.start(s, (b64) => {
-          if (!mutedRef.current && socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ type: "input_audio_buffer.append", audio: b64 }));
-          }
-        });
-      };
-
-      socket.onmessage = (e) => onMsg(e.data);
-      socket.onclose = (e) => {
-        console.log("[Safi] WS closed", e.code, e.reason);
-        cleanup(false); setState("idle");
-      };
-      socket.onerror = () => {
-        toast({ title: "Connection failed", description: "Couldn't reach Safi.", variant: "destructive" });
-        cleanup(false); setState("error");
-      };
+      // Add assistant reply to history
+      historyRef.current = [...historyRef.current, { role: "assistant", content: reply }];
 
     } catch (err: any) {
-      toast({ title: "Couldn't start Safi", description: err.message, variant: "destructive" });
-      cleanup(false); setState("error");
+      toast({ title: "Safi error", description: err.message, variant: "destructive" });
+      setMessages(p => [...p, { id: `e-${Date.now()}`, role: "assistant", text: "Sorry, something went wrong. Please try again." }]);
+    } finally {
+      setLoading(false);
+      textareaRef.current?.focus();
     }
-  }, [onMsg]);
+  }, [loading]);
 
-  // ── Cleanup ───────────────────────────────────────────────────────────────
-  const cleanup = useCallback((closeWs = true) => {
-    if (closeWs) { ws.current?.close(); ws.current = null; }
-    mic.current?.stop(); mic.current = null;
-    stream.current?.getTracks().forEach(t => t.stop()); stream.current = null;
-    player.current?.close(); player.current = null;
-    setSpeaking(false); setTool(null);
-  }, []);
+  const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      send(input);
+    }
+  };
 
-  const disconnect = useCallback(() => { cleanup(true); setState("idle"); }, [cleanup]);
-  const toggleMute = useCallback(() => setMuted(m => !m), []);
-
-  // Unlock AudioContext on first user tap
-  useEffect(() => {
-    const unlock = () => player.current?.resume();
-    window.addEventListener("click", unlock, { once: true });
-    window.addEventListener("touchstart", unlock, { once: true });
-    return () => {
-      window.removeEventListener("click", unlock);
-      window.removeEventListener("touchstart", unlock);
-      cleanup(true);
-    };
-  }, []);
-
-  const connected = state === "connected";
-  const connecting = state === "connecting";
-
-  const statusText =
-    state === "idle"       ? "Press Start — Safi can act, not just answer" :
-    state === "connecting" ? "Connecting…" :
-    state === "error"      ? "Connection failed — try again" :
-    tool                   ? `Working — ${tool.replace(/_/g, " ")}` :
-    speaking               ? "Safi is speaking" :
-    muted                  ? "Microphone muted" :
-                             "Listening — speak now";
+  const clearChat = () => {
+    setMessages([]);
+    historyRef.current = [];
+  };
 
   return (
-    <div className="flex flex-col h-full max-h-screen">
+    <div className="flex flex-col h-full max-h-screen bg-background">
 
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b bg-background">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-sm font-semibold">Safi AI</h1>
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-[#b1306f]/30 text-[#b1306f]">
-              <Zap className="h-2.5 w-2.5 mr-0.5" />Agentic
-            </Badge>
+      <div className="flex items-center justify-between px-6 py-4 border-b bg-background shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 rounded-xl bg-[#b1306f]/10 flex items-center justify-center">
+            <Zap className="h-4 w-4 text-[#b1306f]" />
           </div>
-          <p className="text-xs text-muted-foreground">{statusText}</p>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-semibold">Safi AI</h1>
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-[#b1306f]/30 text-[#b1306f]">
+                <Zap className="h-2.5 w-2.5 mr-0.5" />Agentic
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">Your autonomous business assistant</p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {items.length > 0 && (
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground"
-              onClick={() => setItems([])} data-testid="button-clear">
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          )}
-          {connected && (
-            <Button variant={muted ? "destructive" : "outline"} size="icon" className="h-8 w-8"
-              onClick={toggleMute} data-testid="button-mute" title={muted ? "Unmute" : "Mute"}>
-              {muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-            </Button>
-          )}
-          <Button size="sm"
-            onClick={connected ? disconnect : connect}
-            disabled={connecting}
-            className={cn(connected
-              ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-              : "bg-[#b1306f] hover:bg-[#9a2860] text-white"
-            )}
-            data-testid="button-connect"
-          >
-            {connecting
-              ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Connecting…</>
-              : connected ? "End"
-              : <><Mic className="h-3.5 w-3.5 mr-1.5" />Start</>}
+        {messages.length > 0 && (
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            onClick={clearChat} title="Clear chat" data-testid="button-clear">
+            <Trash2 className="h-4 w-4" />
           </Button>
-        </div>
+        )}
       </div>
 
-      {/* Status bar */}
-      {connected && (
-        <div className="flex items-center gap-2 px-6 py-2 bg-[#b1306f]/5 border-b text-xs font-medium">
-          <span className={cn("inline-block h-2 w-2 rounded-full",
-            tool     ? "bg-amber-500 animate-pulse"
-            : speaking ? "bg-[#b1306f] animate-pulse"
-            : muted   ? "bg-muted-foreground"
-            :           "bg-emerald-500 animate-pulse"
-          )} />
-          <span className={cn(tool ? "text-amber-600" : "text-[#b1306f]")}>{statusText}</span>
-          {speaking && <Volume2 className="h-3.5 w-3.5 ml-1 text-[#b1306f]" />}
-        </div>
-      )}
-
-      {/* Transcript */}
-      <ScrollArea className="flex-1 px-6 py-4">
-        {items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-center text-muted-foreground">
-            <div className="h-16 w-16 rounded-2xl bg-[#b1306f]/10 flex items-center justify-center mb-4">
-              <Zap className="h-7 w-7 text-[#b1306f]" />
+      {/* Messages */}
+      <ScrollArea className="flex-1 px-4 py-4 min-h-0">
+        {messages.length === 0 ? (
+          /* Empty state */
+          <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-center px-4">
+            <div className="h-16 w-16 rounded-2xl bg-[#b1306f]/10 flex items-center justify-center mb-5">
+              <Zap className="h-8 w-8 text-[#b1306f]" />
             </div>
-            <p className="text-sm font-semibold">Safi — Your AI Business Assistant</p>
-            <p className="text-xs mt-2 max-w-[260px] leading-relaxed">
-              Press Start and speak naturally. Safi will listen and respond.
+            <h2 className="text-base font-semibold mb-1">Meet Safi</h2>
+            <p className="text-sm text-muted-foreground max-w-sm leading-relaxed mb-6">
+              Your fully agentic AI. Ask Safi to look up data, run reports, check bookings,
+              review invoices — she acts on real business data, not just answers questions.
             </p>
-            <div className="mt-4 flex flex-wrap justify-center gap-1.5 max-w-xs">
-              {["Book a job", "Send invoice", "Check stock", "Chase payment", "Generate report", "View clients"].map(s => (
-                <span key={s} className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground border">{s}</span>
+            <div className="grid grid-cols-2 gap-2 w-full max-w-sm">
+              {SUGGESTIONS.map(s => (
+                <button
+                  key={s}
+                  onClick={() => send(s)}
+                  className="text-left text-xs px-3 py-2.5 rounded-xl border bg-muted/50 hover:bg-[#b1306f]/5 hover:border-[#b1306f]/30 transition-colors leading-snug"
+                  data-testid={`suggestion-${s.replace(/\s+/g, "-").toLowerCase()}`}
+                >
+                  {s}
+                </button>
               ))}
             </div>
           </div>
         ) : (
-          <div className="space-y-3 max-w-2xl mx-auto">
-            {items.map(item => (
-              <div key={item.id} className={cn("flex", item.role === "user" ? "justify-end" : "justify-start")}>
-                {item.role === "tool" ? (
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs">
-                    <Loader2 className="h-3 w-3 animate-spin" />{item.text}
+          <div className="space-y-4 max-w-2xl mx-auto pb-2">
+            {messages.map(msg => (
+              <div key={msg.id} className={cn("flex gap-3", msg.role === "user" ? "justify-end" : "justify-start")}>
+                {msg.role === "assistant" && (
+                  <div className="h-7 w-7 rounded-full bg-[#b1306f]/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <Bot className="h-3.5 w-3.5 text-[#b1306f]" />
                   </div>
-                ) : (
-                  <div className={cn(
-                    "rounded-2xl px-4 py-2.5 text-sm max-w-[80%] leading-relaxed",
-                    item.role === "user"
-                      ? "bg-[#b1306f] text-white rounded-br-sm"
-                      : "bg-muted text-foreground rounded-bl-sm"
-                  )}>{item.text}</div>
+                )}
+                <div className={cn(
+                  "rounded-2xl px-4 py-3 text-sm leading-relaxed max-w-[80%] whitespace-pre-wrap",
+                  msg.role === "user"
+                    ? "bg-[#b1306f] text-white rounded-br-sm"
+                    : "bg-muted text-foreground rounded-bl-sm"
+                )}>
+                  {msg.text}
+                </div>
+                {msg.role === "user" && (
+                  <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center shrink-0 mt-0.5">
+                    <User className="h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
                 )}
               </div>
             ))}
-            <div ref={bottom} />
+
+            {/* Loading indicator */}
+            {loading && (
+              <div className="flex gap-3 justify-start">
+                <div className="h-7 w-7 rounded-full bg-[#b1306f]/10 flex items-center justify-center shrink-0">
+                  <Bot className="h-3.5 w-3.5 text-[#b1306f]" />
+                </div>
+                <div className="bg-muted rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-2">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[#b1306f]" />
+                  <span className="text-sm text-muted-foreground">Safi is working…</span>
+                </div>
+              </div>
+            )}
+
+            <div ref={bottomRef} />
           </div>
         )}
       </ScrollArea>
+
+      {/* Input */}
+      <div className="px-4 pb-4 pt-2 border-t bg-background shrink-0">
+        <div className="max-w-2xl mx-auto flex gap-2 items-end">
+          <Textarea
+            ref={textareaRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKey}
+            placeholder="Ask Safi anything — check bookings, invoices, stock, reports…"
+            className="resize-none min-h-[44px] max-h-[120px] text-sm rounded-xl border-border focus-visible:ring-[#b1306f]/30"
+            rows={1}
+            disabled={loading}
+            data-testid="input-message"
+          />
+          <Button
+            onClick={() => send(input)}
+            disabled={!input.trim() || loading}
+            size="icon"
+            className="h-11 w-11 shrink-0 bg-[#b1306f] hover:bg-[#9a2860] text-white rounded-xl"
+            data-testid="button-send"
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </Button>
+        </div>
+        <p className="text-center text-[10px] text-muted-foreground mt-2">
+          Press Enter to send · Shift+Enter for new line
+        </p>
+      </div>
     </div>
   );
 }

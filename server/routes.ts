@@ -2695,8 +2695,15 @@ Rules:
     }
   }
 
-  // ── /api/safi/realtime-token — issues ephemeral token with agentic session ──
-  const buildSafiInstructions = async (db: any, userId: string): Promise<string> => {
+  // ── /api/safi/chat — agentic text chat with full tool loop ─────────────────
+  app.post("/api/safi/chat", requireAuth, async (req: AuthedRequest, res: Response) => {
+    const { message, history = [] } = req.body as { message: string; history?: {role:string;content:string}[] };
+    if (!message?.trim()) return res.status(400).json({ message: "No message" });
+
+    const db = req.db!;
+    const userId = req.user!.id;
+
+    // Build system prompt from business info + manuals
     const [userRes, bizRes, manualsRes] = await Promise.all([
       db.from("users").select("name, business_name, industry").eq("id", userId).single(),
       db.from("business_info").select("*").eq("user_id", userId).single(),
@@ -2704,185 +2711,103 @@ Rules:
     ]);
     const userData = userRes.data;
     const bizInfo = bizRes.data;
-    const manuals = manualsRes.data;
+    const manuals = manualsRes.data ?? [];
 
     let bizContext = "";
     if (bizInfo) {
       if (bizInfo.tagline) bizContext += `\nTagline: ${bizInfo.tagline}`;
       if (bizInfo.about) bizContext += `\nAbout: ${bizInfo.about}`;
       if (bizInfo.website_url) bizContext += `\nWebsite: ${bizInfo.website_url}`;
-      if (bizInfo.products?.length) {
-        bizContext += `\n\nProducts & Services:\n${(bizInfo.products as any[]).map((p: any) => `- ${p.name}${p.price ? ` — ${p.price}` : ""}${p.description ? `: ${p.description}` : ""}`).join("\n")}`;
-      }
-      if (bizInfo.faqs?.length) {
-        bizContext += `\n\nFAQs:\n${(bizInfo.faqs as any[]).map((f: any) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n")}`;
-      }
+      if (bizInfo.products?.length) bizContext += `\n\nProducts:\n${(bizInfo.products as any[]).map((p:any)=>`- ${p.name}${p.price?` — ${p.price}`:""}${p.description?`: ${p.description}`:""}`).join("\n")}`;
     }
     let manualContext = "";
-    if (manuals?.length) {
+    if (manuals.length) {
       let total = 0;
-      const sections: string[] = [];
+      const parts: string[] = [];
       for (const m of manuals) {
-        if (total >= 8000) break;
-        const chunk = ((m.extracted_text as string) || "").slice(0, 8000 - total);
-        sections.push(`=== ${m.name} ===\n${chunk}`);
+        if (total >= 6000) break;
+        const chunk = ((m.extracted_text as string) || "").slice(0, 6000 - total);
+        parts.push(`=== ${m.name} ===\n${chunk}`);
         total += chunk.length;
       }
-      manualContext = `\n\nManuals:\n${sections.join("\n\n")}`;
+      manualContext = `\n\nManuals:\n${parts.join("\n\n")}`;
     }
 
-    return `You are Safi, the fully agentic AI assistant for ${userData?.business_name ?? "this business"}.${bizContext}${manualContext}
+    const systemPrompt = `You are Safi, the fully agentic AI assistant for ${userData?.business_name ?? "this business"}.${bizContext}${manualContext}
 
-You are not just a chatbot — you are a fully autonomous business AI. You can look up and act on real data in this business using your tools.
-
-Your capabilities:
-- Look up appointments, jobs, and schedules
-- Find client records and history
-- Check invoices and identify overdue payments
-- Review quotes and estimates
-- Check stock levels and flag low stock
-- Generate business reports (revenue, jobs, new clients)
-- Review leads and enquiries
-
-Personality:
-- Warm, professional, direct. Short sentences — this is a voice interface.
-- When asked to do something, USE YOUR TOOLS — don't just describe what you could do.
-- Always confirm before taking any action that creates, modifies, or sends anything.
-- When you retrieve data, summarise it clearly and concisely.
-- If you can't do something yet (e.g. send an actual email), say what you've prepared and ask them to confirm.
+You are a fully autonomous business AI. When asked to look something up, USE YOUR TOOLS immediately — don't just describe what you could do.
+Reply in clear, concise text. Use bullet points or short lists where helpful.
+When you retrieve data, summarise it clearly.
 
 Key business facts:
 - All courses are 100% online, CPD accredited, no UK licence required
-- Payment plans available via Clearpay and Klarna
+- Payment plans via Clearpay and Klarna
 - Website: ${bizInfo?.website_url ?? "https://mayfair.bigcartel.com"}`;
-  };
 
-  app.post("/api/safi/realtime-token", requireAuth, async (req: AuthedRequest, res: Response) => {
-    try {
-      const db = req.db!;
-      const userId = req.user!.id;
-      const instructions = await buildSafiInstructions(db, userId);
+    // Convert OpenAI-style tools for xAI
+    const xaiTools = SAFI_TOOLS.map(t => ({
+      type: "function" as const,
+      function: {
+        name: t.name,
+        description: t.description,
+        parameters: t.parameters,
+      }
+    }));
 
-      // xAI client_secrets only accepts model — nothing else
-      const tokenRes = await fetch("https://api.x.ai/v1/realtime/client_secrets", {
+    const messages: any[] = [
+      { role: "system", content: systemPrompt },
+      ...history.slice(-10),
+      { role: "user", content: message },
+    ];
+
+    // Agentic loop — keep calling until no more tool calls
+    const MAX_STEPS = 5;
+    for (let step = 0; step < MAX_STEPS; step++) {
+      const grokRes = await fetch("https://api.x.ai/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${process.env.XAI_API_KEY}` },
-        body: JSON.stringify({ model: "grok-voice-think-fast-1.0" }),
+        body: JSON.stringify({ model: "grok-3-mini", messages, tools: xaiTools, tool_choice: "auto", max_tokens: 1000 }),
       });
-      if (!tokenRes.ok) return res.status(502).json({ message: `xAI token error: ${await tokenRes.text()}` });
-      const tokenData = await tokenRes.json();
-      const secret = tokenData.value ?? tokenData.client_secret;
-      if (!secret) return res.status(502).json({ message: `No secret in xAI response: ${JSON.stringify(tokenData)}` });
-      // Return secret + session config so frontend can send session.update
-      res.json({ client_secret: secret, instructions, tools: SAFI_TOOLS });
-    } catch (e: any) {
-      res.status(500).json({ message: e.message });
-    }
-  });
 
-  // Alias
-  app.post("/api/saphie/realtime-token", requireAuth, async (req: AuthedRequest, res: Response) => {
-    try {
-      const db = req.db!;
-      const userId = req.user!.id;
-      const instructions = await buildSafiInstructions(db, userId);
-      const tokenRes = await fetch("https://api.x.ai/v1/realtime/client_secrets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${process.env.XAI_API_KEY}` },
-        body: JSON.stringify({ model: "grok-voice-think-fast-1.0" }),
-      });
-      if (!tokenRes.ok) return res.status(502).json({ message: `xAI token error: ${await tokenRes.text()}` });
-      const tokenData = await tokenRes.json();
-      const secret = tokenData.value ?? tokenData.client_secret;
-      if (!secret) return res.status(502).json({ message: `No secret in xAI response: ${JSON.stringify(tokenData)}` });
-      res.json({ client_secret: secret, instructions, tools: SAFI_TOOLS });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  // ── Safi WebSocket proxy — relays browser ↔ xAI + handles tool calls ───────
-  const safiWss = new WebSocketServer({ noServer: true });
-  httpServer.on("upgrade", (request, socket, head) => {
-    const url = new URL(request.url ?? "", `http://${request.headers.host}`);
-    if (url.pathname === "/ws/safi/realtime" || url.pathname === "/ws/saphie/realtime") {
-      safiWss.handleUpgrade(request, socket as any, head, (browserWs) => {
-        safiWss.emit("connection", browserWs, request);
-      });
-    }
-  });
-
-  safiWss.on("connection", async (browserWs: WS, request: any) => {
-    const url = new URL(request.url ?? "", "http://localhost");
-    const clientSecret = url.searchParams.get("token");
-    if (!clientSecret) { browserWs.close(1008, "Missing token"); return; }
-
-    // Parse user JWT from query param (browsers can't set headers on WS upgrade)
-    const jwtToken = url.searchParams.get("auth") ?? "";
-    const toolDb = jwtToken ? supabaseForUser(jwtToken) : null;
-
-    // Track in-progress tool calls
-    const pendingTools = new Map<string, { name: string; argsBuffer: string }>();
-
-    const xaiWs = new WS(
-      "wss://api.x.ai/v1/realtime?model=grok-voice-think-fast-1.0",
-      { headers: { Authorization: `Bearer ${clientSecret}` } }
-    );
-
-    xaiWs.on("open", () => {
-      browserWs.on("message", (data) => {
-        if (xaiWs.readyState === WS.OPEN) xaiWs.send(data);
-      });
-    });
-
-    xaiWs.on("message", async (rawData) => {
-      // Forward to browser
-      if (browserWs.readyState === WS.OPEN) browserWs.send(rawData);
-
-      // Intercept tool calls
-      let msg: any;
-      try { msg = JSON.parse(rawData.toString()); } catch { return; }
-
-      if (msg.type === "response.function_call_arguments.delta") {
-        const entry = pendingTools.get(msg.call_id) ?? { name: msg.name ?? "", argsBuffer: "" };
-        entry.argsBuffer += msg.delta ?? "";
-        pendingTools.set(msg.call_id, entry);
+      if (!grokRes.ok) {
+        const err = await grokRes.text();
+        return res.status(502).json({ message: `AI error: ${err}` });
       }
 
-      if (msg.type === "response.function_call_arguments.done") {
-        const callId = msg.call_id;
-        const toolName = msg.name ?? pendingTools.get(callId)?.name ?? "unknown";
-        let args: any = {};
-        try { args = JSON.parse(msg.arguments ?? pendingTools.get(callId)?.argsBuffer ?? "{}"); } catch {}
-        pendingTools.delete(callId);
+      const grokData = await grokRes.json() as any;
+      const choice = grokData.choices?.[0];
+      const assistantMsg = choice?.message;
 
-        // Grab user_id from the JWT for tool execution
-        let userId = "";
-        try {
-          const payload = JSON.parse(atob(jwtToken.split(".")[1]));
-          userId = payload.id ?? payload.sub ?? "";
-        } catch {}
+      if (!assistantMsg) return res.status(502).json({ message: "No response from AI" });
 
-        // Create a db proxy with userId attached for the executor
-        const dbWithUser = toolDb ? Object.assign(Object.create(Object.getPrototypeOf(toolDb)), toolDb, { _userId: userId }) : null;
-        const result = dbWithUser ? await executeSafiTool(toolName, args, dbWithUser) : "Tool unavailable — not authenticated.";
+      messages.push(assistantMsg);
 
-        // Send result back to xAI so it can continue speaking
-        if (xaiWs.readyState === WS.OPEN) {
-          xaiWs.send(JSON.stringify({
-            type: "conversation.item.create",
-            item: { type: "function_call_output", call_id: callId, output: result },
-          }));
-          xaiWs.send(JSON.stringify({ type: "response.create" }));
-        }
+      // No tool calls — we have the final answer
+      if (!assistantMsg.tool_calls?.length) {
+        return res.json({ reply: assistantMsg.content ?? "", messages });
       }
-    });
 
-    xaiWs.on("close", (code, reason) => browserWs.close(code, reason));
-    xaiWs.on("error", (err) => { console.error("Safi xAI WS error:", err); browserWs.close(1011, "xAI error"); });
-    browserWs.on("close", () => { if (xaiWs.readyState === WS.OPEN) xaiWs.close(); });
-    browserWs.on("error", (err) => console.error("Safi browser WS error:", err));
+      // Execute all tool calls in parallel
+      const toolResults = await Promise.all(
+        assistantMsg.tool_calls.map(async (tc: any) => {
+          const toolName = tc.function?.name ?? tc.name ?? "";
+          let args: any = {};
+          try { args = JSON.parse(tc.function?.arguments ?? tc.arguments ?? "{}"); } catch {}
+
+          // Attach userId to db proxy for tool executor
+          const dbWithUser = Object.assign(Object.create(Object.getPrototypeOf(db)), db, { _userId: userId });
+          const result = await executeSafiTool(toolName, args, dbWithUser);
+          return { tool_call_id: tc.id, role: "tool" as const, content: result };
+        })
+      );
+
+      messages.push(...toolResults);
+    }
+
+    return res.json({ reply: "I've completed the requested tasks.", messages });
   });
 
-  // ─── Saphie AI — chat + voice transcription + manuals ──────────────────────
+    // ─── Saphie AI — chat + voice transcription + manuals ──────────────────────
 
   const ADMIN_USER_ID = "d76f928a-3d62-4c7c-918b-e66e5760d816";
 
