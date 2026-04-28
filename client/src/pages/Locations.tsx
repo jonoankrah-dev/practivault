@@ -107,16 +107,16 @@ export default function Locations() {
       ) : (
         <div className="grid grid-cols-2 gap-4">
           {locations.map((loc) => (
-            <Card key={loc.id} className={loc.is_default ? "border-[#b1306f]/40 shadow-sm" : ""}>
+            <Card key={loc.id} className={loc.is_default ? "border-[#E83A8E]/40 shadow-sm" : ""}>
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="h-9 w-9 rounded-lg bg-[#b1306f]/10 flex items-center justify-center">
-                      <MapPin className="h-4.5 w-4.5 text-[#b1306f]" />
+                    <div className="h-9 w-9 rounded-lg bg-[#E83A8E]/10 flex items-center justify-center">
+                      <MapPin className="h-4.5 w-4.5 text-[#E83A8E]" />
                     </div>
                     <div>
                       <CardTitle className="text-base">{loc.name}</CardTitle>
-                      {loc.is_default && <Badge className="text-[10px] bg-[#b1306f]/10 text-[#b1306f] border-0 mt-0.5">Default</Badge>}
+                      {loc.is_default && <Badge className="text-[10px] bg-[#E83A8E]/10 text-[#E83A8E] border-0 mt-0.5">Default</Badge>}
                     </div>
                   </div>
                   <div className="flex gap-1">

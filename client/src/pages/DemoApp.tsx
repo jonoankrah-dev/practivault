@@ -153,7 +153,7 @@ function DemoSidebar({ industry, businessName, base }: { industry: string; busin
 
 function DemoBanner({ industryName, industry, onClose }: { industryName: string; industry: string; onClose: () => void }) {
   return (
-    <div className="bg-[#b1306f] text-white px-4 py-2.5 flex items-center justify-between gap-4 text-sm shrink-0">
+    <div className="bg-[#E83A8E] text-white px-4 py-2.5 flex items-center justify-between gap-4 text-sm shrink-0">
       <div className="flex items-center gap-2">
         <span className="font-semibold">🎯 Live Demo</span>
         <span className="text-white/70">|</span>
@@ -162,7 +162,7 @@ function DemoBanner({ industryName, industry, onClose }: { industryName: string;
       <div className="flex items-center gap-3 shrink-0">
         <a
           href={`/#/login?industry=${industry}`}
-          className="inline-flex items-center gap-1.5 bg-white text-[#b1306f] text-xs font-bold px-4 py-1.5 rounded-lg hover:bg-white/90 transition-colors"
+          className="inline-flex items-center gap-1.5 bg-white text-[#E83A8E] text-xs font-bold px-4 py-1.5 rounded-lg hover:bg-white/90 transition-colors"
         >
           Start free trial <ExternalLink className="h-3 w-3" />
         </a>
@@ -285,7 +285,7 @@ export default function DemoApp({ industry }: { industry: string }) {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#f6f3ef] flex flex-col items-center justify-center gap-4">
-        <div className="h-10 w-10 rounded-full border-4 border-[#b1306f]/30 border-t-[#b1306f] animate-spin" />
+        <div className="h-10 w-10 rounded-full border-4 border-[#E83A8E]/30 border-t-[#E83A8E] animate-spin" />
         <div className="text-center">
           <p className="text-sm font-semibold text-[#241f19]">Loading your {displayName} demo…</p>
           <p className="text-xs text-gray-400 mt-1">Signing in and loading your data…</p>
@@ -304,7 +304,7 @@ export default function DemoApp({ industry }: { industry: string }) {
           <p className="text-xs text-gray-400 mb-4">{error}</p>
           <button
             onClick={() => navigate("/demo")}
-            className="text-sm font-semibold text-[#b1306f] hover:underline"
+            className="text-sm font-semibold text-[#E83A8E] hover:underline"
           >
             ← Back to industry picker
           </button>
@@ -360,7 +360,7 @@ export default function DemoApp({ industry }: { industry: string }) {
                 <AlertDialogCancel>Stay in demo</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={confirmLogout}
-                  className="bg-[#b1306f] hover:bg-[#9a2860] text-white"
+                  className="bg-[#E83A8E] hover:bg-[#c42d77] text-white"
                 >
                   Leave &amp; pick another industry
                 </AlertDialogAction>
@@ -382,7 +382,7 @@ export default function DemoApp({ industry }: { industry: string }) {
             {!bannerOpen && (
               <button
                 onClick={() => setBannerOpen(true)}
-                className="bg-[#b1306f]/10 text-[#b1306f] text-xs font-medium px-4 py-1.5 text-center hover:bg-[#b1306f]/15 transition-colors"
+                className="bg-[#E83A8E]/10 text-[#E83A8E] text-xs font-medium px-4 py-1.5 text-center hover:bg-[#E83A8E]/15 transition-colors"
               >
                 🎯 Demo mode — <a href={`/#/login?industry=${industry}`} className="underline">Start free trial</a>
               </button>

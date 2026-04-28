@@ -118,7 +118,7 @@ function ProductDialog({
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button
-            className="bg-[#b1306f] hover:bg-[#9a2860] text-white"
+            className="bg-[#E83A8E] hover:bg-[#c42d77] text-white"
             disabled={!form.name.trim()}
             onClick={() => { onSave(form); onClose(); }}
           >
@@ -169,7 +169,7 @@ function FaqDialog({
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button
-            className="bg-[#b1306f] hover:bg-[#9a2860] text-white"
+            className="bg-[#E83A8E] hover:bg-[#c42d77] text-white"
             disabled={!form.question.trim() || !form.answer.trim()}
             onClick={() => { onSave(form); onClose(); }}
           >
@@ -247,7 +247,7 @@ export default function BusinessInfo() {
   }
 
   const categoryColour = (cat: string) => {
-    if (cat === "CPD Course") return "bg-[#b1306f]/10 text-[#b1306f] border-[#b1306f]/20";
+    if (cat === "CPD Course") return "bg-[#E83A8E]/10 text-[#E83A8E] border-[#E83A8E]/20";
     if (cat === "Medical Equipment") return "bg-teal-50 text-teal-700 border-teal-200";
     if (cat === "Wellness Product") return "bg-amber-50 text-amber-700 border-amber-200";
     return "bg-muted text-muted-foreground border-border";
@@ -262,7 +262,7 @@ export default function BusinessInfo() {
           <Button
             onClick={handleSave}
             disabled={saveMutation.isPending}
-            className="bg-[#b1306f] hover:bg-[#9a2860] text-white"
+            className="bg-[#E83A8E] hover:bg-[#c42d77] text-white"
             data-testid="button-save-business-info"
           >
             {saveMutation.isPending
@@ -278,7 +278,7 @@ export default function BusinessInfo() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-[#b1306f]" />
+            <Building2 className="h-4 w-4 text-[#E83A8E]" />
             Business Details
           </CardTitle>
         </CardHeader>
@@ -310,7 +310,7 @@ export default function BusinessInfo() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Globe className="h-4 w-4 text-[#b1306f]" />
+            <Globe className="h-4 w-4 text-[#E83A8E]" />
             Website & Socials
           </CardTitle>
         </CardHeader>
@@ -380,7 +380,7 @@ export default function BusinessInfo() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <ShoppingBag className="h-4 w-4 text-[#b1306f]" />
+              <ShoppingBag className="h-4 w-4 text-[#E83A8E]" />
               Products & Services
               <Badge variant="outline" className="text-xs font-normal ml-1">{form.products.length}</Badge>
             </CardTitle>
@@ -388,7 +388,7 @@ export default function BusinessInfo() {
               <Button
                 size="sm"
                 onClick={() => setProductDialog({ open: true, item: null })}
-                className="bg-[#b1306f] hover:bg-[#9a2860] text-white text-xs"
+                className="bg-[#E83A8E] hover:bg-[#c42d77] text-white text-xs"
                 data-testid="button-add-product"
               >
                 <Plus className="h-3.5 w-3.5 mr-1" /> Add
@@ -412,7 +412,7 @@ export default function BusinessInfo() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium">{p.name}</span>
                         {p.price && (
-                          <span className="text-xs font-semibold text-[#b1306f]">{p.price}</span>
+                          <span className="text-xs font-semibold text-[#E83A8E]">{p.price}</span>
                         )}
                         {p.category && (
                           <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", categoryColour(p.category))}>
@@ -456,14 +456,14 @@ export default function BusinessInfo() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <HelpCircle className="h-4 w-4 text-[#b1306f]" />
+              <HelpCircle className="h-4 w-4 text-[#E83A8E]" />
               Key FAQs
               <Badge variant="outline" className="text-xs font-normal ml-1">{form.faqs.length}</Badge>
             </CardTitle>
             <Button
               size="sm"
               onClick={() => setFaqDialog({ open: true, item: null })}
-              className="bg-[#b1306f] hover:bg-[#9a2860] text-white text-xs"
+              className="bg-[#E83A8E] hover:bg-[#c42d77] text-white text-xs"
               data-testid="button-add-faq"
             >
               <Plus className="h-3.5 w-3.5 mr-1" /> Add FAQ

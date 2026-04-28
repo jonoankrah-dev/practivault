@@ -90,7 +90,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
   // ── Aesthetics & Beauty ──────────────────────────────────────────────────
   aesthetics: {
     id: "aesthetics", name: "Aesthetics & Beauty", emoji: "🌿",
-    primaryHex: "#b1306f", primaryHsl: "330 57% 44%",
+    primaryHex: "#E83A8E", primaryHsl: "331 79% 57%",
     accentHex: "#0d6b67",  accentHsl: "178 79% 23%",
     sidebarBg: "#1a0d13",  sidebarFg: "#f9e8f0",
     labels: {
@@ -293,7 +293,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
   // ── Default (no industry set) ────────────────────────────────────────────
   default: {
     id: "default", name: "PractiVault", emoji: "🏢",
-    primaryHex: "#b1306f", primaryHsl: "330 57% 44%",
+    primaryHex: "#E83A8E", primaryHsl: "331 79% 57%",
     accentHex: "#0d6b67",  accentHsl: "178 79% 23%",
     sidebarBg: "#1a0d13",  sidebarFg: "#f9e8f0",
     labels: {

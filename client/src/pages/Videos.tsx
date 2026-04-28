@@ -160,7 +160,7 @@ export default function Videos() {
   const getVideoIcon = (type: string) => {
     if (type === "youtube") return <span className="text-[9px] font-bold text-red-500 bg-red-50 px-1 rounded">YT</span>;
     if (type === "vimeo") return <span className="text-[9px] font-bold text-blue-500 bg-blue-50 px-1 rounded">VM</span>;
-    if (type === "upload") return <span className="text-[9px] font-bold text-[#b1306f] bg-[#b1306f]/10 px-1 rounded">UP</span>;
+    if (type === "upload") return <span className="text-[9px] font-bold text-[#E83A8E] bg-[#E83A8E]/10 px-1 rounded">UP</span>;
     return <span className="text-[9px] font-bold text-muted-foreground bg-muted px-1 rounded">LK</span>;
   };
 
@@ -175,7 +175,7 @@ export default function Videos() {
             className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-muted/50 transition-colors"
           >
             <span className="flex items-center gap-2">
-              <Play className="h-4 w-4 text-[#b1306f]" />
+              <Play className="h-4 w-4 text-[#E83A8E]" />
               Add Training Video
             </span>
             {showAdd ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
@@ -214,18 +214,18 @@ export default function Videos() {
               ) : (
                 <div
                   onClick={() => fileRef.current?.click()}
-                  className="border-2 border-dashed border-[#b1306f]/30 rounded-xl p-4 text-center cursor-pointer hover:border-[#b1306f]/60 hover:bg-[#b1306f]/5 transition-colors"
+                  className="border-2 border-dashed border-[#E83A8E]/30 rounded-xl p-4 text-center cursor-pointer hover:border-[#E83A8E]/60 hover:bg-[#E83A8E]/5 transition-colors"
                 >
                   {file ? (
                     <div className="flex items-center gap-2 justify-center text-sm">
-                      <Video className="h-4 w-4 text-[#b1306f]" />
+                      <Video className="h-4 w-4 text-[#E83A8E]" />
                       <span className="font-medium truncate max-w-[160px]">{file.name}</span>
                       <button onClick={e => { e.stopPropagation(); setFile(null); if (fileRef.current) fileRef.current.value = ""; }}
                         className="text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
                     </div>
                   ) : (
                     <div className="text-muted-foreground text-xs space-y-1">
-                      <Upload className="h-6 w-6 mx-auto text-[#b1306f]/50" />
+                      <Upload className="h-6 w-6 mx-auto text-[#E83A8E]/50" />
                       <p className="font-medium text-foreground">Click to choose video</p>
                       <p>MP4, MOV, AVI · up to 500MB</p>
                     </div>
@@ -252,7 +252,7 @@ export default function Videos() {
 
               <div className="flex items-center justify-between rounded-lg border px-3 py-2">
                 <Label className="text-xs cursor-pointer">Free to access</Label>
-                <Switch checked={isFree} onCheckedChange={setIsFree} className="data-[state=checked]:bg-[#b1306f]" />
+                <Switch checked={isFree} onCheckedChange={setIsFree} className="data-[state=checked]:bg-[#E83A8E]" />
               </div>
 
               {!isFree && (
@@ -262,7 +262,7 @@ export default function Videos() {
                 </div>
               )}
 
-              <Button onClick={handleSave} disabled={saving} className="w-full h-8 text-sm bg-[#b1306f] hover:bg-[#9a2860] text-white">
+              <Button onClick={handleSave} disabled={saving} className="w-full h-8 text-sm bg-[#E83A8E] hover:bg-[#c42d77] text-white">
                 {saving ? <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />Saving…</> : <><Play className="h-3.5 w-3.5 mr-2" />Add to Library</>}
               </Button>
             </div>
@@ -282,12 +282,12 @@ export default function Videos() {
                 <div key={v.id} className="flex flex-col gap-1.5 p-2.5 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
                   {confirmDeleteId !== v.id ? (
                     <div className="flex items-start gap-2">
-                      <Video className="h-4 w-4 text-[#b1306f] shrink-0 mt-0.5" />
+                      <Video className="h-4 w-4 text-[#E83A8E] shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium truncate">{v.title}</p>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                           {getVideoIcon(v.video_type)}
-                          <Badge variant="outline" className="text-[9px] px-1 py-0 capitalize border-[#b1306f]/20 text-[#b1306f]">{v.category}</Badge>
+                          <Badge variant="outline" className="text-[9px] px-1 py-0 capitalize border-[#E83A8E]/20 text-[#E83A8E]">{v.category}</Badge>
                           <span className="text-[9px] text-muted-foreground">{v.is_free ? "Free" : `£${(v as any).price ?? 0}`}</span>
                           {v.duration_mins && <span className="text-[9px] text-muted-foreground">{v.duration_mins}min</span>}
                         </div>
@@ -335,7 +335,7 @@ export default function Videos() {
         <SafiSectionChat
           section="Training Videos"
           description="Safi manages your training video library"
-          icon={<Video className="h-4 w-4 text-[#b1306f]" />}
+          icon={<Video className="h-4 w-4 text-[#E83A8E]" />}
           suggestions={SUGGESTIONS}
           sectionContext={SECTION_CONTEXT}
         />

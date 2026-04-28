@@ -174,7 +174,7 @@ export default function Photos() {
       <Label className="text-xs">{label}</Label>
       <div
         onClick={() => inputRef.current?.click()}
-        className="border-2 border-dashed border-[#b1306f]/25 rounded-lg p-2 text-center cursor-pointer hover:border-[#b1306f]/50 hover:bg-[#b1306f]/5 transition-colors min-h-[56px] flex flex-col items-center justify-center"
+        className="border-2 border-dashed border-[#E83A8E]/25 rounded-lg p-2 text-center cursor-pointer hover:border-[#E83A8E]/50 hover:bg-[#E83A8E]/5 transition-colors min-h-[56px] flex flex-col items-center justify-center"
       >
         {file ? (
           <div className="text-xs space-y-0.5">
@@ -186,7 +186,7 @@ export default function Photos() {
           </div>
         ) : (
           <div className="text-muted-foreground text-[10px] space-y-0.5">
-            <Upload className="h-4 w-4 mx-auto text-[#b1306f]/40" />
+            <Upload className="h-4 w-4 mx-auto text-[#E83A8E]/40" />
             <p>Click to upload</p>
           </div>
         )}
@@ -206,7 +206,7 @@ export default function Photos() {
             className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-muted/50 transition-colors"
           >
             <span className="flex items-center gap-2">
-              <Camera className="h-4 w-4 text-[#b1306f]" />
+              <Camera className="h-4 w-4 text-[#E83A8E]" />
               Add Before & After
             </span>
             {showUpload ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
@@ -271,7 +271,7 @@ export default function Photos() {
               <Button
                 onClick={handleUpload}
                 disabled={!clientId || (!beforeFile && !afterFile) || uploading}
-                className="w-full h-8 text-sm bg-[#b1306f] hover:bg-[#9a2860] text-white"
+                className="w-full h-8 text-sm bg-[#E83A8E] hover:bg-[#c42d77] text-white"
               >
                 {uploading ? <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />Uploading…</> : <><Upload className="h-3.5 w-3.5 mr-2" />Save Photos</>}
               </Button>
@@ -299,7 +299,7 @@ export default function Photos() {
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium truncate">{p.client_name ?? "Unknown"}</p>
                         {p.treatment_type && (
-                          <Badge variant="outline" className="text-[9px] px-1 py-0 border-[#b1306f]/20 text-[#b1306f] mt-0.5 inline-block">{p.treatment_type}</Badge>
+                          <Badge variant="outline" className="text-[9px] px-1 py-0 border-[#E83A8E]/20 text-[#E83A8E] mt-0.5 inline-block">{p.treatment_type}</Badge>
                         )}
                         <p className="text-[10px] text-muted-foreground mt-0.5">{new Date(p.taken_at).toLocaleDateString("en-GB")}</p>
                         {p.notes && <p className="text-[10px] text-muted-foreground truncate">{p.notes}</p>}
@@ -342,7 +342,7 @@ export default function Photos() {
         <SafiSectionChat
           section="Before & After"
           description="Safi manages and analyses your treatment photo records"
-          icon={<Camera className="h-4 w-4 text-[#b1306f]" />}
+          icon={<Camera className="h-4 w-4 text-[#E83A8E]" />}
           suggestions={SUGGESTIONS}
           sectionContext={SECTION_CONTEXT}
         />

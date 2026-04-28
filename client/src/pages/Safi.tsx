@@ -93,13 +93,13 @@ export default function Safi() {
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b bg-background shrink-0">
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-xl bg-[#b1306f]/10 flex items-center justify-center">
-            <Zap className="h-4 w-4 text-[#b1306f]" />
+          <div className="h-8 w-8 rounded-xl bg-[#E83A8E]/10 flex items-center justify-center">
+            <Zap className="h-4 w-4 text-[#E83A8E]" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-semibold">Safi AI</h1>
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-[#b1306f]/30 text-[#b1306f]">
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-[#E83A8E]/30 text-[#E83A8E]">
                 <Zap className="h-2.5 w-2.5 mr-0.5" />Agentic
               </Badge>
             </div>
@@ -120,8 +120,8 @@ export default function Safi() {
         {messages.length === 0 ? (
           /* Empty state */
           <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-center px-4">
-            <div className="h-16 w-16 rounded-2xl bg-[#b1306f]/10 flex items-center justify-center mb-5">
-              <Zap className="h-8 w-8 text-[#b1306f]" />
+            <div className="h-16 w-16 rounded-2xl bg-[#E83A8E]/10 flex items-center justify-center mb-5">
+              <Zap className="h-8 w-8 text-[#E83A8E]" />
             </div>
             <h2 className="text-base font-semibold mb-1">Meet Safi</h2>
             <p className="text-sm text-muted-foreground max-w-sm leading-relaxed mb-6">
@@ -133,7 +133,7 @@ export default function Safi() {
                 <button
                   key={s}
                   onClick={() => send(s)}
-                  className="text-left text-xs px-3 py-2.5 rounded-xl border bg-muted/50 hover:bg-[#b1306f]/5 hover:border-[#b1306f]/30 transition-colors leading-snug"
+                  className="text-left text-xs px-3 py-2.5 rounded-xl border bg-muted/50 hover:bg-[#E83A8E]/5 hover:border-[#E83A8E]/30 transition-colors leading-snug"
                   data-testid={`suggestion-${s.replace(/\s+/g, "-").toLowerCase()}`}
                 >
                   {s}
@@ -146,14 +146,14 @@ export default function Safi() {
             {messages.map(msg => (
               <div key={msg.id} className={cn("flex gap-3", msg.role === "user" ? "justify-end" : "justify-start")}>
                 {msg.role === "assistant" && (
-                  <div className="h-7 w-7 rounded-full bg-[#b1306f]/10 flex items-center justify-center shrink-0 mt-0.5">
-                    <Bot className="h-3.5 w-3.5 text-[#b1306f]" />
+                  <div className="h-7 w-7 rounded-full bg-[#E83A8E]/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <Bot className="h-3.5 w-3.5 text-[#E83A8E]" />
                   </div>
                 )}
                 <div className={cn(
                   "rounded-2xl px-4 py-3 text-sm leading-relaxed max-w-[80%] whitespace-pre-wrap",
                   msg.role === "user"
-                    ? "bg-[#b1306f] text-white rounded-br-sm"
+                    ? "bg-[#E83A8E] text-white rounded-br-sm"
                     : "bg-muted text-foreground rounded-bl-sm"
                 )}>
                   {msg.text}
@@ -169,11 +169,11 @@ export default function Safi() {
             {/* Loading indicator */}
             {loading && (
               <div className="flex gap-3 justify-start">
-                <div className="h-7 w-7 rounded-full bg-[#b1306f]/10 flex items-center justify-center shrink-0">
-                  <Bot className="h-3.5 w-3.5 text-[#b1306f]" />
+                <div className="h-7 w-7 rounded-full bg-[#E83A8E]/10 flex items-center justify-center shrink-0">
+                  <Bot className="h-3.5 w-3.5 text-[#E83A8E]" />
                 </div>
                 <div className="bg-muted rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-2">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[#b1306f]" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[#E83A8E]" />
                   <span className="text-sm text-muted-foreground">Safi is working…</span>
                 </div>
               </div>
@@ -193,7 +193,7 @@ export default function Safi() {
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKey}
             placeholder="Ask Safi anything — check bookings, invoices, stock, reports…"
-            className="resize-none min-h-[44px] max-h-[120px] text-sm rounded-xl border-border focus-visible:ring-[#b1306f]/30"
+            className="resize-none min-h-[44px] max-h-[120px] text-sm rounded-xl border-border focus-visible:ring-[#E83A8E]/30"
             rows={1}
             disabled={loading}
             data-testid="input-message"
@@ -202,7 +202,7 @@ export default function Safi() {
             onClick={() => send(input)}
             disabled={!input.trim() || loading}
             size="icon"
-            className="h-11 w-11 shrink-0 bg-[#b1306f] hover:bg-[#9a2860] text-white rounded-xl"
+            className="h-11 w-11 shrink-0 bg-[#E83A8E] hover:bg-[#c42d77] text-white rounded-xl"
             data-testid="button-send"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

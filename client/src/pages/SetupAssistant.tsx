@@ -90,13 +90,13 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
 
         {/* Header */}
         <div className="px-8 pt-6 pb-4 flex items-center gap-3 border-b border-gray-100">
-          <div className="h-9 w-9 rounded-xl bg-[#b1306f] flex items-center justify-center flex-shrink-0">
+          <div className="h-9 w-9 rounded-xl bg-[#E83A8E] flex items-center justify-center flex-shrink-0">
             <svg viewBox="0 0 24 24" className="h-5 w-5 text-white fill-current">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
             </svg>
           </div>
           <div className="flex-1">
-            <p className="text-xs font-semibold text-[#b1306f] uppercase tracking-wide mb-0.5">
+            <p className="text-xs font-semibold text-[#E83A8E] uppercase tracking-wide mb-0.5">
               Setup Assistant
             </p>
             <p className="text-xs text-gray-400">Step {step} of {TOTAL_STEPS} — {Math.round(progress)}% complete</p>
@@ -116,9 +116,9 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
                   <div
                     className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${
                       done
-                        ? "bg-[#b1306f] text-white"
+                        ? "bg-[#E83A8E] text-white"
                         : active
-                        ? "bg-[#b1306f] text-white ring-4 ring-[#b1306f]/20"
+                        ? "bg-[#E83A8E] text-white ring-4 ring-[#E83A8E]/20"
                         : "bg-gray-100 text-gray-400"
                     }`}
                   >
@@ -131,7 +131,7 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
                     )}
                   </div>
                   <span className={`text-[10px] font-medium leading-tight text-center ${
-                    done || active ? "text-[#b1306f]" : "text-gray-400"
+                    done || active ? "text-[#E83A8E]" : "text-gray-400"
                   }`}>{label}</span>
                 </div>
               );
@@ -140,7 +140,7 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
           {/* Progress bar track */}
           <div className="relative h-1.5 bg-gray-100 rounded-full mx-4 -mt-6 mb-6" style={{ zIndex: -1 }}>
             <div
-              className="absolute inset-y-0 left-0 bg-[#b1306f] rounded-full transition-all duration-500 ease-out"
+              className="absolute inset-y-0 left-0 bg-[#E83A8E] rounded-full transition-all duration-500 ease-out"
               style={{ width: `${Math.min(progress, 100)}%` }}
             />
           </div>
@@ -175,7 +175,7 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
               </div>
               <div className="flex gap-3 pt-2">
                 <Button
-                  className="flex-1 bg-[#b1306f] hover:bg-[#9a2860] text-white"
+                  className="flex-1 bg-[#E83A8E] hover:bg-[#c42d77] text-white"
                   onClick={() => setStep(2)}
                   disabled={!businessName.trim()}
                 >
@@ -206,8 +206,8 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
                     onClick={() => setIndustry(ind.id)}
                     className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 text-left transition-all text-sm font-medium ${
                       industry === ind.id
-                        ? "border-[#b1306f] bg-[#b1306f]/5 text-[#b1306f]"
-                        : "border-gray-100 bg-gray-50 text-[#241f19] hover:border-[#b1306f]/40"
+                        ? "border-[#E83A8E] bg-[#E83A8E]/5 text-[#E83A8E]"
+                        : "border-gray-100 bg-gray-50 text-[#241f19] hover:border-[#E83A8E]/40"
                     }`}
                   >
                     <span className="text-lg">{ind.emoji}</span>
@@ -220,7 +220,7 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
                   ← Back
                 </Button>
                 <Button
-                  className="flex-1 bg-[#b1306f] hover:bg-[#9a2860] text-white"
+                  className="flex-1 bg-[#E83A8E] hover:bg-[#c42d77] text-white"
                   onClick={() => setStep(3)}
                   disabled={!industry}
                 >
@@ -275,7 +275,7 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
                   ← Back
                 </Button>
                 <Button
-                  className="flex-1 bg-[#b1306f] hover:bg-[#9a2860] text-white"
+                  className="flex-1 bg-[#E83A8E] hover:bg-[#c42d77] text-white"
                   onClick={() => setStep(4)}
                 >
                   Next →
@@ -313,7 +313,7 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
               ) : (
                 <div className="space-y-3">
                   <div className="space-y-1.5">
-                    <Label>Client name <span className="text-[#b1306f]">*</span></Label>
+                    <Label>Client name <span className="text-[#E83A8E]">*</span></Label>
                     <Input
                       placeholder="e.g. Sarah Johnson"
                       value={clientName}
@@ -352,7 +352,7 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
                   ← Back
                 </Button>
                 <Button
-                  className="flex-1 bg-[#b1306f] hover:bg-[#9a2860] text-white"
+                  className="flex-1 bg-[#E83A8E] hover:bg-[#c42d77] text-white"
                   onClick={() => setStep(5)}
                 >
                   {clientAdded ? "Next →" : "Skip for now →"}
@@ -390,7 +390,7 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
                 ))}
               </div>
               <Button
-                className="w-full bg-[#b1306f] hover:bg-[#9a2860] text-white text-base py-5"
+                className="w-full bg-[#E83A8E] hover:bg-[#c42d77] text-white text-base py-5"
                 onClick={saveAndFinish}
                 disabled={saving}
               >

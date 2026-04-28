@@ -54,7 +54,7 @@ export default function Consent() {
     <SafiSectionChat
       section="Consent Forms"
       description="Safi sends and tracks consent forms for your clients"
-      icon={<ShieldCheck className="h-4 w-4 text-[#b1306f]" />}
+      icon={<ShieldCheck className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}
     />

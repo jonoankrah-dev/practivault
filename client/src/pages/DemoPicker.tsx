@@ -10,7 +10,7 @@ function PickerHeader() {
     <div className="bg-white border-b border-gray-100">
       <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-lg bg-[#b1306f] flex items-center justify-center">
+          <div className="h-8 w-8 rounded-lg bg-[#E83A8E] flex items-center justify-center">
             <svg viewBox="0 0 24 24" className="h-5 w-5 text-white fill-current">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
             </svg>
@@ -19,7 +19,7 @@ function PickerHeader() {
         </div>
         <div className="flex items-center gap-3">
           <a href="/#/login" className="text-sm text-gray-500 hover:text-[#241f19] transition-colors">Sign in</a>
-          <a href="/#/login" className="text-sm font-semibold bg-[#b1306f] text-white px-4 py-1.5 rounded-lg hover:bg-[#9a2860] transition-colors">
+          <a href="/#/login" className="text-sm font-semibold bg-[#E83A8E] text-white px-4 py-1.5 rounded-lg hover:bg-[#c42d77] transition-colors">
             Start free trial
           </a>
         </div>
@@ -35,7 +35,7 @@ function SectorGrid({ onSelect }: { onSelect: (sector: Sector) => void }) {
     <div className="max-w-6xl mx-auto px-6 pb-20">
       {/* Hero */}
       <div className="pt-12 pb-10 text-center">
-        <div className="inline-flex items-center gap-2 bg-[#b1306f]/10 text-[#b1306f] text-xs font-semibold px-3 py-1.5 rounded-full mb-5">
+        <div className="inline-flex items-center gap-2 bg-[#E83A8E]/10 text-[#E83A8E] text-xs font-semibold px-3 py-1.5 rounded-full mb-5">
           ✨ Live interactive demo — no login required
         </div>
         <h1 className="text-4xl font-bold text-[#241f19] mb-4 leading-tight">
@@ -55,7 +55,7 @@ function SectorGrid({ onSelect }: { onSelect: (sector: Sector) => void }) {
             className={`text-left bg-gradient-to-br ${sector.colour} border-2 rounded-2xl p-5 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.98] group`}
           >
             <div className="text-3xl mb-3">{sector.emoji}</div>
-            <h3 className="font-bold text-[#241f19] text-[15px] mb-1 group-hover:text-[#b1306f] transition-colors leading-tight">
+            <h3 className="font-bold text-[#241f19] text-[15px] mb-1 group-hover:text-[#E83A8E] transition-colors leading-tight">
               {sector.label}
             </h3>
             <p className="text-xs text-gray-500 mb-3">{sector.description}</p>
@@ -73,7 +73,7 @@ function SectorGrid({ onSelect }: { onSelect: (sector: Sector) => void }) {
           Join thousands of service businesses using PractiVault — from £19/month.
         </p>
         <div className="flex gap-3 justify-center flex-wrap">
-          <a href="/#/login" className="inline-flex items-center gap-2 px-6 py-3 bg-[#b1306f] text-white text-sm font-semibold rounded-xl hover:bg-[#9a2860] transition-colors shadow-sm">
+          <a href="/#/login" className="inline-flex items-center gap-2 px-6 py-3 bg-[#E83A8E] text-white text-sm font-semibold rounded-xl hover:bg-[#c42d77] transition-colors shadow-sm">
             Start free trial
           </a>
           <a href="/#/pricing" className="inline-flex items-center gap-2 px-6 py-3 border border-gray-200 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors">
@@ -132,13 +132,13 @@ function SubIndustryList({
             <div className="flex items-start gap-3">
               <span className="text-2xl mt-0.5 shrink-0">{sub.emoji}</span>
               <div>
-                <h3 className="font-bold text-[#241f19] text-sm mb-0.5 group-hover:text-[#b1306f] transition-colors">
+                <h3 className="font-bold text-[#241f19] text-sm mb-0.5 group-hover:text-[#E83A8E] transition-colors">
                   {sub.label}
                 </h3>
                 <p className="text-xs text-gray-500">{sub.tagline}</p>
               </div>
             </div>
-            <div className={`mt-3 flex items-center gap-1 text-[11px] font-semibold ${sector.accentText} group-hover:text-[#b1306f] transition-colors`}>
+            <div className={`mt-3 flex items-center gap-1 text-[11px] font-semibold ${sector.accentText} group-hover:text-[#E83A8E] transition-colors`}>
               Try this demo
               <svg className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />

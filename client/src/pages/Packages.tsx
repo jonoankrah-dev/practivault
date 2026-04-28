@@ -45,7 +45,7 @@ export default function Packages() {
     <SafiSectionChat
       section="Packages"
       description="Safi manages your training packages and bundles"
-      icon={<Package className="h-4 w-4 text-[#b1306f]" />}
+      icon={<Package className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}
     />

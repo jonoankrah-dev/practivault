@@ -45,7 +45,7 @@ export default function Clients() {
     <SafiSectionChat
       section="Clients"
       description="Safi manages your full client database"
-      icon={<Users className="h-4 w-4 text-[#b1306f]" />}
+      icon={<Users className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}
     />

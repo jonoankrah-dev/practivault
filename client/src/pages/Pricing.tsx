@@ -43,9 +43,9 @@ const PLANS = [
     tagline: "For growing practices and sole traders",
     monthly: 49,
     annual: 39,
-    color: "from-[#b1306f]/10 to-[#b1306f]/5",
-    accent: "text-[#b1306f]",
-    border: "border-[#b1306f]/30",
+    color: "from-[#E83A8E]/10 to-[#E83A8E]/5",
+    accent: "text-[#E83A8E]",
+    border: "border-[#E83A8E]/30",
     cta: "Start free trial",
     popular: true,
   },
@@ -77,7 +77,7 @@ export default function PricingPage() {
     <div className="min-h-screen bg-[#f6f3ef]">
       {/* Nav */}
       <nav className="bg-white border-b border-gray-100 px-6 py-4 flex items-center gap-3">
-        <div className="h-8 w-8 rounded-lg bg-[#b1306f] flex items-center justify-center">
+        <div className="h-8 w-8 rounded-lg bg-[#E83A8E] flex items-center justify-center">
           <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 2C7 2 3 6 3 11c0 3.3 1.7 6.2 4.3 7.9L9 22h6l1.7-3.1C19.3 17.2 21 14.3 21 11c0-5-4-9-9-9z" />
             <circle cx="12" cy="11" r="3" />
@@ -89,12 +89,12 @@ export default function PricingPage() {
       <div className="max-w-6xl mx-auto px-4 py-16 space-y-16">
         {/* Hero */}
         <div className="text-center space-y-4">
-          <div className="inline-flex items-center gap-1.5 bg-[#b1306f]/10 text-[#b1306f] text-xs font-semibold px-3 py-1 rounded-full">
+          <div className="inline-flex items-center gap-1.5 bg-[#E83A8E]/10 text-[#E83A8E] text-xs font-semibold px-3 py-1 rounded-full">
             <Sparkles className="h-3.5 w-3.5" /> Simple, transparent pricing
           </div>
           <h1 className="text-4xl font-bold text-gray-900 tracking-tight">
             Run your entire business.<br />
-            <span className="text-[#b1306f]">Hands-free if you want.</span>
+            <span className="text-[#E83A8E]">Hands-free if you want.</span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-xl mx-auto">
             One app for every practitioner, tradesperson, and educator — from solo starters to multi-location academies.
@@ -108,7 +108,7 @@ export default function PricingPage() {
               data-testid="button-billing-toggle"
               className={cn(
                 "relative h-6 w-11 rounded-full transition-colors duration-200",
-                annual ? "bg-[#b1306f]" : "bg-gray-200"
+                annual ? "bg-[#E83A8E]" : "bg-gray-200"
               )}
             >
               <span className={cn("absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200", annual && "translate-x-5")} />
@@ -131,11 +131,11 @@ export default function PricingPage() {
                 data-testid={`card-plan-${plan.id}`}
                 className={cn(
                   "relative bg-white rounded-2xl border-2 shadow-sm overflow-hidden transition-shadow hover:shadow-md",
-                  plan.popular ? "border-[#b1306f] shadow-[#b1306f]/10" : "border-gray-100"
+                  plan.popular ? "border-[#E83A8E] shadow-[#E83A8E]/10" : "border-gray-100"
                 )}
               >
                 {plan.popular && (
-                  <div className="bg-[#b1306f] text-white text-[11px] font-bold text-center py-1.5 tracking-wide uppercase">
+                  <div className="bg-[#E83A8E] text-white text-[11px] font-bold text-center py-1.5 tracking-wide uppercase">
                     Most popular
                   </div>
                 )}
@@ -162,7 +162,7 @@ export default function PricingPage() {
                     className={cn(
                       "w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 transition-all",
                       plan.popular
-                        ? "bg-[#b1306f] text-white hover:bg-[#9a2860] shadow-sm"
+                        ? "bg-[#E83A8E] text-white hover:bg-[#c42d77] shadow-sm"
                         : "bg-white text-gray-900 border border-gray-200 hover:border-gray-300 hover:shadow-sm"
                     )}
                   >

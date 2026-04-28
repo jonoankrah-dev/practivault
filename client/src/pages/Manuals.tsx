@@ -179,7 +179,7 @@ export default function Manuals() {
             className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-muted/50 transition-colors"
           >
             <span className="flex items-center gap-2">
-              <Upload className="h-4 w-4 text-[#b1306f]" />
+              <Upload className="h-4 w-4 text-[#E83A8E]" />
               Upload Manual / PDF
             </span>
             {showUpload
@@ -192,11 +192,11 @@ export default function Manuals() {
               {/* File drop zone */}
               <div
                 onClick={() => fileRef.current?.click()}
-                className="border-2 border-dashed border-[#b1306f]/30 rounded-xl p-4 text-center cursor-pointer hover:border-[#b1306f]/60 hover:bg-[#b1306f]/5 transition-colors"
+                className="border-2 border-dashed border-[#E83A8E]/30 rounded-xl p-4 text-center cursor-pointer hover:border-[#E83A8E]/60 hover:bg-[#E83A8E]/5 transition-colors"
               >
                 {file ? (
                   <div className="flex items-center gap-2 justify-center text-sm">
-                    <FileText className="h-4 w-4 text-[#b1306f]" />
+                    <FileText className="h-4 w-4 text-[#E83A8E]" />
                     <span className="font-medium truncate max-w-[180px]">{file.name}</span>
                     <button
                       onClick={e => {
@@ -211,7 +211,7 @@ export default function Manuals() {
                   </div>
                 ) : (
                   <div className="text-muted-foreground text-xs space-y-1">
-                    <Upload className="h-6 w-6 mx-auto text-[#b1306f]/50" />
+                    <Upload className="h-6 w-6 mx-auto text-[#E83A8E]/50" />
                     <p className="font-medium text-foreground">Click to choose file</p>
                     <p>PDF, DOCX, or TXT · up to 50MB</p>
                   </div>
@@ -262,7 +262,7 @@ export default function Manuals() {
               <Button
                 onClick={handleUpload}
                 disabled={!file || !name.trim() || uploading}
-                className="w-full h-8 text-sm bg-[#b1306f] hover:bg-[#9a2860] text-white"
+                className="w-full h-8 text-sm bg-[#E83A8E] hover:bg-[#c42d77] text-white"
               >
                 {uploading
                   ? <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />Uploading…</>
@@ -304,13 +304,13 @@ export default function Manuals() {
                   {/* Normal view */}
                   {confirmDeleteId !== m.id ? (
                     <div className="flex items-start gap-2">
-                      <FileText className="h-4 w-4 text-[#b1306f] shrink-0 mt-0.5" />
+                      <FileText className="h-4 w-4 text-[#E83A8E] shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium truncate">{m.name}</p>
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <Badge
                             variant="outline"
-                            className="text-[9px] px-1 py-0 capitalize border-[#b1306f]/20 text-[#b1306f]"
+                            className="text-[9px] px-1 py-0 capitalize border-[#E83A8E]/20 text-[#E83A8E]"
                           >
                             {m.category}
                           </Badge>
@@ -384,7 +384,7 @@ export default function Manuals() {
         <SafiSectionChat
           section="Manuals"
           description="Safi reads and answers questions from your documents"
-          icon={<BookOpen className="h-4 w-4 text-[#b1306f]" />}
+          icon={<BookOpen className="h-4 w-4 text-[#E83A8E]" />}
           suggestions={SUGGESTIONS}
           sectionContext={SECTION_CONTEXT}
         />

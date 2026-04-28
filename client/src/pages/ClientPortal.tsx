@@ -104,7 +104,7 @@ function Section({
         className="w-full flex items-center gap-3 px-6 py-4 text-left hover:bg-gray-50 transition-colors"
         data-testid={`section-${title.toLowerCase().replace(/\s+/g, "-")}`}
       >
-        <span className="h-8 w-8 rounded-lg bg-[#b1306f]/10 text-[#b1306f] flex items-center justify-center">
+        <span className="h-8 w-8 rounded-lg bg-[#E83A8E]/10 text-[#E83A8E] flex items-center justify-center">
           {icon}
         </span>
         <span className="font-semibold text-gray-900 flex-1">{title}</span>
@@ -181,7 +181,7 @@ export default function ClientPortal({ token }: { token: string }) {
       <div className="bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-2xl mx-auto px-6 py-5 flex items-center gap-4">
           {/* Logo mark */}
-          <div className="h-10 w-10 rounded-xl bg-[#b1306f] flex items-center justify-center shrink-0">
+          <div className="h-10 w-10 rounded-xl bg-[#E83A8E] flex items-center justify-center shrink-0">
             <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2C7 2 3 6 3 11c0 3.3 1.7 6.2 4.3 7.9L9 22h6l1.7-3.1C19.3 17.2 21 14.3 21 11c0-5-4-9-9-9z" />
               <circle cx="12" cy="11" r="3" />
@@ -198,7 +198,7 @@ export default function ClientPortal({ token }: { token: string }) {
         {/* Client card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-5">
           <div className="flex items-start gap-4">
-            <div className="h-12 w-12 rounded-full bg-[#b1306f] text-white flex items-center justify-center text-lg font-semibold shrink-0">
+            <div className="h-12 w-12 rounded-full bg-[#E83A8E] text-white flex items-center justify-center text-lg font-semibold shrink-0">
               {(client?.name?.[0] || "?").toUpperCase()}
             </div>
             <div className="flex-1">
@@ -321,7 +321,7 @@ export default function ClientPortal({ token }: { token: string }) {
                         data-testid={`photo-after-${p.id}`}
                       >
                         <img src={p.after_url} alt="After" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
-                        <span className="absolute bottom-1.5 left-1.5 text-[10px] bg-[#b1306f]/80 text-white px-1.5 py-0.5 rounded-md font-medium">After</span>
+                        <span className="absolute bottom-1.5 left-1.5 text-[10px] bg-[#E83A8E]/80 text-white px-1.5 py-0.5 rounded-md font-medium">After</span>
                       </button>
                     )}
                   </div>

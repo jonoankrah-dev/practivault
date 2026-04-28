@@ -43,7 +43,7 @@ export default function Quotes() {
     <SafiSectionChat
       section="Quotes"
       description="Safi creates and manages all your quotes and estimates"
-      icon={<FileText className="h-4 w-4 text-[#b1306f]" />}
+      icon={<FileText className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}
     />

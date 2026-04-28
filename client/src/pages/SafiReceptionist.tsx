@@ -380,7 +380,7 @@ export default function SafiReceptionist({ onBack }: { onBack?: () => void }) {
             className={cn(
               isConnected
                 ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-                : "bg-[#b1306f] hover:bg-[#9a2860] text-white"
+                : "bg-[#E83A8E] hover:bg-[#c42d77] text-white"
             )}
             data-testid="button-connect-saphie"
           >
@@ -397,10 +397,10 @@ export default function SafiReceptionist({ onBack }: { onBack?: () => void }) {
 
       {/* Live indicator */}
       {isConnected && (
-        <div className="flex items-center gap-2 px-6 py-2 bg-[#b1306f]/5 border-b text-xs text-[#b1306f] font-medium">
+        <div className="flex items-center gap-2 px-6 py-2 bg-[#E83A8E]/5 border-b text-xs text-[#E83A8E] font-medium">
           <span className={cn(
             "inline-block h-2 w-2 rounded-full",
-            speaking ? "bg-[#b1306f] animate-pulse" : muted ? "bg-muted-foreground" : "bg-emerald-500 animate-pulse"
+            speaking ? "bg-[#E83A8E] animate-pulse" : muted ? "bg-muted-foreground" : "bg-emerald-500 animate-pulse"
           )} />
           {speaking ? "Saphie is speaking" : muted ? "Microphone muted" : "Microphone live — speak naturally"}
           {speaking && <Volume2 className="h-3.5 w-3.5 ml-1" />}
@@ -411,8 +411,8 @@ export default function SafiReceptionist({ onBack }: { onBack?: () => void }) {
       <ScrollArea className="flex-1 px-6 py-4">
         {items.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-center text-muted-foreground">
-            <div className="h-14 w-14 rounded-full bg-[#b1306f]/10 flex items-center justify-center mb-3">
-              <Mic className="h-6 w-6 text-[#b1306f]" />
+            <div className="h-14 w-14 rounded-full bg-[#E83A8E]/10 flex items-center justify-center mb-3">
+              <Mic className="h-6 w-6 text-[#E83A8E]" />
             </div>
             <p className="text-sm font-medium">Hi, I'm Saphie</p>
             <p className="text-xs mt-1 max-w-[220px]">
@@ -432,7 +432,7 @@ export default function SafiReceptionist({ onBack }: { onBack?: () => void }) {
                 <div className={cn(
                   "rounded-2xl px-4 py-2.5 text-sm max-w-[80%] leading-relaxed",
                   item.role === "user"
-                    ? "bg-[#b1306f] text-white rounded-br-sm"
+                    ? "bg-[#E83A8E] text-white rounded-br-sm"
                     : "bg-muted text-foreground rounded-bl-sm"
                 )}>
                   {item.text}

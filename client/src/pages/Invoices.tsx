@@ -43,7 +43,7 @@ export default function Invoices() {
     <SafiSectionChat
       section="Invoices"
       description="Safi handles all your invoicing and payment tracking"
-      icon={<Receipt className="h-4 w-4 text-[#b1306f]" />}
+      icon={<Receipt className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}
     />

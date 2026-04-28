@@ -36,7 +36,7 @@ export default function SocialStudio() {
     <SafiSectionChat
       section="Social Studio"
       description="Safi creates and manages all your social content"
-      icon={<Sparkles className="h-4 w-4 text-[#b1306f]" />}
+      icon={<Sparkles className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}
     />

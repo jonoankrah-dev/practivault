@@ -93,7 +93,7 @@ export default function Login() {
 
         {/* Industry badge — shown when coming from demo */}
         {industry && mode === "signup" && (
-          <div className="mb-4 flex items-center gap-2 bg-[#b1306f]/8 border border-[#b1306f]/20 rounded-xl px-4 py-3">
+          <div className="mb-4 flex items-center gap-2 bg-[#E83A8E]/8 border border-[#E83A8E]/20 rounded-xl px-4 py-3">
             <span className="text-lg">
               {industry === "aesthetics" ? "🌿" :
                industry === "hair" ? "💇" :
@@ -106,7 +106,7 @@ export default function Login() {
                industry === "builder" ? "🧱" : "🏢"}
             </span>
             <div>
-              <p className="text-xs font-semibold text-[#b1306f]">Your industry is pre-set</p>
+              <p className="text-xs font-semibold text-[#E83A8E]">Your industry is pre-set</p>
               <p className="text-xs text-gray-500 capitalize">
                 We'll personalise your account for {industry.replace(/-/g, " ")}
               </p>

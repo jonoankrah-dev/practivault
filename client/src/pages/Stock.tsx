@@ -42,7 +42,7 @@ export default function Stock() {
     <SafiSectionChat
       section="Stock"
       description="Safi manages your inventory and stock levels"
-      icon={<Package className="h-4 w-4 text-[#b1306f]" />}
+      icon={<Package className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}
     />

@@ -40,7 +40,7 @@ export default function Leads() {
     <SafiSectionChat
       section="Leads"
       description="Safi tracks and manages all your leads and enquiries"
-      icon={<UserPlus className="h-4 w-4 text-[#b1306f]" />}
+      icon={<UserPlus className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}
     />

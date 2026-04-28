@@ -50,7 +50,7 @@ export default function CpdLog() {
     <SafiSectionChat
       section="CPD Log"
       description="Safi tracks your CPD hours and training records"
-      icon={<GraduationCap className="h-4 w-4 text-[#b1306f]" />}
+      icon={<GraduationCap className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}
     />
