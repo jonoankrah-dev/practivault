@@ -1,5 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { Resend } from "resend";
+import twilio from "twilio";
 import type { Server } from "node:http";
 import { WebSocketServer, WebSocket as WS } from "ws";
 import multer from "multer";
@@ -3629,21 +3630,25 @@ Rules:
         }
         case "send_whatsapp_message": {
           const { to, body: msgBody } = args;
-          const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-          const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
-          if (!phoneNumberId || !accessToken) {
+          const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+          const twilioToken = process.env.TWILIO_AUTH_TOKEN;
+          const twilioFrom = process.env.TWILIO_WHATSAPP_NUMBER || "+447537167007";
+          if (!twilioSid || !twilioToken) {
             await db.from("whatsapp_messages").insert({ user_id: userId, contact_phone: to, contact_name: args.contact_name ?? null, direction: "outbound", body: msgBody, sent_at: new Date().toISOString(), is_read: true, status: "pending_credentials" });
-            return `Message saved but not sent — WhatsApp credentials (WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN) are not yet configured on the server. Add them to Railway and it will send live.`;
+            return `Message saved but not sent — Twilio credentials (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN) are not yet configured on Railway.`;
           }
-          const metaRes = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ messaging_product: "whatsapp", to, type: "text", text: { body: msgBody } }),
-          });
-          const metaData = await metaRes.json() as any;
-          if (!metaRes.ok) return `WhatsApp send failed: ${metaData.error?.message || "Unknown error"}`;
-          await db.from("whatsapp_messages").insert({ user_id: userId, contact_phone: to, contact_name: args.contact_name ?? null, direction: "outbound", body: msgBody, wa_message_id: metaData.messages?.[0]?.id, sent_at: new Date().toISOString(), is_read: true, status: "sent" });
-          return `WhatsApp message sent to ${args.contact_name || to}: "${msgBody}"`;
+          try {
+            const twilioClient = twilio(twilioSid, twilioToken);
+            const sent = await twilioClient.messages.create({
+              from: `whatsapp:${twilioFrom}`,
+              to: `whatsapp:${to}`,
+              body: msgBody,
+            });
+            await db.from("whatsapp_messages").insert({ user_id: userId, contact_phone: to, contact_name: args.contact_name ?? null, direction: "outbound", body: msgBody, wa_message_id: sent.sid, sent_at: new Date().toISOString(), is_read: true, status: "sent" });
+            return `WhatsApp message sent to ${args.contact_name || to}: "${msgBody}"`;
+          } catch (e: any) {
+            return `WhatsApp send failed: ${e.message}`;
+          }
         }
         default:
           return `Unknown tool: ${toolName}`;
@@ -3996,78 +4001,198 @@ Key facts:
   // WHATSAPP INTEGRATION
   // ============================================================
 
-  // GET webhook verification (Meta handshake)
-  app.get("/api/whatsapp/webhook", (req: Request, res: Response) => {
-    const mode = req.query["hub.mode"];
-    const token = req.query["hub.verify_token"];
-    const challenge = req.query["hub.challenge"];
-    if (mode === "subscribe" && token === (process.env.WHATSAPP_VERIFY_TOKEN || "practivault-verify")) {
-      return res.status(200).send(challenge);
-    }
-    res.sendStatus(403);
-  });
-
-  // POST webhook — receives inbound messages from Meta
+  // ── Twilio WhatsApp inbound webhook ─────────────────────────────────────────
+  // Twilio sends form-encoded POST to this URL when a WhatsApp message arrives.
+  // Webhook URL to set in Twilio console:
+  //   https://practivault-backend-production.up.railway.app/api/whatsapp/webhook
   app.post("/api/whatsapp/webhook", async (req: Request, res: Response) => {
     try {
-      const body = req.body;
-      if (body.object !== "whatsapp_business_account") return res.sendStatus(200);
+      // Validate Twilio signature (skip in dev if secret not set)
+      const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
+      if (twilioAuthToken) {
+        const signature = req.headers["x-twilio-signature"] as string || "";
+        const webhookUrl = process.env.TWILIO_WEBHOOK_URL ||
+          `https://practivault-backend-production.up.railway.app/api/whatsapp/webhook`;
+        const valid = twilio.validateRequest(twilioAuthToken, signature, webhookUrl, req.body);
+        if (!valid) {
+          console.warn("WhatsApp webhook: invalid Twilio signature");
+          return res.sendStatus(403);
+        }
+      }
 
-      for (const entry of body.entry || []) {
-        for (const change of entry.changes || []) {
-          const value = change.value;
-          if (!value?.messages) continue;
+      // Twilio sends form-encoded body
+      const from: string = (req.body.From || "").replace("whatsapp:", ""); // e.g. +447911123456
+      const to: string = (req.body.To || "").replace("whatsapp:", "");   // your business number
+      const text: string = req.body.Body || "";
+      const waMessageId: string = req.body.MessageSid || "";
 
-          for (const msg of value.messages) {
-            const from = msg.from; // phone number e.g. 447911123456
-            const text = msg.type === "text" ? msg.text?.body : `[${msg.type} message]`;
-            const waMessageId = msg.id;
-            const ts = new Date(Number(msg.timestamp) * 1000).toISOString();
+      if (!from || !text) return res.sendStatus(200);
 
-            // Find matching user by WhatsApp phone number ID in settings
-            const phoneNumberId = value.metadata?.phone_number_id;
-            if (!phoneNumberId) continue;
+      // Find the PractiVault user who owns this Twilio WhatsApp number
+      const { data: settingsRows } = await supabase
+        .from("user_settings")
+        .select("user_id")
+        .eq("key", "twilio_whatsapp_number")
+        .eq("value", to)
+        .limit(1);
 
-            // Find the PractiVault user who owns this phone number ID
-            const { data: settingsRows } = await supabase
-              .from("user_settings")
-              .select("user_id")
-              .eq("key", "whatsapp_phone_number_id")
-              .eq("value", phoneNumberId)
-              .limit(1);
+      // Fall back to the account owner if number not in settings yet
+      const OWNER_USER_ID = process.env.OWNER_USER_ID || "d76f928a-3d62-4c7c-918b-e66e5760d816";
+      const userId: string = settingsRows?.[0]?.user_id ?? OWNER_USER_ID;
 
-            const userId = settingsRows?.[0]?.user_id;
-            if (!userId) continue;
+      // Try to match phone to an existing client
+      const { data: clientMatch } = await supabase
+        .from("clients")
+        .select("id, name")
+        .eq("user_id", userId)
+        .or(`phone.eq.${from},phone.eq.${from.replace("+", "")}`)
+        .limit(1)
+        .maybeSingle();
 
-            const db = supabaseForUser(null); // use service role for webhook inserts
+      // Store inbound message
+      await supabase.from("whatsapp_messages").insert({
+        user_id: userId,
+        client_id: clientMatch?.id || null,
+        contact_name: clientMatch?.name || null,
+        contact_phone: from,
+        direction: "inbound",
+        body: text,
+        wa_message_id: waMessageId,
+        sent_at: new Date().toISOString(),
+        is_read: false,
+      });
 
-            // Try to match phone to an existing client
-            const { data: clientMatch } = await supabase
-              .from("clients")
-              .select("id, name")
-              .eq("user_id", userId)
-              .or(`phone.eq.${from},phone.eq.+${from}`)
-              .limit(1)
-              .single();
+      // ── Safi auto-reply ────────────────────────────────────────────────────
+      // Fetch business context for Safi
+      const [bizRes, manualsRes, userRes] = await Promise.all([
+        supabase.from("business_info").select("*").eq("user_id", userId).maybeSingle(),
+        supabase.from("manuals").select("name, extracted_text").eq("user_id", userId).not("extracted_text", "is", null).order("created_at", { ascending: true }),
+        supabase.from("users").select("name, business_name").eq("id", userId).maybeSingle(),
+      ]);
+      const bizInfo = bizRes.data as any;
+      const manuals = (manualsRes.data ?? []) as any[];
+      const userData = userRes.data as any;
 
-            await supabase.from("whatsapp_messages").insert({
-              user_id: userId,
-              client_id: clientMatch?.id || null,
-              contact_name: clientMatch?.name || null,
-              contact_phone: from,
-              direction: "inbound",
-              body: text || "",
-              wa_message_id: waMessageId,
-              sent_at: ts,
-              is_read: false,
-            });
+      let bizContext = "";
+      if (bizInfo) {
+        if (bizInfo.tagline) bizContext += `\nTagline: ${bizInfo.tagline}`;
+        if (bizInfo.about) bizContext += `\nAbout: ${bizInfo.about}`;
+        if (bizInfo.website_url) bizContext += `\nWebsite: ${bizInfo.website_url}`;
+        if (bizInfo.products?.length) bizContext += `\n\nProducts:\n${(bizInfo.products as any[]).map((p:any)=>`- ${p.name}${p.price?` — ${p.price}`:""}${p.description?`: ${p.description}`:""}`).join("\n")}`;
+      }
+
+      let manualContext = "";
+      if (manuals.length) {
+        let total = 0;
+        const parts: string[] = [];
+        for (const m of manuals) {
+          if (total >= 5000) break;
+          const chunk = ((m.extracted_text as string) || "").slice(0, 5000 - total);
+          parts.push(`=== ${m.name} ===\n${chunk}`);
+          total += chunk.length;
+        }
+        manualContext = `\n\nManuals:\n${parts.join("\n\n")}`;
+      }
+
+      // Fetch last 10 messages in this thread for conversation context
+      const { data: history } = await supabase
+        .from("whatsapp_messages")
+        .select("direction, body")
+        .eq("user_id", userId)
+        .eq("contact_phone", from)
+        .order("sent_at", { ascending: false })
+        .limit(10);
+
+      const conversationHistory = (history ?? []).reverse().map((m: any) => ({
+        role: m.direction === "inbound" ? "user" : "assistant",
+        content: m.body,
+      }));
+
+      const safiSystem = `You are Safi, the WhatsApp receptionist for ${userData?.business_name ?? "this business"}.${bizContext}${manualContext}
+
+You are responding directly to a customer WhatsApp message on behalf of the business. Be warm, helpful, professional, and concise — this is a WhatsApp chat, so keep replies short and friendly. Do not use markdown formatting (no asterisks, no bullet dashes) — plain text only.
+
+You can answer questions about treatments, pricing, bookings, training courses, and general enquiries. If you do not know the answer, say you will pass the message on to the team.
+
+Do NOT ask the customer to contact you again on another channel unless strictly necessary. Handle the query yourself where possible.
+
+IMPORTANT: Reply only with the message text to send to the customer. Do not explain what you are doing.`;
+
+      const xaiKey = process.env.XAI_API_KEY;
+      if (xaiKey) {
+        const grokRes = await fetch("https://api.x.ai/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${xaiKey}` },
+          body: JSON.stringify({
+            model: "grok-3-mini",
+            messages: [
+              { role: "system", content: safiSystem },
+              ...conversationHistory.slice(-9), // last 9 + new message = 10
+              { role: "user", content: text },
+            ],
+            max_tokens: 300,
+          }),
+        });
+
+        if (grokRes.ok) {
+          const grokData = await grokRes.json() as any;
+          const reply: string = grokData.choices?.[0]?.message?.content?.trim() ?? "";
+
+          if (reply) {
+            // Send reply via Twilio
+            const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+            const twilioToken = process.env.TWILIO_AUTH_TOKEN;
+            const twilioFrom = process.env.TWILIO_WHATSAPP_NUMBER || "+447537167007";
+
+            if (twilioSid && twilioToken) {
+              const client = twilio(twilioSid, twilioToken);
+              try {
+                const sent = await client.messages.create({
+                  from: `whatsapp:${twilioFrom}`,
+                  to: `whatsapp:${from}`,
+                  body: reply,
+                });
+
+                // Store Safi's outbound reply
+                await supabase.from("whatsapp_messages").insert({
+                  user_id: userId,
+                  client_id: clientMatch?.id || null,
+                  contact_name: clientMatch?.name || null,
+                  contact_phone: from,
+                  direction: "outbound",
+                  body: reply,
+                  wa_message_id: sent.sid,
+                  sent_at: new Date().toISOString(),
+                  is_read: true,
+                  status: "sent",
+                });
+              } catch (sendErr: any) {
+                console.error("Twilio send error:", sendErr.message);
+              }
+            } else {
+              // Credentials not yet set — store the draft reply for Jono to review in the inbox
+              await supabase.from("whatsapp_messages").insert({
+                user_id: userId,
+                client_id: clientMatch?.id || null,
+                contact_name: clientMatch?.name || null,
+                contact_phone: from,
+                direction: "outbound",
+                body: reply,
+                sent_at: new Date().toISOString(),
+                is_read: true,
+                status: "pending_credentials",
+              });
+            }
           }
         }
       }
+      // ── End Safi auto-reply ────────────────────────────────────────────────
+
+      // Twilio expects either empty 200 or TwiML — empty 200 is fine
       res.sendStatus(200);
-    } catch (e) {
+    } catch (e: any) {
       console.error("WhatsApp webhook error:", e);
-      res.sendStatus(200); // always 200 to avoid Meta retries
+      res.sendStatus(200); // always 200 — Twilio retries on non-200
     }
   });
 
@@ -4128,16 +4253,16 @@ Key facts:
     res.json(data || []);
   });
 
-  // POST /api/whatsapp/send — send a message to a contact
+  // POST /api/whatsapp/send — send a manual message from the inbox (Twilio)
   app.post("/api/whatsapp/send", requireAuth, async (req: AuthedRequest, res: Response) => {
     const { to, body } = req.body;
     if (!to || !body?.trim()) return res.status(400).json({ message: "to and body are required" });
 
-    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+    const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+    const twilioToken = process.env.TWILIO_AUTH_TOKEN;
+    const twilioFrom = process.env.TWILIO_WHATSAPP_NUMBER || "+447537167007";
 
-    if (!phoneNumberId || !accessToken) {
-      // Store the message as pending even without live credentials (dev mode)
+    if (!twilioSid || !twilioToken) {
       const { data: stored } = await req.db!.from("whatsapp_messages").insert({
         user_id: req.user!.id,
         contact_phone: to,
@@ -4147,42 +4272,32 @@ Key facts:
         is_read: true,
         status: "pending_credentials",
       }).select().single();
-      return res.json({ ok: true, message: stored, warning: "WhatsApp credentials not yet configured — message saved but not sent." });
+      return res.json({ ok: true, message: stored, warning: "Twilio credentials not yet configured — message saved but not sent. Add TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN to Railway." });
     }
 
-    // Send via Meta Cloud API
-    const metaRes = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to,
-        type: "text",
-        text: { body: body.trim() },
-      }),
-    });
+    try {
+      const client = twilio(twilioSid, twilioToken);
+      const sent = await client.messages.create({
+        from: `whatsapp:${twilioFrom}`,
+        to: `whatsapp:${to}`,
+        body: body.trim(),
+      });
 
-    const metaData = await metaRes.json() as any;
-    if (!metaRes.ok) {
-      return res.status(500).json({ message: metaData.error?.message || "WhatsApp send failed" });
+      const { data: stored } = await req.db!.from("whatsapp_messages").insert({
+        user_id: req.user!.id,
+        contact_phone: to,
+        direction: "outbound",
+        body: body.trim(),
+        wa_message_id: sent.sid,
+        sent_at: new Date().toISOString(),
+        is_read: true,
+        status: "sent",
+      }).select().single();
+
+      res.json({ ok: true, message: stored });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "Twilio send failed" });
     }
-
-    // Store the sent message
-    const { data: stored } = await req.db!.from("whatsapp_messages").insert({
-      user_id: req.user!.id,
-      contact_phone: to,
-      direction: "outbound",
-      body: body.trim(),
-      wa_message_id: metaData.messages?.[0]?.id,
-      sent_at: new Date().toISOString(),
-      is_read: true,
-      status: "sent",
-    }).select().single();
-
-    res.json({ ok: true, message: stored });
   });
 
   // GET /api/whatsapp/unread-count — badge count for sidebar
