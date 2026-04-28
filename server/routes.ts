@@ -2587,7 +2587,9 @@ Direct people to the website to purchase. Never be vague about pricing.`;
         return res.status(502).json({ message: `xAI token error: ${err}` });
       }
       const tokenData = await tokenRes.json();
-      res.json({ client_secret: tokenData.client_secret, instructions });
+      // xAI returns { value: "xai-realtime-client-secret-...", expires_at: ... }
+      const secret = tokenData.value ?? tokenData.client_secret;
+      res.json({ client_secret: secret, instructions });
     } catch (e: any) {
       res.status(500).json({ message: e.message });
     }

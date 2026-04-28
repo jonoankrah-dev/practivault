@@ -128,8 +128,8 @@ export default function Saphie() {
     try {
       // 1. Get ephemeral token (includes instructions baked in server-side)
       const tokenData = await apiRequest("POST", "/api/saphie/realtime-token", {}) as any;
-      const secret = tokenData.client_secret;
-      if (!secret) throw new Error("No client_secret returned");
+      const secret = tokenData.client_secret ?? tokenData.value;
+      if (!secret) throw new Error(`No client_secret returned. Response: ${JSON.stringify(tokenData)}`);
 
       // 2. Open mic
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
