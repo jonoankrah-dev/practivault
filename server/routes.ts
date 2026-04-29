@@ -96,6 +96,16 @@ const ENDOPULSE_KNOWLEDGE = `
 Website: https://www.endopulse.co.uk
 Instagram: @endopulseofficial
 
+OWNERSHIP & TRADEMARK:
+- endoPulse™ is a registered UK trademark owned by Alicia Ankrah
+- UK IPO application number: UK00004192333
+- Filed: 21/22 April 2025 | Registered: 22 August 2025 | Renewal: 22 April 2035
+- Owner: Alicia Ankrah, Wallasey, Merseyside, United Kingdom
+- Trademark type: Word mark
+- Class 10: Laser instruments for medical and cosmetic use, aesthetic devices, skin treatment devices
+- Class 44: Cosmetic laser treatment of skin, laser skin rejuvenation, laser skin tightening services
+- There is also a related company: ENDOPULSE UK LIMITED (incorporated October 2025)
+
 MACHINES:
 - endoPulse™ Machine 980nm — £2,699
 - endoPulse™ Machine 980nm + 1470nm (dual wavelength) — £2,999
@@ -130,7 +140,7 @@ INSTAGRAM @endopulseofficial:
 - Tone: warm, punchy, aspirational
 - Uses hooks, FOMO, and before/after content
 
-IMPORTANT: Never mention, reference, compare, or name any competitor. Only speak about endoPulse™.
+IMPORTANT: Never mention, reference, compare, or name any competitor business, person, or brand. Only speak about endoPulse™ and its official products, training, and services.
 `;
 
 
