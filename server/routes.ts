@@ -4353,11 +4353,13 @@ IMPORTANT: Reply only with the message text to send to the customer. Do not expl
       }
       // ── End Safi auto-reply ────────────────────────────────────────────────
 
-      // Twilio expects either empty 200 or TwiML — empty 200 is fine
-      res.sendStatus(200);
+      // Return empty TwiML — sendStatus(200) sends "OK" as body which Twilio delivers as a message
+      res.setHeader("Content-Type", "text/xml");
+      res.status(200).send("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>");
     } catch (e: any) {
       console.error("WhatsApp webhook error:", e);
-      res.sendStatus(200); // always 200 — Twilio retries on non-200
+      res.setHeader("Content-Type", "text/xml");
+      res.status(200).send("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>"); // always 200 — Twilio retries on non-200
     }
   });
 
