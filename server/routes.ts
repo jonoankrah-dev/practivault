@@ -142,9 +142,10 @@ PRICING FOR PRACTITIONERS:
 - Online training: £400
 - In-person training: £1,500
 
-INSTAGRAM:
-- Official account: @endopulse (owned by Alicia Ankrah — the original endoPulse™)
-- @endopulseofficial is NOT our account — that handle was taken by a competitor (Kyle Frost) after @endopulse was already claimed by Alicia
+SOCIAL MEDIA:
+- Instagram: @endopulse (owned by Alicia Ankrah — the original endoPulse™)
+- Facebook: Endopulse (official page)
+- @endopulseofficial is NOT our account — that handle was taken by a competitor after @endopulse was already claimed by Alicia
 - Content: treatment results, practitioner success, income claims, training promos
 - Tone: warm, punchy, aspirational
 
