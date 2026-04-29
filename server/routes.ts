@@ -50,8 +50,8 @@ async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction
 
 // ── Live website context cache ───────────────────────────────────────────────
 const ENDOPULSE_URLS = [
-  "https://pulsetechnologyuk.com/products/endopulse",
-  "https://pulsetechnologyuk.com",
+  "https://www.endopulse.co.uk",
+  "https://www.endopulse.co.uk",
 ];
 const websiteCache: { content: string; fetchedAt: number } = { content: "", fetchedAt: 0 };
 const WEBSITE_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
@@ -92,57 +92,47 @@ async function fetchEndopulseContext(): Promise<string> {
 
 // Hardcoded endoPulse knowledge (always available as baseline)
 const ENDOPULSE_KNOWLEDGE = `
-=== endoPulse™ — Official Website Knowledge ===
-Source: https://pulsetechnologyuk.com/products/endopulse
+=== endoPulse™ — Official Business Knowledge ===
+Website: https://www.endopulse.co.uk
 Instagram: @endopulseofficial
 
-PRODUCT:
-- EndoPulse™ 970nm Diode Laser — UK CE-Marked
-- Designed exclusively for qualified aesthetic and medical practitioners
-- Advanced 970nm diode laser technology — transmits controlled energy into targeted dermal layers
-- Real-time temperature monitoring and automatic energy calibration
-- 12-month manufacturer's warranty
-- Machine price: £3,500 (sale) / £5,500 RRP
-- Finance available via Klarna at checkout
-- Delivery: 5–7 working days after verification
+MACHINES:
+- endoPulse™ Machine 980nm — £2,699
+- endoPulse™ Machine 980nm + 1470nm (dual wavelength) — £2,999
+- Optic Fiber accessory — £387
+
+TECHNOLOGY:
+- 980nm wavelength: targets fat cells and vascular lesions
+- 1470nm wavelength: targets water in tissue for skin tightening and collagen stimulation
+- Dual wavelength model delivers both fat reduction AND skin tightening in one device
+- Stimulates collagen and elastin production, activates fibroblasts
+- Results visible immediately, continue to improve over weeks as collagen rebuilds
 
 TREATMENTS:
-- Advanced skin tightening, lifting, and rejuvenation
-- Stimulates collagen and elastin production
-- Activates fibroblasts — contracts existing connective fibres
-- Immediate skin firming + sustained tissue regeneration over weeks
-- Suitable for: face, neck, jawline, under eyes, jowls, body (tummy, arms, thighs, back), and sensitive areas
+- Body contouring and fat reduction
+- Skin tightening and lifting
+- Face, neck, jawline, under eyes, jowls, tummy, arms, thighs, back
 - Non-surgical, minimally invasive, minimal discomfort and downtime
-- Results visible immediately, improve further over weeks as collagen rebuilds
-
-SAFETY:
-- For professional use by qualified and trained practitioners ONLY
-- Consistent performance ensures maximum patient safety and comfort
-- Clinically proven results
-- Below 1000W threshold — CQC registration NOT required
-- Endorsed by Finch Insurance for medics AND non-medics
-- Must follow all professional standards, safety protocols, and insurance requirements
 
 TRAINING:
-- Online CPD-accredited course: £400
-- In-house training: £1,500 — Harley Street London + Rodney Street Liverpool
-- No UK licence required
-- Payment plans via Clearpay and Klarna
-- UK trademark registered
+- Online course: £400 (CPD accredited, on sale)
+- In-person training: £1,500 (on sale)
+- No UK licence required to perform treatments
 
-COMPANY:
-- Pulse Technology — "The UK's #1 endolaser training provider — 5 star recommended"
-- Founded by Kyle Frost, in partnership with Maxine McCarthy (Cosmetic Couture)
-- Built by clinicians, inspired by innovation
-- UK-Based Support with global standards
-- Client treatment pricing: from £450–£800+ per session
-- Machine breaks even in just 4 client sessions
+PRICING FOR PRACTITIONERS:
+- Single wavelength machine (980nm): £2,699
+- Dual wavelength machine (980nm + 1470nm): £2,999
+- Online training: £400
+- In-person training: £1,500
 
 INSTAGRAM @endopulseofficial:
 - Content covers: treatment results, practitioner success, income claims, training promos
-- Tone: warm, punchy, aspirational — Jono's voice
+- Tone: warm, punchy, aspirational
 - Uses hooks, FOMO, and before/after content
+
+IMPORTANT: Never mention, reference, compare, or name any competitor. Only speak about endoPulse™.
 `;
+
 
 // Helper: AI score for leads
 function computeAiScore(lead: {
@@ -1465,7 +1455,7 @@ Respond ONLY with a JSON object (no markdown, no code blocks) with exactly these
 
     const SYSTEM_PROMPT = `You are a social media expert and advertising copywriter for endoPulse\u2122 \u2014 a UK aesthetics business run by Jono.
 
-OFFICIAL WEBSITE: https://pulsetechnologyuk.com/products/endopulse
+OFFICIAL WEBSITE: https://www.endopulse.co.uk
 INSTAGRAM: @endopulseofficial
 
 JONO'S VOICE (follow exactly):
@@ -1480,10 +1470,10 @@ JONO'S VOICE (follow exactly):
 - CTA: always ends with comment keyword OR DM instruction
 - Hashtags: exactly 5, always include #fyp, mix niche + broad
 
-ACCURATE PRODUCT FACTS (from pulsetechnologyuk.com):
-- EndoPulse\u2122 970nm Diode Laser \u2014 UK CE-Marked
-- 970nm diode laser transmits controlled energy into targeted dermal layers
-- Real-time temperature monitoring and automatic energy calibration
+ACCURATE PRODUCT FACTS (from www.endopulse.co.uk):
+- endoPulse\u2122 Machine — 980nm single wavelength OR 980nm+1470nm dual wavelength
+- 980nm targets fat cells; 1470nm targets water for skin tightening
+- Dual wavelength delivers fat reduction AND skin tightening in one device
 - Stimulates collagen and elastin production, activates fibroblasts
 - Treatments: face, neck, jawline, under eyes, jowls, tummy, arms, thighs, back, sensitive areas
 - Non-surgical, minimally invasive, minimal discomfort and downtime
@@ -1583,7 +1573,7 @@ Respond ONLY with a JSON object (no markdown, no code blocks):
     const dur = Number(duration) || 10;
     const SYSTEM_PROMPT = `You are a social media reel expert and advertising video director for endoPulse\u2122 \u2014 a UK aesthetics business run by Jono. You create scroll-stopping Instagram Reels, TikTok scripts, and paid video ad concepts.
 
-OFFICIAL WEBSITE: https://pulsetechnologyuk.com/products/endopulse
+OFFICIAL WEBSITE: https://www.endopulse.co.uk
 INSTAGRAM: @endopulseofficial
 
 JONO'S VOICE:
@@ -1594,10 +1584,10 @@ JONO'S VOICE:
 - Creates FOMO: "celebrities pay thousands for this"
 - CTA: comment a keyword or DM
 
-ACCURATE PRODUCT FACTS (from pulsetechnologyuk.com):
-- EndoPulse\u2122 970nm Diode Laser \u2014 UK CE-Marked
-- 970nm diode laser transmits controlled energy into targeted dermal layers
-- Real-time temperature monitoring and automatic energy calibration
+ACCURATE PRODUCT FACTS (from www.endopulse.co.uk):
+- endoPulse\u2122 Machine — 980nm single wavelength OR 980nm+1470nm dual wavelength
+- 980nm targets fat cells; 1470nm targets water for skin tightening
+- Dual wavelength delivers fat reduction AND skin tightening in one device
 - Stimulates collagen and elastin production, activates fibroblasts
 - Treatments: face, neck, jawline, under eyes, jowls, tummy, arms, thighs, back, sensitive areas
 - Non-surgical, minimally invasive, minimal discomfort and downtime
@@ -3845,14 +3835,14 @@ Read-only actions (fetching data, showing lists, generating reports) do NOT need
 Reply in clear, concise markdown. Use bullet points or short lists where helpful.
 When you retrieve data, summarise it clearly and add a brief observation where useful (e.g. "3 invoices overdue — worth chasing those this week").
 
-When answering questions about endoPulse™ treatments, safety, pricing, aftercare, or training — use the official website knowledge above. Give accurate, concise answers. Refer customers to pulsetechnologyuk.com or Instagram @endopulseofficial for full details.
+When answering questions about endoPulse™ treatments, safety, pricing, aftercare, or training — use the official website knowledge above. Give accurate, concise answers. Refer customers to www.endopulse.co.uk or Instagram @endopulseofficial for full details.
 
 NEVER mention, reference, compare, or name any competitor business, product, or brand. If asked about competitors, simply say you can only speak about endoPulse™.
 
 Key business facts:
 - All courses are 100% online, CPD accredited, no UK licence required
 - Payment plans via Clearpay and Klarna
-- Website: ${bizInfo?.website_url ?? "pulsetechnologyuk.com"}${sectionContext ? `\n\n--- CURRENT SECTION CONTEXT ---\n${sectionContext}` : ""}`;
+- Website: ${bizInfo?.website_url ?? "www.endopulse.co.uk"}${sectionContext ? `\n\n--- CURRENT SECTION CONTEXT ---\n${sectionContext}` : ""}`;
 
     // Convert OpenAI-style tools for xAI
     const xaiTools = SAFI_TOOLS.map(t => ({
@@ -4245,7 +4235,7 @@ Key facts:
 
 You are responding directly to a customer WhatsApp message on behalf of the business. Be warm, helpful, professional, and concise — this is a WhatsApp chat, so keep replies short and friendly. Do not use markdown formatting (no asterisks, no bullet dashes) — plain text only.
 
-You have full knowledge of the endoPulse™ product, treatments, safety, pricing, training, and aftercare from the official knowledge above. Use this to answer customer questions accurately. For full details, refer them to pulsetechnologyuk.com or Instagram @endopulseofficial.
+You have full knowledge of the endoPulse™ product, treatments, safety, pricing, training, and aftercare from the official knowledge above. Use this to answer customer questions accurately. For full details, refer them to www.endopulse.co.uk or Instagram @endopulseofficial.
 
 NEVER mention, reference, compare, or name any competitor business, product, or brand. If asked about competitors, simply say you can only speak about endoPulse™.
 
