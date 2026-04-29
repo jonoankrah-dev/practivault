@@ -3792,11 +3792,10 @@ Rules:
     const userId = req.user!.id;
 
     // Build system prompt from business info + manuals + live website
-    const [userRes, bizRes, manualsRes, liveWebContext] = await Promise.all([
+    const [userRes, bizRes, manualsRes] = await Promise.all([
       db.from("users").select("name, business_name, industry").eq("id", userId).single(),
       db.from("business_info").select("*").eq("user_id", userId).single(),
       db.from("manuals").select("name, extracted_text").eq("user_id", userId).not("extracted_text", "is", null).order("created_at", { ascending: true }),
-      fetchEndopulseContext(),
     ]);
     const userData = userRes.data;
     const bizInfo = bizRes.data;
@@ -3822,7 +3821,7 @@ Rules:
       manualContext = `\n\nManuals:\n${parts.join("\n\n")}`;
     }
     // Live website + hardcoded knowledge
-    const websiteContext = `\n\n${ENDOPULSE_KNOWLEDGE}${liveWebContext ? `\n\n=== LIVE WEBSITE CONTENT (fetched now) ===\n${liveWebContext.slice(0, 3000)}` : ""}`;
+    const websiteContext = `\n\n${ENDOPULSE_KNOWLEDGE}`;
 
     const systemPrompt = `You are Safi, the fully agentic AI assistant for ${userData?.business_name ?? "this business"}.${bizContext}${manualContext}${websiteContext}
 
@@ -3847,6 +3846,8 @@ Reply in clear, concise markdown. Use bullet points or short lists where helpful
 When you retrieve data, summarise it clearly and add a brief observation where useful (e.g. "3 invoices overdue — worth chasing those this week").
 
 When answering questions about endoPulse™ treatments, safety, pricing, aftercare, or training — use the official website knowledge above. Give accurate, concise answers. Refer customers to pulsetechnologyuk.com or Instagram @endopulseofficial for full details.
+
+NEVER mention, reference, compare, or name any competitor business, product, or brand. If asked about competitors, simply say you can only speak about endoPulse™.
 
 Key business facts:
 - All courses are 100% online, CPD accredited, no UK licence required
@@ -4194,11 +4195,10 @@ Key facts:
 
       // ── Safi auto-reply ────────────────────────────────────────────────────
       // Fetch business context for Safi (inc. live website)
-      const [bizRes, manualsRes, userRes, liveWebCtx] = await Promise.all([
+      const [bizRes, manualsRes, userRes] = await Promise.all([
         supabase.from("business_info").select("*").eq("user_id", userId).maybeSingle(),
         supabase.from("manuals").select("name, extracted_text").eq("user_id", userId).not("extracted_text", "is", null).order("created_at", { ascending: true }),
         supabase.from("users").select("name, business_name").eq("id", userId).maybeSingle(),
-        fetchEndopulseContext(),
       ]);
       const bizInfo = bizRes.data as any;
       const manuals = (manualsRes.data ?? []) as any[];
@@ -4225,7 +4225,7 @@ Key facts:
         manualContext = `\n\nManuals:\n${parts.join("\n\n")}`;
       }
 
-      const waWebsiteContext = `\n\n${ENDOPULSE_KNOWLEDGE}${liveWebCtx ? `\n\n=== LIVE WEBSITE (fetched now) ===\n${liveWebCtx.slice(0, 2000)}` : ""}`;
+      const waWebsiteContext = `\n\n${ENDOPULSE_KNOWLEDGE}`;
 
       // Fetch last 10 messages in this thread for conversation context
       const { data: history } = await supabase
@@ -4245,7 +4245,9 @@ Key facts:
 
 You are responding directly to a customer WhatsApp message on behalf of the business. Be warm, helpful, professional, and concise — this is a WhatsApp chat, so keep replies short and friendly. Do not use markdown formatting (no asterisks, no bullet dashes) — plain text only.
 
-You have full knowledge of the endoPulse\u2122 product, treatments, safety, pricing, training, and aftercare from the official website above. Use this to answer customer questions accurately. For full details, refer them to pulsetechnologyuk.com or Instagram @endopulseofficial.
+You have full knowledge of the endoPulse™ product, treatments, safety, pricing, training, and aftercare from the official knowledge above. Use this to answer customer questions accurately. For full details, refer them to pulsetechnologyuk.com or Instagram @endopulseofficial.
+
+NEVER mention, reference, compare, or name any competitor business, product, or brand. If asked about competitors, simply say you can only speak about endoPulse™.
 
 You can answer questions about treatments, pricing, bookings, training courses, and general enquiries. If you do not know the answer, say you will pass the message on to the team.
 
