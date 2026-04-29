@@ -608,8 +608,13 @@ IMPORTANT:
 
   // ============ AUTHED ROUTES =============
   app.use("/api", (req, res, next) => {
-    // Skip auth for public consent endpoints and health
-    if (req.path.startsWith("/consent/sign/") || req.path === "/health") return next();
+    // Skip auth for public/webhook endpoints
+    if (
+      req.path.startsWith("/consent/sign/") ||
+      req.path === "/health" ||
+      req.path === "/whatsapp/webhook" ||
+      req.path.startsWith("/vapi")
+    ) return next();
     return requireAuth(req as AuthedRequest, res, next);
   });
 
