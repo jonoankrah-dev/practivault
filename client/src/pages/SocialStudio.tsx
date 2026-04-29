@@ -20,7 +20,7 @@ const SUGGESTIONS = [
 const SECTION_CONTEXT = `You are in the Social Studio section — social media content creation for endoPulse™.
 
 OFFICIAL WEBSITE: https://www.endopulse.co.uk
-INSTAGRAM: @endopulseofficial
+INSTAGRAM: @endopulse
 
 ACCURATE PRODUCT FACTS (always use these — do not invent):
 - EndoPulse™ 980nm + 1470nm dual wavelength laser — UK CE-Marked

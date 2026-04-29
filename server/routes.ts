@@ -94,7 +94,7 @@ async function fetchEndopulseContext(): Promise<string> {
 const ENDOPULSE_KNOWLEDGE = `
 === endoPulse™ — Official Business Knowledge ===
 Website: https://www.endopulse.co.uk
-Instagram: @endopulseofficial
+Instagram: @endopulse
 
 OWNERSHIP & TRADEMARK:
 - endoPulse™ is a registered UK trademark owned by Alicia Ankrah
@@ -142,10 +142,11 @@ PRICING FOR PRACTITIONERS:
 - Online training: £400
 - In-person training: £1,500
 
-INSTAGRAM @endopulseofficial:
-- Content covers: treatment results, practitioner success, income claims, training promos
+INSTAGRAM:
+- Official account: @endopulse (owned by Alicia Ankrah — the original endoPulse™)
+- @endopulseofficial is NOT our account — that handle was taken by a competitor (Kyle Frost) after @endopulse was already claimed by Alicia
+- Content: treatment results, practitioner success, income claims, training promos
 - Tone: warm, punchy, aspirational
-- Uses hooks, FOMO, and before/after content
 
 IMPORTANT: Never mention, reference, compare, or name any competitor business, person, or brand. Only speak about endoPulse™ and its official products, training, and services.
 `;
@@ -1473,7 +1474,7 @@ Respond ONLY with a JSON object (no markdown, no code blocks) with exactly these
     const SYSTEM_PROMPT = `You are a social media expert and advertising copywriter for endoPulse\u2122 \u2014 a UK aesthetics business run by Jono.
 
 OFFICIAL WEBSITE: https://www.endopulse.co.uk
-INSTAGRAM: @endopulseofficial
+INSTAGRAM: @endopulse
 
 JONO'S VOICE (follow exactly):
 - Warm, punchy, short sentences. Gets to the point fast. No waffle.
@@ -1591,7 +1592,7 @@ Respond ONLY with a JSON object (no markdown, no code blocks):
     const SYSTEM_PROMPT = `You are a social media reel expert and advertising video director for endoPulse\u2122 \u2014 a UK aesthetics business run by Jono. You create scroll-stopping Instagram Reels, TikTok scripts, and paid video ad concepts.
 
 OFFICIAL WEBSITE: https://www.endopulse.co.uk
-INSTAGRAM: @endopulseofficial
+INSTAGRAM: @endopulse
 
 JONO'S VOICE:
 - Warm, punchy, short sentences
@@ -3852,7 +3853,7 @@ Read-only actions (fetching data, showing lists, generating reports) do NOT need
 Reply in clear, concise markdown. Use bullet points or short lists where helpful.
 When you retrieve data, summarise it clearly and add a brief observation where useful (e.g. "3 invoices overdue — worth chasing those this week").
 
-When answering questions about endoPulse™ treatments, safety, pricing, aftercare, or training — use the official website knowledge above. Give accurate, concise answers. Refer customers to www.endopulse.co.uk or Instagram @endopulseofficial for full details.
+When answering questions about endoPulse™ treatments, safety, pricing, aftercare, or training — use the official website knowledge above. Give accurate, concise answers. Refer customers to www.endopulse.co.uk or Instagram @endopulse for full details.
 
 NEVER mention, reference, compare, or name any competitor business, product, or brand. If asked about competitors, simply say you can only speak about endoPulse™.
 
@@ -4271,7 +4272,7 @@ Key facts:
 
 You are responding directly to a customer WhatsApp message on behalf of the business. Be warm, helpful, professional, and concise — this is a WhatsApp chat, so keep replies short and friendly. Do not use markdown formatting (no asterisks, no bullet dashes) — plain text only.
 
-You have full knowledge of the endoPulse™ product, treatments, safety, pricing, training, and aftercare from the official knowledge above. Use this to answer customer questions accurately. For full details, refer them to www.endopulse.co.uk or Instagram @endopulseofficial.
+You have full knowledge of the endoPulse™ product, treatments, safety, pricing, training, and aftercare from the official knowledge above. Use this to answer customer questions accurately. For full details, refer them to www.endopulse.co.uk or Instagram @endopulse.
 
 NEVER mention, reference, compare, or name any competitor business, product, or brand. If asked about competitors, simply say you can only speak about endoPulse™.
 
