@@ -48,6 +48,102 @@ async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction
   }
 }
 
+// ── Live website context cache ───────────────────────────────────────────────
+const ENDOPULSE_URLS = [
+  "https://pulsetechnologyuk.com/products/endopulse",
+  "https://pulsetechnologyuk.com",
+];
+const websiteCache: { content: string; fetchedAt: number } = { content: "", fetchedAt: 0 };
+const WEBSITE_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+async function fetchEndopulseContext(): Promise<string> {
+  if (websiteCache.content && Date.now() - websiteCache.fetchedAt < WEBSITE_CACHE_TTL_MS) {
+    return websiteCache.content;
+  }
+  try {
+    const results = await Promise.allSettled(
+      ENDOPULSE_URLS.map(url =>
+        fetch(url, { signal: AbortSignal.timeout(8000), headers: { "User-Agent": "Mozilla/5.0" } })
+          .then(r => r.text())
+      )
+    );
+    const texts: string[] = [];
+    for (const r of results) {
+      if (r.status === "fulfilled") {
+        // Strip HTML tags, collapse whitespace
+        const clean = r.value
+          .replace(/<script[\s\S]*?<\/script>/gi, "")
+          .replace(/<style[\s\S]*?<\/style>/gi, "")
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 4000);
+        if (clean.length > 200) texts.push(clean);
+      }
+    }
+    const combined = texts.join("\n\n---\n\n").slice(0, 6000);
+    websiteCache.content = combined;
+    websiteCache.fetchedAt = Date.now();
+    return combined;
+  } catch {
+    return websiteCache.content || "";
+  }
+}
+
+// Hardcoded endoPulse knowledge (always available as baseline)
+const ENDOPULSE_KNOWLEDGE = `
+=== endoPulse™ — Official Website Knowledge ===
+Source: https://pulsetechnologyuk.com/products/endopulse
+Instagram: @endopulseofficial
+
+PRODUCT:
+- EndoPulse™ 970nm Diode Laser — UK CE-Marked
+- Designed exclusively for qualified aesthetic and medical practitioners
+- Advanced 970nm diode laser technology — transmits controlled energy into targeted dermal layers
+- Real-time temperature monitoring and automatic energy calibration
+- 12-month manufacturer's warranty
+- Machine price: £3,500 (sale) / £5,500 RRP
+- Finance available via Klarna at checkout
+- Delivery: 5–7 working days after verification
+
+TREATMENTS:
+- Advanced skin tightening, lifting, and rejuvenation
+- Stimulates collagen and elastin production
+- Activates fibroblasts — contracts existing connective fibres
+- Immediate skin firming + sustained tissue regeneration over weeks
+- Suitable for: face, neck, jawline, under eyes, jowls, body (tummy, arms, thighs, back), and sensitive areas
+- Non-surgical, minimally invasive, minimal discomfort and downtime
+- Results visible immediately, improve further over weeks as collagen rebuilds
+
+SAFETY:
+- For professional use by qualified and trained practitioners ONLY
+- Consistent performance ensures maximum patient safety and comfort
+- Clinically proven results
+- Below 1000W threshold — CQC registration NOT required
+- Endorsed by Finch Insurance for medics AND non-medics
+- Must follow all professional standards, safety protocols, and insurance requirements
+
+TRAINING:
+- Online CPD-accredited course: £400
+- In-house training: £1,500 — Harley Street London + Rodney Street Liverpool
+- No UK licence required
+- Payment plans via Clearpay and Klarna
+- UK trademark registered
+
+COMPANY:
+- Pulse Technology — "The UK's #1 endolaser training provider — 5 star recommended"
+- Founded by Kyle Frost, in partnership with Maxine McCarthy (Cosmetic Couture)
+- Built by clinicians, inspired by innovation
+- UK-Based Support with global standards
+- Client treatment pricing: from £450–£800+ per session
+- Machine breaks even in just 4 client sessions
+
+INSTAGRAM @endopulseofficial:
+- Content covers: treatment results, practitioner success, income claims, training promos
+- Tone: warm, punchy, aspirational — Jono's voice
+- Uses hooks, FOMO, and before/after content
+`;
+
 // Helper: AI score for leads
 function computeAiScore(lead: {
   phone?: string | null;
@@ -1362,7 +1458,10 @@ Respond ONLY with a JSON object (no markdown, no code blocks) with exactly these
       });
     }
 
-    const SYSTEM_PROMPT = `You are a social media expert for endoPulse\u2122 \u2014 a UK aesthetics business run by Jono.
+    const SYSTEM_PROMPT = `You are a social media expert and advertising copywriter for endoPulse\u2122 \u2014 a UK aesthetics business run by Jono.
+
+OFFICIAL WEBSITE: https://pulsetechnologyuk.com/products/endopulse
+INSTAGRAM: @endopulseofficial
 
 JONO'S VOICE (follow exactly):
 - Warm, punchy, short sentences. Gets to the point fast. No waffle.
@@ -1376,28 +1475,38 @@ JONO'S VOICE (follow exactly):
 - CTA: always ends with comment keyword OR DM instruction
 - Hashtags: exactly 5, always include #fyp, mix niche + broad
 
-BUSINESS FACTS:
-- endoPulse\u2122 dual wavelength laser (980nm fat melting + 1470nm skin tightening)
-- Can't be replicated by single-wavelength devices
-- Treatments: face, neck, jawline, under eyes, jowls, tummy, arms, thighs, back
-- Client pricing: from \u00a3450\u2013\u00a3800+ per session
-- Training: online \u00a3400, in-house \u00a31,500 (Harley Street London + Rodney Street Liverpool)
-- Machine: \u00a32,999, breaks even in 4 sessions
-- CPD accredited, covered by Finch Insurance and PolicyBee
+ACCURATE PRODUCT FACTS (from pulsetechnologyuk.com):
+- EndoPulse\u2122 970nm Diode Laser \u2014 UK CE-Marked
+- 970nm diode laser transmits controlled energy into targeted dermal layers
+- Real-time temperature monitoring and automatic energy calibration
+- Stimulates collagen and elastin production, activates fibroblasts
+- Treatments: face, neck, jawline, under eyes, jowls, tummy, arms, thighs, back, sensitive areas
+- Non-surgical, minimally invasive, minimal discomfort and downtime
 - Results visible immediately, improve over weeks as collagen rebuilds
-- UK trademarked
+- Machine price: \u00a33,500 (sale from \u00a35,500) \u2014 breaks even in 4 client sessions
+- Finance via Klarna at checkout
+- Client treatment pricing: from \u00a3450\u2013\u00a3800+ per session
+- Training: online \u00a3400 (CPD accredited), in-house \u00a31,500 (Harley Street London + Rodney Street Liverpool)
+- No UK licence required, CQC registration NOT required (below 1000W)
+- Endorsed by Finch Insurance for medics AND non-medics
+- UK trademark registered
+- 12-month manufacturer\u2019s warranty
+- Payment plans: Clearpay and Klarna
 
 POST TYPES:
 - practitioner_pitch: Challenge practitioners to add endoPulse\u2122, income claims, FOMO
 - client_results: Speak to clients about results, no surgery needed, transformation
-- model_call: Urgency + half price + specific date/location (use placeholder [DATE] [LOCATION])
-- income_claim: Comparison to filler/tox, maths showing \u00a3800 per session ROI
-- educational: Explain dual wavelength technology simply, credibility building
-- training_promo: Harley Street credibility, CPD, student success stories
-- machine_sale: ROI calculation, break-even in 4 sessions, £400 online training sold separately
-- objection_handling: Answer "is it safe?", "does it hurt?", "what's recovery like?" honestly
+- model_call: Urgency + discounted intro price + specific date/location (use placeholder [DATE] [LOCATION])
+- income_claim: Comparison to filler/tox, maths showing \u00a3800 per session ROI, break-even in 4 sessions
+- educational: Explain 970nm diode laser technology simply, credibility building, collagen science
+- training_promo: Harley Street + Liverpool credibility, CPD, student success stories, no licence needed
+- machine_sale: ROI calculation, break-even in 4 sessions, Klarna finance available, \u00a33,500 price point
+- objection_handling: Answer "is it safe?", "does it hurt?", "what's recovery like?", "do I need a licence?" honestly using real facts
 - before_after: Hook to make people swipe, results description, DM CTA
 - tiktok: POV format, fast punchy rhythm, dual audience (practitioners + clients)
+- advertising: Paid ad copy \u2014 strong hook, benefit-led body, clear CTA. Suitable for Meta/Instagram/TikTok ads. Concise, punchy, no hashtags needed, designed to convert cold audiences
+- instagram_story: Short, visual-first, swipe-up energy, 1\u20133 lines max, big CTA
+- testimonial_style: Social proof angle \u2014 write as if quoting a happy client or practitioner result
 
 Respond ONLY with a JSON object (no markdown, no code blocks):
 {
@@ -1467,7 +1576,10 @@ Respond ONLY with a JSON object (no markdown, no code blocks):
     }
 
     const dur = Number(duration) || 10;
-    const SYSTEM_PROMPT = `You are a social media reel expert for endoPulse\u2122 \u2014 a UK aesthetics business run by Jono. You create scroll-stopping Instagram Reels and TikTok scripts.
+    const SYSTEM_PROMPT = `You are a social media reel expert and advertising video director for endoPulse\u2122 \u2014 a UK aesthetics business run by Jono. You create scroll-stopping Instagram Reels, TikTok scripts, and paid video ad concepts.
+
+OFFICIAL WEBSITE: https://pulsetechnologyuk.com/products/endopulse
+INSTAGRAM: @endopulseofficial
 
 JONO'S VOICE:
 - Warm, punchy, short sentences
@@ -1477,15 +1589,23 @@ JONO'S VOICE:
 - Creates FOMO: "celebrities pay thousands for this"
 - CTA: comment a keyword or DM
 
-BUSINESS FACTS:
-- endoPulse\u2122 dual wavelength laser (980nm fat melting + 1470nm skin tightening)
-- Dual wavelength = results no single-wavelength device can match
-- Client treatments: from \u00a3450\u2013\u00a3800+ per session
-- Training: online \u00a3400, in-house \u00a31,500 (Harley Street London + Rodney Street Liverpool)
-- Machine: \u00a32,999 \u2014 breaks even in just 4 client sessions
-- CPD accredited, covered by Finch Insurance + PolicyBee
-- UK trademarked
-- Results visible immediately, improve over weeks
+ACCURATE PRODUCT FACTS (from pulsetechnologyuk.com):
+- EndoPulse\u2122 970nm Diode Laser \u2014 UK CE-Marked
+- 970nm diode laser transmits controlled energy into targeted dermal layers
+- Real-time temperature monitoring and automatic energy calibration
+- Stimulates collagen and elastin production, activates fibroblasts
+- Treatments: face, neck, jawline, under eyes, jowls, tummy, arms, thighs, back, sensitive areas
+- Non-surgical, minimally invasive, minimal discomfort and downtime
+- Results visible immediately, improve over weeks as collagen rebuilds
+- Machine price: \u00a33,500 (sale from \u00a35,500) \u2014 breaks even in 4 client sessions
+- Finance via Klarna at checkout
+- Client treatment pricing: from \u00a3450\u2013\u00a3800+ per session
+- Training: online \u00a3400 (CPD accredited), in-house \u00a31,500 (Harley Street London + Rodney Street Liverpool)
+- No UK licence required, CQC registration NOT required (below 1000W)
+- Endorsed by Finch Insurance for medics AND non-medics
+- UK trademark registered
+- 12-month manufacturer\u2019s warranty
+- Payment plans: Clearpay and Klarna
 
 VEO 3 PROMPT GUIDE:
 Write cinematic, specific Veo 3 prompts. Include:
@@ -3666,11 +3786,12 @@ Rules:
     const db = req.db!;
     const userId = req.user!.id;
 
-    // Build system prompt from business info + manuals
-    const [userRes, bizRes, manualsRes] = await Promise.all([
+    // Build system prompt from business info + manuals + live website
+    const [userRes, bizRes, manualsRes, liveWebContext] = await Promise.all([
       db.from("users").select("name, business_name, industry").eq("id", userId).single(),
       db.from("business_info").select("*").eq("user_id", userId).single(),
       db.from("manuals").select("name, extracted_text").eq("user_id", userId).not("extracted_text", "is", null).order("created_at", { ascending: true }),
+      fetchEndopulseContext(),
     ]);
     const userData = userRes.data;
     const bizInfo = bizRes.data;
@@ -3695,8 +3816,10 @@ Rules:
       }
       manualContext = `\n\nManuals:\n${parts.join("\n\n")}`;
     }
+    // Live website + hardcoded knowledge
+    const websiteContext = `\n\n${ENDOPULSE_KNOWLEDGE}${liveWebContext ? `\n\n=== LIVE WEBSITE CONTENT (fetched now) ===\n${liveWebContext.slice(0, 3000)}` : ""}`;
 
-    const systemPrompt = `You are Safi, the fully agentic AI assistant for ${userData?.business_name ?? "this business"}.${bizContext}${manualContext}
+    const systemPrompt = `You are Safi, the fully agentic AI assistant for ${userData?.business_name ?? "this business"}.${bizContext}${manualContext}${websiteContext}
 
 You are a fully autonomous business AI and you're also warm, friendly, and genuinely helpful — like a trusted colleague who knows the business inside out. Keep your tone conversational and natural. Use first names when you know them. Be encouraging but efficient — no waffle, just good energy and clear communication.
 
@@ -3718,10 +3841,12 @@ Read-only actions (fetching data, showing lists, generating reports) do NOT need
 Reply in clear, concise markdown. Use bullet points or short lists where helpful.
 When you retrieve data, summarise it clearly and add a brief observation where useful (e.g. "3 invoices overdue — worth chasing those this week").
 
+When answering questions about endoPulse™ treatments, safety, pricing, aftercare, or training — use the official website knowledge above. Give accurate, concise answers. Refer customers to pulsetechnologyuk.com or Instagram @endopulseofficial for full details.
+
 Key business facts:
 - All courses are 100% online, CPD accredited, no UK licence required
 - Payment plans via Clearpay and Klarna
-- Website: ${bizInfo?.website_url ?? "your website"}${sectionContext ? `\n\n--- CURRENT SECTION CONTEXT ---\n${sectionContext}` : ""}`;
+- Website: ${bizInfo?.website_url ?? "pulsetechnologyuk.com"}${sectionContext ? `\n\n--- CURRENT SECTION CONTEXT ---\n${sectionContext}` : ""}`;
 
     // Convert OpenAI-style tools for xAI
     const xaiTools = SAFI_TOOLS.map(t => ({
@@ -4063,11 +4188,12 @@ Key facts:
       });
 
       // ── Safi auto-reply ────────────────────────────────────────────────────
-      // Fetch business context for Safi
-      const [bizRes, manualsRes, userRes] = await Promise.all([
+      // Fetch business context for Safi (inc. live website)
+      const [bizRes, manualsRes, userRes, liveWebCtx] = await Promise.all([
         supabase.from("business_info").select("*").eq("user_id", userId).maybeSingle(),
         supabase.from("manuals").select("name, extracted_text").eq("user_id", userId).not("extracted_text", "is", null).order("created_at", { ascending: true }),
         supabase.from("users").select("name, business_name").eq("id", userId).maybeSingle(),
+        fetchEndopulseContext(),
       ]);
       const bizInfo = bizRes.data as any;
       const manuals = (manualsRes.data ?? []) as any[];
@@ -4094,6 +4220,8 @@ Key facts:
         manualContext = `\n\nManuals:\n${parts.join("\n\n")}`;
       }
 
+      const waWebsiteContext = `\n\n${ENDOPULSE_KNOWLEDGE}${liveWebCtx ? `\n\n=== LIVE WEBSITE (fetched now) ===\n${liveWebCtx.slice(0, 2000)}` : ""}`;
+
       // Fetch last 10 messages in this thread for conversation context
       const { data: history } = await supabase
         .from("whatsapp_messages")
@@ -4108,9 +4236,11 @@ Key facts:
         content: m.body,
       }));
 
-      const safiSystem = `You are Safi, the WhatsApp receptionist for ${userData?.business_name ?? "this business"}.${bizContext}${manualContext}
+      const safiSystem = `You are Safi, the WhatsApp receptionist for ${userData?.business_name ?? "this business"}.${bizContext}${manualContext}${waWebsiteContext}
 
 You are responding directly to a customer WhatsApp message on behalf of the business. Be warm, helpful, professional, and concise — this is a WhatsApp chat, so keep replies short and friendly. Do not use markdown formatting (no asterisks, no bullet dashes) — plain text only.
+
+You have full knowledge of the endoPulse\u2122 product, treatments, safety, pricing, training, and aftercare from the official website above. Use this to answer customer questions accurately. For full details, refer them to pulsetechnologyuk.com or Instagram @endopulseofficial.
 
 You can answer questions about treatments, pricing, bookings, training courses, and general enquiries. If you do not know the answer, say you will pass the message on to the team.
 
