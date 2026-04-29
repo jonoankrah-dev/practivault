@@ -3901,7 +3901,14 @@ Key business facts:
 
       // No tool calls — we have the final answer
       if (!assistantMsg.tool_calls?.length) {
-        return res.json({ reply: assistantMsg.content ?? "", messages });
+        const reply = (assistantMsg.content ?? "").trim();
+        // Filter out trivial acknowledgements the model sometimes returns after tool calls
+        const isTrivial = /^(ok\.?|okay\.?|done\.?|sure\.?|got it\.?|noted\.?)$/i.test(reply);
+        if (!isTrivial || messages.length <= 2) {
+          return res.json({ reply, messages });
+        }
+        // If trivial, fall through to get a better final response
+        break;
       }
 
       // Execute all tool calls in parallel
@@ -3921,7 +3928,19 @@ Key business facts:
       messages.push(...toolResults);
     }
 
-    return res.json({ reply: "I've completed the requested tasks.", messages });
+    // Ask the model for a proper confirmation after tool execution
+    try {
+      messages.push({ role: "user", content: "Please give me a short friendly confirmation of what you just did." });
+      const confirmRes = await fetch("https://api.x.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.XAI_API_KEY}` },
+        body: JSON.stringify({ model: "grok-3-mini", messages, max_tokens: 200 }),
+      });
+      const confirmData = await confirmRes.json() as any;
+      const confirmReply = confirmData.choices?.[0]?.message?.content?.trim() ?? "";
+      if (confirmReply) return res.json({ reply: confirmReply, messages });
+    } catch { /* fall through */ }
+    return res.json({ reply: "Done — all sorted.", messages });
   });
 
     // ─── Saphie AI — chat + voice transcription + manuals ──────────────────────
