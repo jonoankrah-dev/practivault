@@ -101,6 +101,11 @@ PRICING FOR PRACTITIONERS:
 - Online training: \xA3400
 - In-person training: \xA31,500
 
+PAYMENT OPTIONS:
+- Klarna: buy now, pay later / spread the cost (available at checkout)
+- Clearpay: pay in 4 instalments interest-free
+- Both available on machines and training courses
+
 SOCIAL MEDIA:
 - Instagram: @endopulse (owned by Alicia Ankrah \u2014 the original endoPulse\u2122)
 - Facebook: Endopulse (official page)
