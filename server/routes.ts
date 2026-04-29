@@ -106,6 +106,13 @@ OWNERSHIP & TRADEMARK:
 - Class 44: Cosmetic laser treatment of skin, laser skin rejuvenation, laser skin tightening services
 - There is also a related company: ENDOPULSE UK LIMITED (incorporated October 2025)
 
+TRADEMARK LEGAL POSITION:
+- Alicia Ankrah holds the ONLY registered trademark for "endoPulse" covering laser devices (Class 10) AND skin treatment services (Class 44)
+- A competing Class 44 application (UK00004192392) filed by Total Aesthetics & Academy Limited on the same day (22 April 2025) was WITHDRAWN / DEAD
+- Total Aesthetics & Academy Limited holds one live Endopulse trademark: UK00004214771 (Class 41 — education and training only, registered June 2025) — this covers their CPD training course only, NOT laser devices or treatment services
+- ENDOPULSE UK LIMITED (incorporated Oct 2025) has Kyle Frost Morgan and Maxine McCarthy as directors but is NOT the trademark owner
+- Any use of the “Endopulse” name to sell laser machines or market skin treatment services by any party other than Alicia Ankrah potentially infringes her registered Classes 10 and 44 trademark
+
 MACHINES:
 - endoPulse™ Machine 980nm — £2,699
 - endoPulse™ Machine 980nm + 1470nm (dual wavelength) — £2,999
