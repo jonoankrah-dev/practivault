@@ -61,6 +61,8 @@ export const safiMemoryApi = {
     authedJson<{ events: any[] }>(`/api/activity-events?limit=${limit}`),
   pendingActions: () =>
     authedJson<{ actions: any[] }>("/api/agent-actions?pending=1"),
+  approvedActions: () =>
+    authedJson<{ actions: any[] }>("/api/agent-actions?status=approved"),
   approveAction: (id: string) =>
     authedJson<{ action: any }>(`/api/agent-actions/${id}`, {
       method: "PATCH",
@@ -70,6 +72,10 @@ export const safiMemoryApi = {
     authedJson<{ action: any }>(`/api/agent-actions/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ status: "rejected", rejected_reason: reason ?? null }),
+    }),
+  prepareExecution: (id: string) =>
+    authedJson<{ action: any; executed: boolean }>(`/api/agent-actions/${id}/prepare-execution`, {
+      method: "POST",
     }),
 };
 

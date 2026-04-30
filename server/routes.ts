@@ -297,6 +297,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { data, error } = await supabaseForUser(req.token!)
       .from("call_logs")
       .select("*")
+      .eq("user_id", req.user!.id)
       .order("created_at", { ascending: false })
       .limit(100);
     if (error) return res.status(500).json({ message: error.message });
@@ -2517,7 +2518,13 @@ Rules:
     if (address !== undefined) updates.address = address;
     if (phone !== undefined) updates.phone = phone;
     if (email !== undefined) updates.email = email;
-    const { data, error } = await req.db!.from("locations").update(updates).eq("id", req.params.id).select().single();
+    const { data, error } = await req.db!
+      .from("locations")
+      .update(updates)
+      .eq("id", req.params.id)
+      .eq("user_id", req.user!.id)
+      .select()
+      .single();
     if (error) return res.status(500).json({ message: error.message });
     res.json(data);
   });
@@ -2718,7 +2725,7 @@ Rules:
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SAFI — Fully Agentic AI (xAI grok-voice-think-fast-1.0 Realtime)
+  // SAFI — Fully agentic text AI
   // ═══════════════════════════════════════════════════════════════════════════
 
   // ── Safi tool definitions (sent to xAI in session config) ─────────────────
@@ -3162,6 +3169,24 @@ Rules:
     },
     {
       type: "function",
+      name: "create_social_draft",
+      description: "Create a Social Studio draft only after the user has approved the exact draft text. This saves a draft, records Safi Memory, and queues the post for approval. It never posts or publishes.",
+      parameters: {
+        type: "object",
+        properties: {
+          caption: { type: "string", description: "Full caption or post text to save as a draft" },
+          platform: { type: "string", enum: ["instagram", "tiktok", "facebook", "all"], description: "Target platform" },
+          post_type: { type: "string", enum: ["practitioner_pitch","client_results","model_call","income_claim","educational","training_promo","machine_sale","objection_handling","before_after","tiktok","other"], description: "Type of social post" },
+          hook: { type: "string", description: "Optional opening hook" },
+          hashtags: { type: "string", description: "Optional hashtags" },
+          keyword_cta: { type: "string", description: "Optional keyword CTA" },
+          notes: { type: "string", description: "Optional internal notes" },
+        },
+        required: ["caption", "platform"],
+      },
+    },
+    {
+      type: "function",
       name: "get_whatsapp_threads",
       description: "List all WhatsApp conversations grouped by contact. Shows the last message and unread count for each thread.",
       parameters: {
@@ -3478,12 +3503,12 @@ Rules:
             to: cl.email,
             subject: `Your ${formLabel} form from ${bizName}`,
             html: `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
-              <h2 style="color:#b1306f;margin-bottom:8px">${formLabel}</h2>
+              <h2 style="color:#E83A8E;margin-bottom:8px">${formLabel}</h2>
               <p>Hi ${cl.name},</p>
               <p>Please complete your <strong>${formLabel}</strong> form before your next appointment with <strong>${bizName}</strong>.</p>
               <p>It only takes a minute — just click the button below:</p>
               <p style="text-align:center;margin:32px 0">
-                <a href="${signingLink}" style="background:#b1306f;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Complete My Form</a>
+                <a href="${signingLink}" style="background:#E83A8E;color:white;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Complete My Form</a>
               </p>
               <p style="color:#666;font-size:13px">Or copy this link into your browser:<br>${signingLink}</p>
               <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
@@ -3795,6 +3820,67 @@ Rules:
           if (error) return `Failed to add CPD entry: ${error.message}`;
           return `CPD entry logged: ${data.course_name} — ${new Date(data.date).toLocaleDateString("en-GB")} — ${data.hours} hours`;
         }
+        case "create_social_draft": {
+          if (!args.caption) return "Draft caption is required.";
+          const platform = args.platform ?? "instagram";
+          const postType = args.post_type ?? "other";
+          const { data, error } = await db.from("social_posts").insert({
+            user_id: userId,
+            caption: args.caption,
+            platform,
+            post_type: postType,
+            hook: args.hook ?? null,
+            hashtags: args.hashtags ?? null,
+            keyword_cta: args.keyword_cta ?? null,
+            status: "draft",
+            notes: args.notes ?? "Created by Safi after user approval.",
+          }).select("id, caption, platform, post_type, status").single();
+          if (error) return `Failed to save social draft: ${error.message}`;
+
+          const eventId = await recordActivityEvent(
+            {
+              userId,
+              source: "social_studio",
+              platform,
+              feature: "safi_chat",
+              eventType: "draft_saved",
+              entityType: "social_post",
+              entityId: data.id,
+              title: `Social draft saved for ${platform}`,
+              summary: String(data.caption || "").slice(0, 200),
+              payload: {
+                social_post_id: data.id,
+                post_type: postType,
+                status: data.status,
+              },
+              createdBy: "safi",
+            },
+            db,
+          );
+
+          await queueAgentAction(
+            {
+              userId,
+              activityEventId: eventId,
+              actionType: "post_social",
+              channel: platform,
+              platform,
+              title: `Review ${platform} draft before posting`,
+              draftBody: data.caption,
+              payload: {
+                social_post_id: data.id,
+                post_type: postType,
+                platform,
+              },
+              status: "pending_approval",
+              approvalRequired: true,
+              createdBy: "safi",
+            },
+            db,
+          );
+
+          return `Social draft saved for ${platform}. It is still a draft, and posting is queued in Safi Memory for approval.`;
+        }
         case "get_whatsapp_threads": {
           const { data: msgs } = await db.from("whatsapp_messages").select("*").eq("user_id", userId).order("sent_at", { ascending: false }).limit(200);
           if (!msgs?.length) return "No WhatsApp conversations yet. Once your number is connected and clients message you, threads will appear here.";
@@ -3891,7 +3977,7 @@ Rules:
 You are a fully autonomous business AI and you're also warm, friendly, and genuinely helpful — like a trusted colleague who knows the business inside out. Keep your tone conversational and natural. Use first names when you know them. Be encouraging but efficient — no waffle, just good energy and clear communication.
 
 APPROVAL RULE (non-negotiable):
-Before executing ANY outbound or write action — including sending messages, posting on social media, sending quotes, sending invoices, updating lead status, or creating records — you MUST first show the user exactly what you have prepared and ask for their approval.
+Before executing ANY outbound or write action — including sending messages, posting on social media, sending quotes, sending invoices, updating lead status, creating social drafts, or creating records — you MUST first show the user exactly what you have prepared and ask for their approval.
 
 How to ask for approval:
 1. Show the full prepared content (the post, quote, invoice, message — exactly as it would be sent/created)

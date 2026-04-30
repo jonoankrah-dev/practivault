@@ -10,13 +10,20 @@ type AuthedRequest = Request & {
   db?: any;
 };
 
-const VALID_NEXT_STATUSES: AgentActionStatus[] = [
-  "approved",
-  "rejected",
-  "cancelled",
-  "draft",
-  "pending_approval",
-];
+const ALLOWED_TRANSITIONS: Record<AgentActionStatus, AgentActionStatus[]> = {
+  draft: ["pending_approval", "cancelled"],
+  pending_approval: ["approved", "rejected", "cancelled", "draft"],
+  approved: ["ready_for_execution", "cancelled"],
+  ready_for_execution: ["cancelled"],
+  rejected: [],
+  sent: [],
+  cancelled: [],
+  failed: ["ready_for_execution", "cancelled"],
+};
+
+function canTransition(from: AgentActionStatus, to: AgentActionStatus): boolean {
+  return ALLOWED_TRANSITIONS[from]?.includes(to) ?? false;
+}
 
 function clampLimit(raw: unknown, def = 50, max = 200): number {
   const n = Number.parseInt(String(raw ?? def), 10);
@@ -151,12 +158,12 @@ export function registerSafiMemoryRoutes(app: Express): void {
   app.patch("/api/agent-actions/:id", async (req: AuthedRequest, res: Response) => {
     try {
       const userId = req.user!.id;
-      const { id } = req.params;
+      const id = String(req.params.id);
       const b = req.body ?? {};
 
       const { data: existing, error: readErr } = await req.db!
         .from("agent_action_queue")
-        .select("id, user_id, status")
+        .select("id, user_id, status, title, draft_body, action_type, channel")
         .eq("id", id)
         .eq("user_id", userId)
         .single();
@@ -164,15 +171,26 @@ export function registerSafiMemoryRoutes(app: Express): void {
 
       const patch: Record<string, unknown> = {};
       if (typeof b.status === "string") {
-        if (!VALID_NEXT_STATUSES.includes(b.status as AgentActionStatus)) {
-          return res.status(400).json({ message: `invalid status: ${b.status}` });
+        const next = b.status as AgentActionStatus;
+        if (next === "sent" || next === "failed") {
+          return res.status(400).json({
+            message: "status_not_user_settable",
+            detail: `${next} is set by the future executor service, not by approval`,
+          });
         }
-        patch.status = b.status;
-        if (b.status === "approved") {
+        if (!canTransition(existing.status as AgentActionStatus, next)) {
+          return res.status(400).json({
+            message: "invalid_transition",
+            from: existing.status,
+            to: next,
+          });
+        }
+        patch.status = next;
+        if (next === "approved") {
           patch.approved_by = userId;
           patch.approved_at = new Date().toISOString();
         }
-        if (b.status === "rejected") {
+        if (next === "rejected") {
           patch.rejected_reason = b.rejected_reason ?? null;
         }
       }
@@ -213,6 +231,58 @@ export function registerSafiMemoryRoutes(app: Express): void {
       }
 
       return res.json({ action: updated });
+    } catch (e) {
+      return res.status(500).json({ message: (e as Error).message });
+    }
+  });
+
+  app.post("/api/agent-actions/:id/prepare-execution", async (req: AuthedRequest, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const id = String(req.params.id);
+
+      const { data: existing, error: readErr } = await req.db!
+        .from("agent_action_queue")
+        .select("id, user_id, status, title, draft_body, action_type, channel")
+        .eq("id", id)
+        .eq("user_id", userId)
+        .single();
+      if (readErr || !existing) return res.status(404).json({ message: "not found" });
+
+      const from = existing.status as AgentActionStatus;
+      if (!canTransition(from, "ready_for_execution")) {
+        return res.status(409).json({
+          message: "not_promotable",
+          detail: `cannot promote from ${from} to ready_for_execution`,
+        });
+      }
+
+      const { data: updated, error: updErr } = await req.db!
+        .from("agent_action_queue")
+        .update({ status: "ready_for_execution" })
+        .eq("id", id)
+        .eq("user_id", userId)
+        .select("*")
+        .single();
+      if (updErr) return res.status(500).json({ message: updErr.message });
+
+      await recordActivityEvent(
+        {
+          userId,
+          source: "safi",
+          feature: "approval_queue",
+          eventType: "action_ready_for_execution",
+          entityType: "agent_action",
+          entityId: id,
+          title: `Action ready for execution: ${updated.title}`,
+          summary: updated.draft_body ? updated.draft_body.slice(0, 200) : null,
+          payload: { action_type: updated.action_type, channel: updated.channel },
+          createdBy: "user",
+        },
+        req.db!,
+      );
+
+      return res.json({ action: updated, executed: false });
     } catch (e) {
       return res.status(500).json({ message: (e as Error).message });
     }

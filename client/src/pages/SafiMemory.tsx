@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Clock, RefreshCw, X, Zap } from "lucide-react";
+import { Check, Clock, PlayCircle, RefreshCw, X, Zap } from "lucide-react";
 import { safiMemoryApi } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -47,11 +47,17 @@ export default function SafiMemory() {
     queryFn: () => safiMemoryApi.pendingActions(),
     refetchInterval: 30_000,
   });
+  const approvedQuery = useQuery({
+    queryKey: ["/api/agent-actions", "approved"],
+    queryFn: () => safiMemoryApi.approvedActions(),
+    refetchInterval: 30_000,
+  });
 
   const refresh = async () => {
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["/api/activity-events", "recent"] }),
       qc.invalidateQueries({ queryKey: ["/api/agent-actions", "pending"] }),
+      qc.invalidateQueries({ queryKey: ["/api/agent-actions", "approved"] }),
     ]);
   };
 
@@ -71,9 +77,23 @@ export default function SafiMemory() {
     }
   }
 
+  async function prepareExecution(id: string) {
+    try {
+      await safiMemoryApi.prepareExecution(id);
+      toast({
+        title: "Prepared",
+        description: "This is now ready for the future executor. Nothing has been sent or posted.",
+      });
+      await refresh();
+    } catch (e: any) {
+      toast({ title: "Could not prepare action", description: e.message, variant: "destructive" });
+    }
+  }
+
   const pending = actionsQuery.data?.actions as AgentAction[] | undefined;
+  const approved = approvedQuery.data?.actions as AgentAction[] | undefined;
   const events = eventsQuery.data?.events as ActivityEvent[] | undefined;
-  const loading = actionsQuery.isLoading || eventsQuery.isLoading;
+  const loading = actionsQuery.isLoading || approvedQuery.isLoading || eventsQuery.isLoading;
 
   return (
     <div className="min-h-screen bg-background">
@@ -142,6 +162,54 @@ export default function SafiMemory() {
                   <Button size="sm" variant="outline" onClick={() => updateAction(action.id, "rejected")} data-testid={`button-reject-${action.id}`}>
                     <X className="h-3.5 w-3.5 mr-1" />
                     Reject
+                  </Button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border bg-card p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-semibold">Approved · awaiting execution prep</h2>
+              <p className="text-xs text-muted-foreground">
+                Approved actions can be prepared for the future executor. Nothing sends or posts from this button.
+              </p>
+            </div>
+            <Badge variant="outline">{approved?.length ?? 0}</Badge>
+          </div>
+
+          {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
+          {!loading && (!approved || approved.length === 0) && (
+            <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+              Nothing approved and waiting right now.
+            </div>
+          )}
+          <div className="space-y-3">
+            {approved?.map((action) => (
+              <article key={action.id} className="rounded-xl border p-3" data-testid={`card-approved-agent-action-${action.id}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-medium">{action.title}</h3>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {action.action_type}
+                      {action.channel ? ` · ${action.channel}` : ""} · {formatDate(action.created_at)}
+                    </p>
+                  </div>
+                  <Badge variant="secondary" className="text-[10px]">
+                    {action.status}
+                  </Badge>
+                </div>
+                {action.draft_body && (
+                  <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-muted/60 p-3 text-xs leading-relaxed">
+                    {action.draft_body}
+                  </pre>
+                )}
+                <div className="mt-3">
+                  <Button size="sm" onClick={() => prepareExecution(action.id)} data-testid={`button-prepare-execution-${action.id}`}>
+                    <PlayCircle className="h-3.5 w-3.5 mr-1" />
+                    Prepare for execution
                   </Button>
                 </div>
               </article>

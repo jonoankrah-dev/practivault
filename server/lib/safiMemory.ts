@@ -36,6 +36,7 @@ export type AgentActionStatus =
   | "draft"
   | "pending_approval"
   | "approved"
+  | "ready_for_execution"
   | "rejected"
   | "sent"
   | "cancelled"
