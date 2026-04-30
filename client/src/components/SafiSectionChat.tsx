@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Zap, Send, Trash2, Loader2, Bot, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
+import { SaffiVoiceButton } from "@/components/SaffiVoiceButton";
 
 type Role = "user" | "assistant";
 type Message = { id: string; role: Role; text: string };
@@ -72,7 +73,7 @@ export default function SafiSectionChat({
 
       historyRef.current = [...historyRef.current, { role: "assistant", content: reply }];
     } catch (err: any) {
-      toast({ title: "Safi error", description: err.message, variant: "destructive" });
+      toast({ title: "Saffi error", description: err.message, variant: "destructive" });
       setMessages(p => [...p, {
         id: `e-${Date.now()}`, role: "assistant",
         text: "Sorry, something went wrong. Please try again.",
@@ -102,7 +103,7 @@ export default function SafiSectionChat({
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-semibold">{section}</h1>
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-[#E83A8E]/30 text-[#E83A8E]">
-                <Zap className="h-2.5 w-2.5 mr-0.5" />Safi AI
+                <Zap className="h-2.5 w-2.5 mr-0.5" />Saffi AI
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground">{description}</p>
@@ -124,9 +125,9 @@ export default function SafiSectionChat({
             <div className="h-16 w-16 rounded-2xl bg-[#E83A8E]/10 flex items-center justify-center mb-5">
               <Zap className="h-8 w-8 text-[#E83A8E]" />
             </div>
-            <h2 className="text-base font-semibold mb-1">Safi is managing your {section}</h2>
+            <h2 className="text-base font-semibold mb-1">Saffi is managing your {section}</h2>
             <p className="text-sm text-muted-foreground max-w-sm leading-relaxed mb-6">
-              Ask Safi to fetch, create, update or analyse anything in this section.
+              Ask Saffi to fetch, create, update or analyse anything in this section.
               She acts directly on your live data.
             </p>
             <div className="grid grid-cols-2 gap-2 w-full max-w-sm">
@@ -151,20 +152,27 @@ export default function SafiSectionChat({
                     <Bot className="h-3.5 w-3.5 text-[#E83A8E]" />
                   </div>
                 )}
-                <div className={cn(
-                  "rounded-2xl px-4 py-3 text-sm leading-relaxed max-w-[80%]",
-                  msg.role === "user"
-                    ? "bg-[#E83A8E] text-white rounded-br-sm whitespace-pre-wrap"
-                    : "bg-muted text-foreground rounded-bl-sm"
-                )}>
-                  {msg.role === "assistant" ? (
-                    <div className="prose prose-sm max-w-none dark:prose-invert
-                      prose-p:my-1 prose-ul:my-1 prose-li:my-0.5
-                      prose-headings:text-sm prose-headings:font-semibold prose-headings:my-2
-                      prose-strong:font-semibold prose-code:text-xs">
-                      <ReactMarkdown>{msg.text}</ReactMarkdown>
+                <div className="flex flex-col gap-1 max-w-[80%]">
+                  <div className={cn(
+                    "rounded-2xl px-4 py-3 text-sm leading-relaxed",
+                    msg.role === "user"
+                      ? "bg-[#E83A8E] text-white rounded-br-sm whitespace-pre-wrap"
+                      : "bg-muted text-foreground rounded-bl-sm"
+                  )}>
+                    {msg.role === "assistant" ? (
+                      <div className="prose prose-sm max-w-none dark:prose-invert
+                        prose-p:my-1 prose-ul:my-1 prose-li:my-0.5
+                        prose-headings:text-sm prose-headings:font-semibold prose-headings:my-2
+                        prose-strong:font-semibold prose-code:text-xs">
+                        <ReactMarkdown>{msg.text}</ReactMarkdown>
+                      </div>
+                    ) : msg.text}
+                  </div>
+                  {msg.role === "assistant" && msg.text.trim() && (
+                    <div className="self-start">
+                      <SaffiVoiceButton text={msg.text} testId={`button-voice-${msg.id}`} />
                     </div>
-                  ) : msg.text}
+                  )}
                 </div>
                 {msg.role === "user" && (
                   <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center shrink-0 mt-0.5">
@@ -181,7 +189,7 @@ export default function SafiSectionChat({
                 </div>
                 <div className="bg-muted rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-2">
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-[#E83A8E]" />
-                  <span className="text-sm text-muted-foreground">Safi is working…</span>
+                  <span className="text-sm text-muted-foreground">Saffi is working…</span>
                 </div>
               </div>
             )}
@@ -199,7 +207,7 @@ export default function SafiSectionChat({
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKey}
-            placeholder={`Ask Safi to manage your ${section.toLowerCase()}…`}
+            placeholder={`Ask Saffi to manage your ${section.toLowerCase()}…`}
             className="resize-none min-h-[44px] max-h-[120px] text-sm rounded-xl border-border focus-visible:ring-[#E83A8E]/30"
             rows={1}
             disabled={loading}

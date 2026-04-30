@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Zap, Send, Trash2, Loader2, Bot, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SaffiVoiceButton } from "@/components/SaffiVoiceButton";
 
 type Role = "user" | "assistant" | "tool";
 type Message = { id: string; role: Role; text: string };
@@ -67,7 +68,7 @@ export default function Safi() {
       historyRef.current = [...historyRef.current, { role: "assistant", content: reply }];
 
     } catch (err: any) {
-      toast({ title: "Safi error", description: err.message, variant: "destructive" });
+      toast({ title: "Saffi error", description: err.message, variant: "destructive" });
       setMessages(p => [...p, { id: `e-${Date.now()}`, role: "assistant", text: "Sorry, something went wrong. Please try again." }]);
     } finally {
       setLoading(false);
@@ -98,7 +99,7 @@ export default function Safi() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-sm font-semibold">Safi AI</h1>
+              <h1 className="text-sm font-semibold">Saffi AI</h1>
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-[#E83A8E]/30 text-[#E83A8E]">
                 <Zap className="h-2.5 w-2.5 mr-0.5" />Agentic
               </Badge>
@@ -123,9 +124,9 @@ export default function Safi() {
             <div className="h-16 w-16 rounded-2xl bg-[#E83A8E]/10 flex items-center justify-center mb-5">
               <Zap className="h-8 w-8 text-[#E83A8E]" />
             </div>
-            <h2 className="text-base font-semibold mb-1">Meet Safi</h2>
+            <h2 className="text-base font-semibold mb-1">Meet Saffi</h2>
             <p className="text-sm text-muted-foreground max-w-sm leading-relaxed mb-6">
-              Your fully agentic AI. Ask Safi to look up data, run reports, check bookings,
+              Your fully agentic AI. Ask Saffi to look up data, run reports, check bookings,
               review invoices — she acts on real business data, not just answers questions.
             </p>
             <div className="grid grid-cols-2 gap-2 w-full max-w-sm">
@@ -150,13 +151,20 @@ export default function Safi() {
                     <Bot className="h-3.5 w-3.5 text-[#E83A8E]" />
                   </div>
                 )}
-                <div className={cn(
-                  "rounded-2xl px-4 py-3 text-sm leading-relaxed max-w-[80%] whitespace-pre-wrap",
-                  msg.role === "user"
-                    ? "bg-[#E83A8E] text-white rounded-br-sm"
-                    : "bg-muted text-foreground rounded-bl-sm"
-                )}>
-                  {msg.text}
+                <div className="flex flex-col gap-1 max-w-[80%]">
+                  <div className={cn(
+                    "rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap",
+                    msg.role === "user"
+                      ? "bg-[#E83A8E] text-white rounded-br-sm"
+                      : "bg-muted text-foreground rounded-bl-sm"
+                  )}>
+                    {msg.text}
+                  </div>
+                  {msg.role === "assistant" && msg.text.trim() && (
+                    <div className="self-start">
+                      <SaffiVoiceButton text={msg.text} testId={`button-voice-${msg.id}`} />
+                    </div>
+                  )}
                 </div>
                 {msg.role === "user" && (
                   <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center shrink-0 mt-0.5">
@@ -174,7 +182,7 @@ export default function Safi() {
                 </div>
                 <div className="bg-muted rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-2">
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-[#E83A8E]" />
-                  <span className="text-sm text-muted-foreground">Safi is working…</span>
+                  <span className="text-sm text-muted-foreground">Saffi is working…</span>
                 </div>
               </div>
             )}
@@ -192,7 +200,7 @@ export default function Safi() {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKey}
-            placeholder="Ask Safi anything — check bookings, invoices, stock, reports…"
+            placeholder="Ask Saffi anything — check bookings, invoices, stock, reports…"
             className="resize-none min-h-[44px] max-h-[120px] text-sm rounded-xl border-border focus-visible:ring-[#E83A8E]/30"
             rows={1}
             disabled={loading}

@@ -4262,6 +4262,68 @@ Key facts:
     res.json({ text: result.text ?? "" });
   });
 
+  // POST /api/saffi/voice — Saffi TTS playback via xAI Grok (voice_id 'eve').
+  // Playback only. No tool calls, no command execution, no actions. Server-side
+  // proxy so XAI_API_KEY is never exposed to the browser. Returns audio/mpeg
+  // bytes; returns 503 with a clear flag when XAI_API_KEY is unavailable.
+  app.post("/api/saffi/voice", requireAuth, async (req: AuthedRequest, res) => {
+    const apiKey = process.env.XAI_API_KEY;
+    if (!apiKey) {
+      return res.status(503).json({
+        message: "voice_unavailable",
+        detail: "Saffi voice is not configured on this server (XAI_API_KEY missing).",
+      });
+    }
+
+    const raw = req.body?.text;
+    if (typeof raw !== "string" || !raw.trim()) {
+      return res.status(400).json({ message: "No text" });
+    }
+
+    // Strip control chars, collapse whitespace, hard-cap to 1500 chars.
+    const safeText = raw
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 1500);
+    if (!safeText) return res.status(400).json({ message: "No text" });
+
+    try {
+      const ttsRes = await fetch("https://api.x.ai/v1/tts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "grok-tts",
+          text: safeText,
+          voice: "eve",
+          language: "en",
+          output_format: "mp3_24000_128000",
+        }),
+        signal: AbortSignal.timeout(20_000),
+      });
+
+      if (!ttsRes.ok) {
+        const err = await ttsRes.text().catch(() => "");
+        console.warn("[saffi-voice] xAI TTS error:", ttsRes.status, err.slice(0, 200));
+        return res.status(502).json({
+          message: "voice_provider_error",
+          status: ttsRes.status,
+        });
+      }
+
+      const arrayBuffer = await ttsRes.arrayBuffer();
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Cache-Control", "no-store");
+      res.end(Buffer.from(arrayBuffer));
+    } catch (e: any) {
+      console.warn("[saffi-voice] threw:", e?.message);
+      return res.status(502).json({ message: "voice_provider_error" });
+    }
+  });
+
   // POST /api/saphie/speak — Grok (xAI) TTS → returns WAV audio
   app.post("/api/saphie/speak", requireAuth, async (req: AuthedRequest, res) => {
     const { text } = req.body;

@@ -147,7 +147,7 @@ export default function SafiAdmin({ onBack }: { onBack?: () => void }) {
   return (
     <div className="p-8 max-w-7xl mx-auto">
       <PageHeader
-        title="Safi — Admin Assistant"
+        title="Saffi — Admin Assistant"
         subtitle={`${todayCount} message${todayCount === 1 ? "" : "s"} analysed today · Paste a DM and get a reply in your voice`}
         actions={
           onBack ? (

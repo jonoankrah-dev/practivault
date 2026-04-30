@@ -337,7 +337,7 @@ export default function SafiReceptionist({ onBack }: { onBack?: () => void }) {
             </Button>
           )}
           <div>
-          <h1 className="text-sm font-semibold">Safi — Receptionist</h1>
+          <h1 className="text-sm font-semibold">Saffi — Receptionist</h1>
           <p className="text-xs text-muted-foreground">
             {connState === "idle"      && "Press Start to connect"}
             {connState === "connecting" && "Connecting…"}

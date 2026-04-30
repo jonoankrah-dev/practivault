@@ -65,11 +65,11 @@ export default function SafiMemory() {
     try {
       if (status === "approved") {
         await safiMemoryApi.approveAction(id);
-        toast({ title: "Approved", description: "Safi can now pick this up when the executor is added." });
+        toast({ title: "Approved", description: "Saffi can now pick this up when the executor is added." });
       } else {
         const reason = window.prompt("Reason for rejection? (optional)") ?? undefined;
         await safiMemoryApi.rejectAction(id, reason);
-        toast({ title: "Rejected", description: "Safi will learn from that decision." });
+        toast({ title: "Rejected", description: "Saffi will learn from that decision." });
       }
       await refresh();
     } catch (e: any) {
@@ -103,9 +103,9 @@ export default function SafiMemory() {
             <Zap className="h-4 w-4 text-[#E83A8E]" />
           </div>
           <div>
-            <h1 className="text-sm font-semibold">Safi Memory</h1>
+            <h1 className="text-sm font-semibold">Saffi Memory</h1>
             <p className="text-xs text-muted-foreground">
-              Activity Safi can learn from, plus actions waiting for your approval.
+              Activity Saffi can learn from, plus actions waiting for your approval.
             </p>
           </div>
         </div>
@@ -121,7 +121,7 @@ export default function SafiMemory() {
             <div>
               <h2 className="text-sm font-semibold">Pending approval</h2>
               <p className="text-xs text-muted-foreground">
-                Safi prepares these, but nothing sends or posts until you approve.
+                Saffi prepares these, but nothing sends or posts until you approve.
               </p>
             </div>
             <Badge variant="outline">{pending?.length ?? 0}</Badge>
