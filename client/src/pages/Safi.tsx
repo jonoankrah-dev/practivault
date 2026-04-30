@@ -10,9 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
-import { Zap, Send, Trash2, Loader2, Bot, User } from "lucide-react";
+import { Zap, Send, Trash2, Loader2, Bot, User, Mic } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SaffiVoiceButton } from "@/components/SaffiVoiceButton";
+import { SaffiVoiceConversation } from "@/components/SaffiVoiceConversation";
 
 type Role = "user" | "assistant" | "tool";
 type Message = { id: string; role: Role; text: string };
@@ -31,6 +32,7 @@ export default function Safi() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const historyRef = useRef<{ role: string; content: string }[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -89,6 +91,8 @@ export default function Safi() {
   };
 
   return (
+    <>
+    <SaffiVoiceConversation open={voiceOpen} onClose={() => setVoiceOpen(false)} />
     <div className="flex flex-col h-full max-h-screen bg-background">
 
       {/* Header */}
@@ -108,12 +112,25 @@ export default function Safi() {
           </div>
         </div>
 
-        {messages.length > 0 && (
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            onClick={clearChat} title="Clear chat" data-testid="button-clear">
-            <Trash2 className="h-4 w-4" />
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setVoiceOpen(true)}
+            className="h-8 gap-1.5 border-[#E83A8E]/40 text-[#E83A8E] hover:bg-[#E83A8E]/10 hover:text-[#E83A8E]"
+            title="Talk to Saffi"
+            data-testid="button-open-voice"
+          >
+            <Mic className="h-3.5 w-3.5" />
+            <span className="text-xs font-medium">Talk</span>
           </Button>
-        )}
+          {messages.length > 0 && (
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              onClick={clearChat} title="Clear chat" data-testid="button-clear">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Messages */}
@@ -125,10 +142,18 @@ export default function Safi() {
               <Zap className="h-8 w-8 text-[#E83A8E]" />
             </div>
             <h2 className="text-base font-semibold mb-1">Meet Saffi</h2>
-            <p className="text-sm text-muted-foreground max-w-sm leading-relaxed mb-6">
+            <p className="text-sm text-muted-foreground max-w-sm leading-relaxed mb-4">
               Your fully agentic AI. Ask Saffi to look up data, run reports, check bookings,
               review invoices — she acts on real business data, not just answers questions.
             </p>
+            <Button
+              onClick={() => setVoiceOpen(true)}
+              className="mb-6 gap-2 bg-[#E83A8E] hover:bg-[#c42d77] text-white rounded-xl"
+              data-testid="button-empty-talk"
+            >
+              <Mic className="h-4 w-4" />
+              Talk to Saffi
+            </Button>
             <div className="grid grid-cols-2 gap-2 w-full max-w-sm">
               {SUGGESTIONS.map(s => (
                 <button
@@ -221,5 +246,6 @@ export default function Safi() {
         </p>
       </div>
     </div>
+    </>
   );
 }

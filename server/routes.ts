@@ -1,6 +1,7 @@
 import { registerPublicConfigRoute } from "./routes/publicConfig";
 import { recordActivityEvent, queueAgentAction } from "./lib/safiMemory";
 import { registerSafiMemoryRoutes } from "./routes/safiMemory";
+import { registerSaffiRealtime, saffiRealtimeTokenHandler } from "./realtime/saffiRealtime";
 import type { Express, Request, Response, NextFunction } from "express";
 import { Resend } from "resend";
 import twilio from "twilio";
@@ -642,6 +643,10 @@ IMPORTANT:
 });
 
   registerSafiMemoryRoutes(app);
+
+  // Saffi realtime: auth-gated token endpoint + WSS bridge to xAI.
+  app.post("/api/saffi/realtime/token", requireAuth, (req, res) => saffiRealtimeTokenHandler(req as any, res));
+  registerSaffiRealtime(httpServer, app);
 
   // ---- USERS / PROFILE ----
   app.get("/api/me", requireAuth, async (req: AuthedRequest, res) => {
