@@ -1,4 +1,6 @@
 import { registerPublicConfigRoute } from "./routes/publicConfig";
+import { recordActivityEvent, queueAgentAction } from "./lib/safiMemory";
+import { registerSafiMemoryRoutes } from "./routes/safiMemory";
 import type { Express, Request, Response, NextFunction } from "express";
 import { Resend } from "resend";
 import twilio from "twilio";
@@ -637,6 +639,8 @@ IMPORTANT:
 
   return requireAuth(req as AuthedRequest, res, next);
 });
+
+  registerSafiMemoryRoutes(app);
 
   // ---- USERS / PROFILE ----
   app.get("/api/me", requireAuth, async (req: AuthedRequest, res) => {
@@ -1577,12 +1581,51 @@ Respond ONLY with a JSON object (no markdown, no code blocks):
       const jsonSlice =
         jsonStart >= 0 && jsonEnd > jsonStart ? cleaned.slice(jsonStart, jsonEnd + 1) : cleaned;
       const result = JSON.parse(jsonSlice);
-      res.json({
+      const generatedPost = {
         caption: String(result.caption || ""),
         hook: String(result.hook || ""),
         hashtags: String(result.hashtags || ""),
         keyword_cta: String(result.keyword_cta || ""),
-      });
+      };
+      const eventId = await recordActivityEvent(
+        {
+          userId: req.user!.id,
+          source: "social_studio",
+          platform,
+          feature: "generator",
+          eventType: "draft_generated",
+          entityType: "social_post_draft",
+          title: `Social draft generated for ${platform}`,
+          summary: generatedPost.hook || generatedPost.caption.slice(0, 200),
+          payload: {
+            post_type,
+            platform,
+            topic: topic ?? null,
+            extra_context: extra_context ?? null,
+            keyword_cta: generatedPost.keyword_cta,
+            hashtags: generatedPost.hashtags,
+          },
+          createdBy: "safi",
+        },
+        req.db!,
+      );
+      await queueAgentAction(
+        {
+          userId: req.user!.id,
+          activityEventId: eventId,
+          actionType: "post_social",
+          channel: platform,
+          platform,
+          title: `Review ${platform} post draft`,
+          draftBody: generatedPost.caption,
+          payload: generatedPost,
+          status: "pending_approval",
+          approvalRequired: true,
+          createdBy: "safi",
+        },
+        req.db!,
+      );
+      res.json(generatedPost);
     } catch (e: any) {
       res.status(502).json({ message: "AI generation failed: " + (e?.message || "unknown error") });
     }
@@ -4220,7 +4263,7 @@ Key facts:
         .maybeSingle();
 
       // Store inbound message
-      await supabase.from("whatsapp_messages").insert({
+      const { data: inboundMessage } = await supabase.from("whatsapp_messages").insert({
         user_id: userId,
         client_id: clientMatch?.id || null,
         contact_name: clientMatch?.name || null,
@@ -4230,6 +4273,21 @@ Key facts:
         wa_message_id: waMessageId,
         sent_at: new Date().toISOString(),
         is_read: false,
+      }).select().single();
+
+      void recordActivityEvent({
+        userId,
+        source: "whatsapp",
+        platform: "twilio",
+        feature: "inbox",
+        eventType: "message_received",
+        entityType: "whatsapp_message",
+        entityId: inboundMessage?.id ?? waMessageId,
+        clientId: clientMatch?.id || null,
+        title: `WhatsApp from ${clientMatch?.name || from}`,
+        summary: text.slice(0, 200),
+        payload: { from, to, twilio_sid: waMessageId },
+        createdBy: "integration",
       });
 
       // ── Safi auto-reply ────────────────────────────────────────────────────
@@ -4330,7 +4388,7 @@ IMPORTANT: Reply only with the message text to send. Do not explain what you are
                 });
 
                 // Store Safi's outbound reply
-                await supabase.from("whatsapp_messages").insert({
+                const { data: outboundMessage } = await supabase.from("whatsapp_messages").insert({
                   user_id: userId,
                   client_id: clientMatch?.id || null,
                   contact_name: clientMatch?.name || null,
@@ -4341,13 +4399,27 @@ IMPORTANT: Reply only with the message text to send. Do not explain what you are
                   sent_at: new Date().toISOString(),
                   is_read: true,
                   status: "sent",
+                }).select().single();
+                void recordActivityEvent({
+                  userId,
+                  source: "whatsapp",
+                  platform: "twilio",
+                  feature: "outbox",
+                  eventType: "message_sent",
+                  entityType: "whatsapp_message",
+                  entityId: outboundMessage?.id ?? sent.sid,
+                  clientId: clientMatch?.id || null,
+                  title: `WhatsApp sent to ${clientMatch?.name || from}`,
+                  summary: reply.slice(0, 200),
+                  payload: { to: from, twilio_sid: sent.sid, initiated_by: "saffi" },
+                  createdBy: "safi",
                 });
               } catch (sendErr: any) {
                 console.error("Twilio send error:", sendErr.message);
               }
             } else {
               // Credentials not yet set — store the draft reply for Jono to review in the inbox
-              await supabase.from("whatsapp_messages").insert({
+              const { data: draftMessage } = await supabase.from("whatsapp_messages").insert({
                 user_id: userId,
                 client_id: clientMatch?.id || null,
                 contact_name: clientMatch?.name || null,
@@ -4357,6 +4429,35 @@ IMPORTANT: Reply only with the message text to send. Do not explain what you are
                 sent_at: new Date().toISOString(),
                 is_read: true,
                 status: "pending_credentials",
+              }).select().single();
+              const eventId = await recordActivityEvent({
+                userId,
+                source: "whatsapp",
+                platform: "twilio",
+                feature: "outbox",
+                eventType: "reply_drafted",
+                entityType: "whatsapp_message",
+                entityId: draftMessage?.id ?? null,
+                clientId: clientMatch?.id || null,
+                title: `WhatsApp reply drafted for ${clientMatch?.name || from}`,
+                summary: reply.slice(0, 200),
+                payload: { to: from, reason: "pending_twilio_credentials" },
+                createdBy: "safi",
+              });
+              void queueAgentAction({
+                userId,
+                activityEventId: eventId,
+                actionType: "send_message",
+                channel: "whatsapp",
+                platform: "twilio",
+                targetClientId: clientMatch?.id || null,
+                targetContact: from,
+                title: `Review WhatsApp reply to ${clientMatch?.name || from}`,
+                draftBody: reply,
+                payload: { whatsapp_message_id: draftMessage?.id ?? null },
+                status: "pending_approval",
+                approvalRequired: true,
+                createdBy: "safi",
               });
             }
           }

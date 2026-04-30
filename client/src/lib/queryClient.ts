@@ -42,6 +42,37 @@ export async function apiRequest(method: string, url: string, data?: unknown): P
   return res;
 }
 
+async function authedJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const hasBody = !!init.body;
+  const explicitHeaders = init.headers ?? {};
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: {
+      ...authHeaders(hasBody),
+      ...explicitHeaders,
+    },
+  });
+  await throwIfResNotOk(res);
+  return (await res.json()) as T;
+}
+
+export const safiMemoryApi = {
+  recentEvents: (limit = 50) =>
+    authedJson<{ events: any[] }>(`/api/activity-events?limit=${limit}`),
+  pendingActions: () =>
+    authedJson<{ actions: any[] }>("/api/agent-actions?pending=1"),
+  approveAction: (id: string) =>
+    authedJson<{ action: any }>(`/api/agent-actions/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "approved" }),
+    }),
+  rejectAction: (id: string, reason?: string) =>
+    authedJson<{ action: any }>(`/api/agent-actions/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "rejected", rejected_reason: reason ?? null }),
+    }),
+};
+
 type UnauthorizedBehavior = "returnNull" | "throw";
 export const getQueryFn: <T>(options: { on401: UnauthorizedBehavior }) => QueryFunction<T> =
   ({ on401 }) =>

@@ -34,6 +34,7 @@ import CpdLog from "@/pages/CpdLog";
 import Locations from "@/pages/Locations";
 import Stock from "@/pages/Stock";
 import Safi from "@/pages/Safi";
+import SafiMemory from "@/pages/SafiMemory";
 import WhatsApp from "@/pages/WhatsApp";
 
 import SetupAssistant from "@/pages/SetupAssistant";
@@ -210,6 +211,9 @@ function AppRouter() {
       </Route>
       <Route path="/safi">
         <Protected><Safi /></Protected>
+      </Route>
+      <Route path="/safi-memory">
+        <Protected><SafiMemory /></Protected>
       </Route>
       <Route path="/saphie">
         <Protected><Safi /></Protected>
