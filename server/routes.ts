@@ -623,17 +623,20 @@ IMPORTANT:
   });
 
   // ============ AUTHED ROUTES =============
-  app.use("/api", (req, res, next) => {
-    // Skip auth for public/webhook endpoints
-    if (
-      req.path.startsWith("/consent/sign/") ||
-      req.path === "/health" ||
-      req.path === "/whatsapp/webhook" ||
-              req.path === "/public-config" ||
-      req.path.startsWith("/vapi")
-    ) return next();
-    return requireAuth(req as AuthedRequest, res, next);
-  });
+ app.use("/api", (req, res, next) => {
+  // Skip auth for public/webhook endpoints
+  if (
+    req.path.startsWith("/consent/sign/") ||
+    req.path === "/health" ||
+    req.path === "/whatsapp/webhook" ||
+    req.path === "/public-config" ||
+    req.path.startsWith("/vapi")
+  ) {
+    return next();
+  }
+
+  return requireAuth(req as AuthedRequest, res, next);
+});
 
   // ---- USERS / PROFILE ----
   app.get("/api/me", requireAuth, async (req: AuthedRequest, res) => {
