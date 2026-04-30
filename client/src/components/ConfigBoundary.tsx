@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ensureSupabaseReady } from "@/lib/supabase";
 
+const CONFIG_BOUNDARY_VERSION = "runtime-config-v2";
+
 type State =
   | { status: "loading" }
     | { status: "ready" }
@@ -27,7 +29,7 @@ type State =
 
                                                                                             if (state.status === "loading") {
                                                                                                 return (
-                                                                                                      <div
+                                                                                                      <div data-config-version={CONFIG_BOUNDARY_VERSION}
                                                                                                               style={{
                                                                                                                         minHeight: "100vh",
                                                                                                                                   display: "grid",
