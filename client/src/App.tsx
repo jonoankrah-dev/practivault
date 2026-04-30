@@ -39,6 +39,7 @@ import WhatsApp from "@/pages/WhatsApp";
 
 import SetupAssistant from "@/pages/SetupAssistant";
 import NotFound from "@/pages/not-found";
+import { SaffiVoiceConversation } from "@/components/SaffiVoiceConversation";
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { session, user, loading } = useAuth();
@@ -46,6 +47,20 @@ function Protected({ children }: { children: React.ReactNode }) {
   const [setupChecked, setSetupChecked] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
   const [setupIndustry, setSetupIndustry] = useState<string | undefined>(undefined);
+  const [voiceOpen, setVoiceOpen] = useState(false);
+
+  // Global open/close hooks so any page can request the voice controller
+  // without prop-drilling. Pages dispatch `saffi:openVoice` / `saffi:closeVoice`.
+  useEffect(() => {
+    const onOpen = () => setVoiceOpen(true);
+    const onClose = () => setVoiceOpen(false);
+    window.addEventListener("saffi:openVoice", onOpen);
+    window.addEventListener("saffi:closeVoice", onClose);
+    return () => {
+      window.removeEventListener("saffi:openVoice", onOpen);
+      window.removeEventListener("saffi:closeVoice", onClose);
+    };
+  }, []);
 
   useEffect(() => {
     if (!loading && !session) {
@@ -87,6 +102,10 @@ function Protected({ children }: { children: React.ReactNode }) {
           onComplete={() => setShowSetup(false)}
         />
       )}
+      <SaffiVoiceConversation
+        open={voiceOpen}
+        onClose={() => setVoiceOpen(false)}
+      />
     </>
   );
 }

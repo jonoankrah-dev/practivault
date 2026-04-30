@@ -19,9 +19,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { getAuthToken } from "@/lib/queryClient";
-import { Mic, MicOff, Loader2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Mic, MicOff, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Status =
@@ -96,6 +95,7 @@ export function SaffiVoiceConversation({ open, onClose }: Props) {
   const [status, setStatus] = useState<Status>("idle");
   const [errorText, setErrorText] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string>("");
+  const [expanded, setExpanded] = useState<boolean>(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
@@ -133,6 +133,7 @@ export function SaffiVoiceConversation({ open, onClose }: Props) {
       setStatus("idle");
       setTranscript("");
       setErrorText(null);
+      setExpanded(false);
     }
     return () => cleanup();
   }, [open, cleanup]);
@@ -347,108 +348,119 @@ export function SaffiVoiceConversation({ open, onClose }: Props) {
   const isLoading = status === "requesting" || status === "connecting";
   const isLive = status === "listening" || status === "thinking" || status === "speaking";
 
+  // Non-blocking floating controller. Fixed bottom-right; the rest of the app
+  // stays interactive. No backdrop, no full-screen modal.
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Talk to Saffi"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      role="region"
+      aria-label="Saffi voice"
+      className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-end px-4 sm:px-6"
     >
-      <div className="relative w-full max-w-md rounded-3xl bg-background p-8 shadow-2xl">
-        <button
-          onClick={onClose}
-          aria-label="Close voice"
-          className="absolute right-4 top-4 rounded-full p-2 text-muted-foreground hover:bg-muted"
-          data-testid="button-saffi-voice-close"
-        >
-          <X className="h-4 w-4" />
-        </button>
+      <div
+        className={cn(
+          "pointer-events-auto w-[min(22rem,calc(100vw-2rem))] rounded-2xl bg-background/95 backdrop-blur",
+          "border border-[#E83A8E]/20 shadow-[0_10px_30px_rgba(0,0,0,0.18)]",
+        )}
+        data-testid="saffi-voice-controller"
+      >
+        {/* Expanded transcript (collapsible upward) */}
+        {expanded && (
+          <div className="border-b border-border px-4 py-3">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
+              Live transcript
+            </div>
+            <p className="max-h-40 overflow-y-auto text-xs leading-relaxed text-foreground/80 whitespace-pre-wrap">
+              {transcript || "Saffi will show what she hears and says here."}
+            </p>
+            <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+              Saffi can chat, plan, and prepare drafts. Sending messages, posting,
+              quotes and invoices still need your approval in the app.
+            </p>
+          </div>
+        )}
 
-        <div className="flex flex-col items-center gap-6 py-2">
-          <h2 className="text-base font-semibold">Talk to Saffi</h2>
-
-          {/* Mic orb */}
-          <div className="relative h-44 w-44">
-            {/* animated rings */}
+        {/* Compact row */}
+        <div className="flex items-center gap-3 px-3 py-2.5">
+          {/* Mic orb (smaller, with subtle rings) */}
+          <div className="relative h-11 w-11 shrink-0">
             <div
               className={cn(
-                "absolute inset-0 rounded-full border border-[#E83A8E]/20",
+                "absolute inset-0 rounded-full border border-[#E83A8E]/25",
                 ringActive && "animate-ping",
               )}
             />
             <div
               className={cn(
-                "absolute inset-3 rounded-full border border-[#E83A8E]/30",
-                ringActive && "animate-pulse",
-              )}
-            />
-            <div
-              className={cn(
-                "absolute inset-6 rounded-full border-2 border-[#E83A8E]/40",
+                "absolute inset-1 rounded-full border border-[#E83A8E]/40",
                 status === "speaking" && "animate-pulse",
               )}
             />
-
-            {/* Center button */}
             <button
               onClick={isLive ? stop : start}
               disabled={isLoading}
               data-testid="button-saffi-voice-toggle"
+              aria-label={isLive ? "Stop voice" : "Start voice"}
               className={cn(
-                "absolute inset-10 rounded-full flex items-center justify-center transition-all",
-                "shadow-[0_8px_30px_rgba(232,58,142,0.35)]",
+                "absolute inset-1.5 rounded-full flex items-center justify-center transition-all",
+                "shadow-[0_4px_14px_rgba(232,58,142,0.35)]",
                 isLive
                   ? "bg-white text-[#E83A8E] ring-2 ring-[#E83A8E]"
                   : "bg-[#E83A8E] text-white hover:bg-[#c42d77]",
                 isLoading && "opacity-80 cursor-wait",
               )}
-              aria-label={isLive ? "Stop voice" : "Start voice"}
             >
               {isLoading ? (
-                <Loader2 className="h-8 w-8 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : isLive ? (
-                <MicOff className="h-9 w-9" />
+                <MicOff className="h-4 w-4" />
               ) : (
-                <Mic className="h-10 w-10" />
+                <Mic className="h-4 w-4" />
               )}
             </button>
           </div>
 
-          {/* status text */}
-          <div className="min-h-[2.5rem] text-center">
-            <p
+          {/* Status + (when collapsed) latest transcript snippet */}
+          <div className="min-w-0 flex-1">
+            <div
               className={cn(
-                "text-sm",
+                "text-[13px] font-medium leading-tight truncate",
                 status === "error" ? "text-[#c42d77]" : "text-foreground",
               )}
               data-testid="text-saffi-voice-status"
             >
               {statusLine}
-            </p>
-            {transcript && status !== "error" && (
-              <p className="mt-2 max-w-sm text-xs text-muted-foreground line-clamp-3">
-                {transcript}
-              </p>
+            </div>
+            {!expanded && transcript && status !== "error" && (
+              <div className="text-[11px] text-muted-foreground truncate">
+                {transcript.slice(-160)}
+              </div>
+            )}
+            {!expanded && !transcript && status === "idle" && (
+              <div className="text-[11px] text-muted-foreground truncate">
+                Saffi · Grok voice
+              </div>
             )}
           </div>
 
-          {/* End button when live */}
-          {isLive && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => { stop(); onClose(); }}
-              data-testid="button-saffi-voice-end"
-            >
-              End conversation
-            </Button>
-          )}
+          {/* Expand transcript */}
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="rounded-full p-1.5 text-muted-foreground hover:bg-muted"
+            aria-label={expanded ? "Hide transcript" : "Show transcript"}
+            data-testid="button-saffi-voice-expand"
+          >
+            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+          </button>
 
-          <p className="max-w-sm text-center text-[11px] leading-relaxed text-muted-foreground">
-            Saffi can chat, plan, and prepare drafts here. Sending messages,
-            posting, quotes and invoices still need your approval in the app.
-          </p>
+          {/* Close (also stops session) */}
+          <button
+            onClick={() => { stop(); onClose(); }}
+            className="rounded-full p-1.5 text-muted-foreground hover:bg-muted"
+            aria-label="Close voice"
+            data-testid="button-saffi-voice-close"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </div>

@@ -13,7 +13,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Zap, Send, Trash2, Loader2, Bot, User, Mic } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SaffiVoiceButton } from "@/components/SaffiVoiceButton";
-import { SaffiVoiceConversation } from "@/components/SaffiVoiceConversation";
+// Voice controller is mounted globally inside Protected (App.tsx) so it stays
+// available while Jono navigates the app. Pages just dispatch saffi:openVoice.
+const openSaffiVoice = () => {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("saffi:openVoice"));
+  }
+};
 
 type Role = "user" | "assistant" | "tool";
 type Message = { id: string; role: Role; text: string };
@@ -32,7 +38,6 @@ export default function Safi() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [voiceOpen, setVoiceOpen] = useState(false);
   const historyRef = useRef<{ role: string; content: string }[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -91,8 +96,6 @@ export default function Safi() {
   };
 
   return (
-    <>
-    <SaffiVoiceConversation open={voiceOpen} onClose={() => setVoiceOpen(false)} />
     <div className="flex flex-col h-full max-h-screen bg-background">
 
       {/* Header */}
@@ -116,7 +119,7 @@ export default function Safi() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setVoiceOpen(true)}
+            onClick={openSaffiVoice}
             className="h-8 gap-1.5 border-[#E83A8E]/40 text-[#E83A8E] hover:bg-[#E83A8E]/10 hover:text-[#E83A8E]"
             title="Talk to Saffi"
             data-testid="button-open-voice"
@@ -147,7 +150,7 @@ export default function Safi() {
               review invoices — she acts on real business data, not just answers questions.
             </p>
             <Button
-              onClick={() => setVoiceOpen(true)}
+              onClick={openSaffiVoice}
               className="mb-6 gap-2 bg-[#E83A8E] hover:bg-[#c42d77] text-white rounded-xl"
               data-testid="button-empty-talk"
             >
@@ -246,6 +249,5 @@ export default function Safi() {
         </p>
       </div>
     </div>
-    </>
   );
 }
