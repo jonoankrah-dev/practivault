@@ -6,6 +6,13 @@ import {
   SAFFI_READ_ONLY_TOOL_DEFS,
   executeReadOnlyTool,
 } from "./lib/safiReadOnlyTools";
+import {
+  classifyInbound,
+  redactSystemPrompt,
+  injectGuardDirective,
+  postCheckReply,
+  softRefusal,
+} from "./lib/saffiKnowledgeGuard";
 import type { Express, Request, Response, NextFunction } from "express";
 import { Resend } from "resend";
 import twilio from "twilio";
@@ -4561,21 +4568,31 @@ Key facts:
 
       const waWebsiteContext = `\n\n${ENDOPULSE_KNOWLEDGE}`;
 
-      // Fetch last 10 messages in this thread for conversation context
+      // Fetch last 30 messages in this thread for conversation context AND for
+      // the probing-window guard (we look back 30 min). We project sent_at so
+      // the classifier can apply the time window without a second query.
       const { data: history } = await supabase
         .from("whatsapp_messages")
-        .select("direction, body")
+        .select("direction, body, sent_at")
         .eq("user_id", userId)
         .eq("contact_phone", from)
         .order("sent_at", { ascending: false })
-        .limit(10);
+        .limit(30);
 
-      const conversationHistory = (history ?? []).reverse().map((m: any) => ({
+      const conversationHistory = (history ?? []).slice(0, 10).reverse().map((m: any) => ({
         role: m.direction === "inbound" ? "user" : "assistant",
         content: m.body,
       }));
 
-      const safiSystem = `Your name is Saffi. You work for ${userData?.business_name ?? "endoPulse™"} and you are messaging customers on WhatsApp on behalf of the business.${bizContext}${manualContext}${waWebsiteContext}
+      // ── Knowledge-safety classifier (defence in depth, layer 1+2) ────────
+      const guard = classifyInbound(text, history ?? []);
+      if (guard.riskLevel !== "normal") {
+        console.warn(
+          `[saffi-guard] phone=${from} risk=${guard.riskLevel} probing=${guard.probingScore} cats=${guard.categories.join(",")}`,
+        );
+      }
+
+      let safiSystem = `Your name is Saffi. You work for ${userData?.business_name ?? "endoPulse™"} and you are messaging customers on WhatsApp on behalf of the business.${bizContext}${manualContext}${waWebsiteContext}
 
 You are a real member of the team as far as the customer is concerned. Never say you are an AI, a bot, an assistant, or an automated service. Never say "AI", "automated", "virtual", or anything that reveals you are not human. If someone asks directly whether you are a bot or AI, deflect warmly: "I'm Saffi, part of the endoPulse team — how can I help you?"
 
@@ -4589,7 +4606,62 @@ Answer questions about treatments, pricing, bookings, training, and general enqu
 
 IMPORTANT: Reply only with the message text to send. Do not explain what you are doing.`;
 
+      // ── Knowledge-safety: layer 3 (redact source) + layer 4 (instruction)
+      safiSystem = redactSystemPrompt(safiSystem, guard.riskLevel);
+      safiSystem = injectGuardDirective(safiSystem, guard.riskLevel, guard.categories);
+
+      // ── Layer 5a: hard short-circuit. For prompt-extraction, credential, or
+      // private-data probes, never call the LLM at all — send a soft refusal.
+      const HARD_REFUSE_CATS = new Set(["prompt_extraction", "credentials", "private_data"]);
+      const hardRefuse = guard.categories.some((c) => HARD_REFUSE_CATS.has(c));
+
       const xaiKey = process.env.XAI_API_KEY;
+      if (hardRefuse) {
+        const refusalText = softRefusal(guard.categories);
+        const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+        const twilioToken = process.env.TWILIO_AUTH_TOKEN;
+        const twilioFrom = process.env.TWILIO_WHATSAPP_NUMBER || "+447537167007";
+        try {
+          if (twilioSid && twilioToken) {
+            const tw = twilio(twilioSid, twilioToken);
+            const sent = await tw.messages.create({
+              from: `whatsapp:${twilioFrom}`,
+              to: `whatsapp:${from}`,
+              body: refusalText,
+            });
+            await supabase.from("whatsapp_messages").insert({
+              user_id: userId,
+              client_id: clientMatch?.id || null,
+              contact_name: clientMatch?.name || null,
+              contact_phone: from,
+              direction: "outbound",
+              body: refusalText,
+              wa_message_id: sent.sid,
+              sent_at: new Date().toISOString(),
+              is_read: true,
+              status: "sent",
+            });
+            void recordActivityEvent({
+              userId,
+              source: "whatsapp",
+              platform: "twilio",
+              feature: "knowledge_guard",
+              eventType: "guard_hard_refusal",
+              entityType: "whatsapp_message",
+              entityId: sent.sid,
+              clientId: clientMatch?.id || null,
+              title: `Saffi declined a restricted request`,
+              summary: `from ${from}: ${text.slice(0, 120)}`,
+              payload: { categories: guard.categories, probingScore: guard.probingScore, risk: guard.riskLevel },
+              createdBy: "safi",
+            });
+          }
+        } catch (e: any) {
+          console.warn("[saffi-guard] hard refusal send failed:", e?.message);
+        }
+        return res.sendStatus(200);
+      }
+
       if (xaiKey) {
         const grokRes = await fetch("https://api.x.ai/v1/chat/completions", {
           method: "POST",
@@ -4607,7 +4679,32 @@ IMPORTANT: Reply only with the message text to send. Do not explain what you are
 
         if (grokRes.ok) {
           const grokData = await grokRes.json() as any;
-          const reply: string = grokData.choices?.[0]?.message?.content?.trim() ?? "";
+          let reply: string = grokData.choices?.[0]?.message?.content?.trim() ?? "";
+
+          // ── Layer 5b: post-check the proposed reply for leak markers.
+          if (reply) {
+            const checked = postCheckReply(reply, guard.riskLevel, guard.categories);
+            if (checked.suppressed) {
+              console.warn(
+                `[saffi-guard] reply suppressed phone=${from} risk=${guard.riskLevel} reason=${checked.reason}`,
+              );
+              void recordActivityEvent({
+                userId,
+                source: "whatsapp",
+                platform: "twilio",
+                feature: "knowledge_guard",
+                eventType: "guard_reply_suppressed",
+                entityType: "whatsapp_message",
+                entityId: inboundMessage?.id ?? waMessageId,
+                clientId: clientMatch?.id || null,
+                title: `Saffi reply rewritten by knowledge guard`,
+                summary: `reason=${checked.reason}`,
+                payload: { categories: guard.categories, risk: guard.riskLevel, reason: checked.reason },
+                createdBy: "safi",
+              });
+            }
+            reply = checked.reply;
+          }
 
           if (reply) {
             // Send reply via Twilio
