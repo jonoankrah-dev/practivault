@@ -111,15 +111,20 @@ const ENDOPULSE_KNOWLEDGE = `
 Website: https://www.endopulse.co.uk
 Instagram: @endopulse
 
-OWNERSHIP & TRADEMARK:
-- endoPulse™ is a registered UK trademark owned by Alicia Ankrah
-- UK IPO application number: UK00004192333
-- Filed: 21/22 April 2025 | Registered: 22 August 2025 | Renewal: 22 April 2035
-- Owner: Alicia Ankrah, Wallasey, Merseyside, United Kingdom
-- Trademark type: Word mark
-- Class 10: Laser instruments for medical and cosmetic use, aesthetic devices, skin treatment devices
-- Class 44: Cosmetic laser treatment of skin, laser skin rejuvenation, laser skin tightening services
+OWNERSHIP & TRADEMARK (verified against the official UK IPO record — approved public knowledge, safe to share with customers):
+- Trade mark number: UK00004192333
+- Word mark: endopulse
+- Status: Registered
+- Owner: Alicia Ankrah
+- Classes: Class 10 and Class 44
+- Filing date: 22 April 2025
+- Date of entry in register: 22 August 2025
+- Renewal date: 22 April 2035
+- Official UK IPO record link (share this when customers ask): https://trademarks.ipo.gov.uk/ipo-tmcase/page/Results/1/UK00004192333
+- Class 10 (devices): Laser instruments for medical and cosmetic use, aesthetic devices, skin treatment devices
+- Class 44 (services): Cosmetic laser treatment of skin, laser skin rejuvenation, laser skin tightening services
 - There is also a related company: ENDOPULSE UK LIMITED (incorporated October 2025)
+- Customer-facing wording: you may say "Alicia Ankrah owns the registered endoPulse trademark in Classes 10 and 44 — the official UK IPO record is here: https://trademarks.ipo.gov.uk/ipo-tmcase/page/Results/1/UK00004192333". Do NOT share Alicia's personal address from the IPO record in chat — link to the IPO record instead. Do not give legal advice; only state the registered facts.
 
 TRADEMARK LEGAL POSITION:
 - Alicia Ankrah holds the ONLY registered trademark for "endoPulse" covering laser devices (Class 10) AND skin treatment services (Class 44)

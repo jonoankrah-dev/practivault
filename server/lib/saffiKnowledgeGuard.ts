@@ -128,6 +128,27 @@ const RESTRICTED_ON_FIRST_HIT: GuardCategory[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Approved public-information patterns. Messages that match these are forced
+// to riskLevel='normal' and have any incidentally-matched restricted
+// categories cleared. This is for facts Saffi is explicitly allowed to share
+// with customers, e.g. the official UK IPO trademark record for endoPulse.
+// ─────────────────────────────────────────────────────────────────────────────
+const APPROVED_PUBLIC_PATTERNS: RegExp[] = [
+  // Trademark / IPO questions about endoPulse
+  /\b(trade ?mark|trademarked|tm)\b/i,
+  /\bUK00004192333\b/i,
+  /\bipo[\s-]?(record|number|link|registered|registration)\b/i,
+  /\bclass(es)?\s*1?0|class(es)?\s*44\b/i,
+  /\b(who|what)\b.{0,30}\b(owns|owner|registered)\b.{0,30}\b(endopulse|endo pulse|endopulse™|trade ?mark)\b/i,
+  /\bis\b.{0,15}\bendopulse\b.{0,15}\b(trade ?marked|registered)\b/i,
+];
+
+function isApprovedPublic(text: string): boolean {
+  const s = String(text ?? "");
+  return APPROVED_PUBLIC_PATTERNS.some((re) => re.test(s));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Pure classifier
 // ─────────────────────────────────────────────────────────────────────────────
 function matchCategoriesForText(text: string): GuardCategory[] {
@@ -147,6 +168,23 @@ export function classifyInbound(
   text: string,
   history: MiniMessage[] = [],
 ): GuardClassification {
+  // Approved public-info short-circuit: trademark / UK IPO record questions
+  // about endoPulse are explicitly allowed and must never be treated as
+  // restricted probing. We still report category hits in `triggeredOnInbound`
+  // for telemetry, but force riskLevel to 'normal' and clear `categories`.
+  if (isApprovedPublic(text)) {
+    const incidental = matchCategoriesForText(String(text ?? ""));
+    return {
+      riskLevel: "normal",
+      categories: [],
+      probingScore: 0,
+      triggeredOnInbound: incidental,
+      notes: incidental.length
+        ? [`approved_public_override (incidental cats cleared: ${incidental.join(",")})`]
+        : ["approved_public_override"],
+    };
+  }
+
   const inboundCats = matchCategoriesForText(String(text ?? ""));
 
   // Count probes in the last 30 minutes from inbound history.
