@@ -1,3 +1,4 @@
+import { registerPublicConfigRoute } from "./routes/publicConfig";
 import type { Express, Request, Response, NextFunction } from "express";
 import { Resend } from "resend";
 import twilio from "twilio";
@@ -179,6 +180,7 @@ function computeAiScore(lead: {
 }
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+    registerPublicConfigRoute(app);
   // Health
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
