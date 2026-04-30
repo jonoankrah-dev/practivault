@@ -99,6 +99,10 @@ export function SaffiVoiceConversation({ open, onClose }: Props) {
 
   const wsRef = useRef<WebSocket | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
+  // Stream pre-acquired by a launcher click (preserves the user gesture on
+  // browsers like Safari/iOS where a later getUserMedia would be rejected).
+  const pendingStreamRef = useRef<MediaStream | null>(null);
+  const autoStartedRef = useRef<boolean>(false);
   const inputCtxRef = useRef<AudioContext | null>(null);
   const inputProcRef = useRef<ScriptProcessorNode | null>(null);
   const inputSrcRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -134,9 +138,39 @@ export function SaffiVoiceConversation({ open, onClose }: Props) {
       setTranscript("");
       setErrorText(null);
       setExpanded(false);
+      autoStartedRef.current = false;
+      // Drop any pre-acquired stream so a stale gesture doesn't pollute the
+      // next session.
+      try { pendingStreamRef.current?.getTracks().forEach((t) => t.stop()); } catch {}
+      pendingStreamRef.current = null;
     }
     return () => cleanup();
   }, [open, cleanup]);
+
+  // Listen for direct-start launchers. The launcher captures the user gesture
+  // and hands over a MediaStream so we don't have to ask permission again.
+  // It also dispatches saffi:openVoice so Protected can flip `open` true.
+  useEffect(() => {
+    function onStart(ev: Event) {
+      const ce = ev as CustomEvent<{ stream?: MediaStream }>;
+      pendingStreamRef.current = ce.detail?.stream ?? null;
+    }
+    window.addEventListener("saffi:startVoice", onStart as EventListener);
+    return () => window.removeEventListener("saffi:startVoice", onStart as EventListener);
+  }, []);
+
+  // When the pill is opened with a pending stream, auto-start the session.
+  useEffect(() => {
+    if (!open) return;
+    if (autoStartedRef.current) return;
+    if (status !== "idle") return;
+    autoStartedRef.current = true;
+    const stream = pendingStreamRef.current;
+    pendingStreamRef.current = null;
+    void start(stream ?? undefined);
+    // start() depends on getAuthToken / fetch; safe to call once per open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   function fail(msg: string) {
     setErrorText(msg);
@@ -175,25 +209,32 @@ export function SaffiVoiceConversation({ open, onClose }: Props) {
     };
   }
 
-  async function start() {
+  async function start(preAcquired?: MediaStream) {
     if (status !== "idle" && status !== "error") return;
     setErrorText(null);
     setStatus("requesting");
 
-    // 1. mic permission
+    // 1. mic permission. If the caller (the launcher click handler) already
+    // grabbed a stream synchronously inside the user gesture, reuse it — that
+    // matters on Safari/iOS where async getUserMedia after navigation loses
+    // the gesture.
     let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-    } catch (e: any) {
-      fail("Microphone permission was not granted.");
-      return;
+    if (preAcquired) {
+      stream = preAcquired;
+    } else {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+      } catch (e: any) {
+        fail("Microphone permission was not granted.");
+        return;
+      }
     }
     micStreamRef.current = stream;
 
@@ -381,8 +422,10 @@ export function SaffiVoiceConversation({ open, onClose }: Props) {
 
         {/* Compact row */}
         <div className="flex items-center gap-3 px-3 py-2.5">
-          {/* Mic orb (smaller, with subtle rings) */}
-          <div className="relative h-11 w-11 shrink-0">
+          {/* Status orb — visual only. The pink "Talk to Saffi" launcher
+              starts the session; in this pill the mic dot is non-interactive
+              so there is only ever ONE mic control to think about. */}
+          <div className="relative h-11 w-11 shrink-0" aria-hidden="true">
             <div
               className={cn(
                 "absolute inset-0 rounded-full border border-[#E83A8E]/25",
@@ -395,18 +438,14 @@ export function SaffiVoiceConversation({ open, onClose }: Props) {
                 status === "speaking" && "animate-pulse",
               )}
             />
-            <button
-              onClick={isLive ? stop : start}
-              disabled={isLoading}
-              data-testid="button-saffi-voice-toggle"
-              aria-label={isLive ? "Stop voice" : "Start voice"}
+            <div
+              data-testid="saffi-voice-orb"
               className={cn(
-                "absolute inset-1.5 rounded-full flex items-center justify-center transition-all",
+                "absolute inset-1.5 rounded-full flex items-center justify-center",
                 "shadow-[0_4px_14px_rgba(232,58,142,0.35)]",
                 isLive
                   ? "bg-white text-[#E83A8E] ring-2 ring-[#E83A8E]"
-                  : "bg-[#E83A8E] text-white hover:bg-[#c42d77]",
-                isLoading && "opacity-80 cursor-wait",
+                  : "bg-[#E83A8E] text-white",
               )}
             >
               {isLoading ? (
@@ -416,7 +455,7 @@ export function SaffiVoiceConversation({ open, onClose }: Props) {
               ) : (
                 <Mic className="h-4 w-4" />
               )}
-            </button>
+            </div>
           </div>
 
           {/* Status + (when collapsed) latest transcript snippet */}

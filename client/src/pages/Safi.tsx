@@ -13,10 +13,36 @@ import { Textarea } from "@/components/ui/textarea";
 import { Zap, Send, Trash2, Loader2, Bot, User, Mic } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SaffiVoiceButton } from "@/components/SaffiVoiceButton";
-// Voice controller is mounted globally inside Protected (App.tsx) so it stays
-// available while Jono navigates the app. Pages just dispatch saffi:openVoice.
-const openSaffiVoice = () => {
-  if (typeof window !== "undefined") {
+// Voice controller is mounted globally inside Protected (App.tsx). The pink
+// "Talk to Saffi" button is the single mic control: it grabs the microphone
+// stream INSIDE the click handler (preserves the user gesture so Safari/iOS
+// don't reject it), then dispatches `saffi:startVoice` with that stream so
+// the floating controller opens and starts the session immediately. If the
+// browser denies mic permission, we still dispatch `saffi:openVoice` so the
+// pill can show the error state.
+const openSaffiVoice = async () => {
+  if (typeof window === "undefined") return;
+  // Some older browsers don't expose mediaDevices over http — graceful path:
+  // open the pill anyway so it can show the unavailable state.
+  if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
+    window.dispatchEvent(new Event("saffi:openVoice"));
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+    window.dispatchEvent(
+      new CustomEvent("saffi:startVoice", { detail: { stream } }),
+    );
+    window.dispatchEvent(new Event("saffi:openVoice"));
+  } catch {
+    // Permission denied / no mic — pill will surface the error.
     window.dispatchEvent(new Event("saffi:openVoice"));
   }
 };
