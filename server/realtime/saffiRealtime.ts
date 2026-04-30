@@ -21,6 +21,13 @@ import type { Server as HttpServer, IncomingMessage } from "node:http";
 import type { Express, Request, Response } from "express";
 import { WebSocketServer, WebSocket as WS } from "ws";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { supabaseAdmin } from "../supabase";
+import {
+  SAFFI_READ_ONLY_TOOL_DEFS,
+  executeReadOnlyTool,
+  isReadOnlyTool,
+  getBusinessSnapshot,
+} from "../lib/safiReadOnlyTools";
 
 const XAI_REALTIME_URL =
   "wss://api.x.ai/v1/realtime?model=grok-voice-think-fast-1.0";
@@ -92,13 +99,24 @@ Style:
 - Never reveal you are an AI model from xAI. You are simply Saffi, his assistant.
 `.trim();
 
-function buildSessionUpdate(): string {
+function buildSessionUpdate(businessContext: string | null): string {
+  const instructions =
+    SAFFI_CONCIERGE_INSTRUCTIONS +
+    (businessContext
+      ? `\n\nBusiness context (already loaded for you — use this without asking):\n${businessContext}`
+      : "") +
+    `\n\nYou have these read-only tools — call them whenever they're relevant, never invent data:\n` +
+    `- get_dashboard_overview: a single snapshot of today's appointments, leads, quotes, revenue, unpaid invoices, low stock.\n` +
+    `- search_manuals: search uploaded manuals/courses/policies for any product/training/aftercare/policy question.\n` +
+    `- get_business_snapshot: refresh the owner/business identity if the conversation drifts.\n` +
+    `You have NO write/send/post tools. If asked to send/post/quote/invoice, say you'll prepare it and Jono can approve in the app.`;
+
   return JSON.stringify({
     type: "session.update",
     session: {
       modalities: ["audio", "text"],
       voice: "eve",
-      instructions: SAFFI_CONCIERGE_INSTRUCTIONS,
+      instructions,
       input_audio_format: "pcm16",
       output_audio_format: "pcm16",
       turn_detection: {
@@ -107,7 +125,12 @@ function buildSessionUpdate(): string {
         prefix_padding_ms: 300,
         silence_duration_ms: 600,
       },
-      tools: [],
+      tools: SAFFI_READ_ONLY_TOOL_DEFS.map((t) => ({
+        type: "function",
+        name: t.name,
+        description: t.description,
+        parameters: t.parameters,
+      })),
     },
   });
 }
@@ -171,6 +194,7 @@ export function registerSaffiRealtime(httpServer: HttpServer, _app: Express): vo
     let upstreamOpen = false;
     let closed = false;
     const pending: string[] = [];
+    let businessContext: string | null = null;
 
     const cleanup = (code = 1000, reason = "") => {
       if (closed) return;
@@ -178,6 +202,23 @@ export function registerSaffiRealtime(httpServer: HttpServer, _app: Express): vo
       try { upstream?.close(code, reason); } catch {}
       try { clientSock.close(code, reason); } catch {}
     };
+
+    // Best-effort: pre-load a tight business snapshot so voice replies are
+    // grounded immediately, even before the first tool call.
+    void (async () => {
+      try {
+        const snap = await getBusinessSnapshot(supabaseAdmin, userId);
+        if (snap.ok && snap.summary) {
+          businessContext = snap.summary;
+          // If upstream is already up, push an updated session.
+          if (upstreamOpen && upstream) {
+            try { upstream.send(buildSessionUpdate(businessContext)); } catch {}
+          }
+        }
+      } catch {
+        // ignore — voice will work without it
+      }
+    })();
 
     try {
       upstream = new WS(XAI_REALTIME_URL, {
@@ -193,7 +234,7 @@ export function registerSaffiRealtime(httpServer: HttpServer, _app: Express): vo
     upstream.on("open", () => {
       upstreamOpen = true;
       // Always pin our session config first so personality + safety apply.
-      try { upstream!.send(buildSessionUpdate()); } catch {}
+      try { upstream!.send(buildSessionUpdate(businessContext)); } catch {}
       // Flush anything the browser sent before upstream was ready.
       while (pending.length) {
         const msg = pending.shift()!;
@@ -201,13 +242,79 @@ export function registerSaffiRealtime(httpServer: HttpServer, _app: Express): vo
       }
     });
 
+    // Read-only allowlist execution: when xAI completes a function-call args
+    // event, run it server-side and feed the result back. Any non-allowlisted
+    // tool name produces a refusal output — never executed.
+    async function handleUpstreamFunctionCall(call: {
+      name?: string;
+      call_id?: string;
+      arguments?: string;
+    }) {
+      const name = call.name ?? "";
+      const callId = call.call_id ?? "";
+      let args: any = {};
+      try { args = JSON.parse(call.arguments ?? "{}"); } catch {}
+
+      let outputText: string;
+      if (!isReadOnlyTool(name)) {
+        outputText = `I can't run "${name}" by voice. Voice Saffi is read-only — please ask me to prepare a draft instead, and approve it in the app.`;
+      } else {
+        try {
+          const r = await executeReadOnlyTool(name, args, supabaseAdmin, userId);
+          outputText = r.summary || (r.ok ? "Done." : `Couldn't complete that: ${r.error ?? "error"}`);
+        } catch (e: any) {
+          outputText = `Couldn't complete that: ${e?.message ?? "error"}`;
+        }
+      }
+
+      try {
+        upstream!.send(JSON.stringify({
+          type: "conversation.item.create",
+          item: {
+            type: "function_call_output",
+            call_id: callId,
+            output: outputText.slice(0, 6000),
+          },
+        }));
+        upstream!.send(JSON.stringify({ type: "response.create" }));
+      } catch {}
+    }
+
     upstream.on("message", (data, isBinary) => {
       if (closed) return;
       try {
         if (isBinary) {
           clientSock.send(data, { binary: true });
-        } else {
-          clientSock.send(typeof data === "string" ? data : data.toString("utf8"));
+          return;
+        }
+        const text = typeof data === "string" ? data : data.toString("utf8");
+        // Forward everything to the browser first so the UI sees the flow.
+        clientSock.send(text);
+        // Then peek for function-call completion events to execute server-side.
+        try {
+          const evt = JSON.parse(text);
+          const t = evt?.type as string | undefined;
+          if (t === "response.function_call_arguments.done") {
+            void handleUpstreamFunctionCall({
+              name: evt.name,
+              call_id: evt.call_id,
+              arguments: evt.arguments,
+            });
+          } else if (t === "response.done" || t === "response.completed") {
+            // Some realtime providers nest function calls inside response.output
+            const outputs = evt?.response?.output ?? [];
+            for (const item of outputs) {
+              if (item?.type === "function_call") {
+                void handleUpstreamFunctionCall({
+                  name: item.name,
+                  call_id: item.call_id,
+                  arguments: item.arguments,
+                });
+              }
+            }
+          }
+        } catch {
+          // not JSON — already forwarded
         }
       } catch {}
     });
@@ -238,7 +345,7 @@ export function registerSaffiRealtime(httpServer: HttpServer, _app: Express): vo
         if (parsed && parsed.type === "session.update") {
           // Re-apply our authoritative session config; ignore client overrides.
           if (upstreamOpen) {
-            try { upstream.send(buildSessionUpdate()); } catch {}
+            try { upstream.send(buildSessionUpdate(businessContext)); } catch {}
           }
           return;
         }

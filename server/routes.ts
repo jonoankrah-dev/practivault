@@ -2,6 +2,10 @@ import { registerPublicConfigRoute } from "./routes/publicConfig";
 import { recordActivityEvent, queueAgentAction } from "./lib/safiMemory";
 import { registerSafiMemoryRoutes } from "./routes/safiMemory";
 import { registerSaffiRealtime, saffiRealtimeTokenHandler } from "./realtime/saffiRealtime";
+import {
+  SAFFI_READ_ONLY_TOOL_DEFS,
+  executeReadOnlyTool,
+} from "./lib/safiReadOnlyTools";
 import type { Express, Request, Response, NextFunction } from "express";
 import { Resend } from "resend";
 import twilio from "twilio";
@@ -2059,6 +2063,75 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
     }
   });
 
+  // POST /api/manuals/:id/extract — re-run text extraction for a single
+  // manual the caller owns. Used to backfill manuals uploaded before extraction
+  // worked, or to retry after a transient failure. Read-only side effects
+  // beyond updating extracted_text on the row.
+  app.post("/api/manuals/:id/extract", requireAuth, async (req: AuthedRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user!.id;
+
+      const { data: manual, error: readErr } = await req.db!
+        .from("manuals")
+        .select("id, user_id, file_name, file_url")
+        .eq("id", id)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (readErr) return res.status(500).json({ message: readErr.message });
+      if (!manual) return res.status(404).json({ message: "not_found" });
+      if (!manual.file_url) return res.status(400).json({ message: "no_file_url" });
+
+      const fileName = (manual.file_name as string) || "";
+      let buffer: Buffer;
+      try {
+        const r = await fetch(manual.file_url as string, { signal: AbortSignal.timeout(15_000) });
+        if (!r.ok) return res.status(502).json({ message: `fetch_failed:${r.status}` });
+        buffer = Buffer.from(await r.arrayBuffer());
+      } catch (e: any) {
+        return res.status(502).json({ message: `fetch_failed:${e?.message ?? "unknown"}` });
+      }
+
+      let extractedText: string | null = null;
+      try {
+        const lower = fileName.toLowerCase();
+        const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
+          Promise.race([p, new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms))]);
+        if (lower.endsWith(".pdf")) {
+          const parsed = await withTimeout(pdfParse(buffer), 12_000);
+          extractedText = (parsed as any).text?.trim() || null;
+        } else if (lower.endsWith(".docx")) {
+          const result = await withTimeout(mammoth.extractRawText({ buffer }), 12_000);
+          extractedText = (result as any).value?.trim() || null;
+        } else if (lower.endsWith(".txt")) {
+          extractedText = buffer.toString("utf-8").trim();
+        } else {
+          return res.status(400).json({ message: "unsupported_file_type" });
+        }
+        if (extractedText && extractedText.length > 60000) {
+          extractedText = extractedText.slice(0, 60000) + "\n[...truncated]";
+        }
+      } catch (e: any) {
+        return res.status(500).json({ message: `extract_failed:${e?.message ?? "unknown"}` });
+      }
+
+      if (!extractedText) {
+        return res.status(200).json({ ok: true, indexed: false, message: "No extractable text in this file." });
+      }
+
+      const { error: updErr } = await req.db!
+        .from("manuals")
+        .update({ extracted_text: extractedText })
+        .eq("id", id)
+        .eq("user_id", userId);
+      if (updErr) return res.status(500).json({ message: updErr.message });
+
+      return res.json({ ok: true, indexed: true, length: extractedText.length });
+    } catch (e: any) {
+      return res.status(500).json({ message: e?.message ?? "unknown" });
+    }
+  });
+
   // Delete manual
   app.delete("/api/manuals/:id", requireAuth, async (req: AuthedRequest, res: Response) => {
     const { id } = req.params;
@@ -3945,15 +4018,17 @@ Rules:
     const db = req.db!;
     const userId = req.user!.id;
 
-    // Build system prompt from business info + manuals + live website
-    const [userRes, bizRes, manualsRes] = await Promise.all([
+    // Build system prompt from business identity + light manual hint.
+    // We deliberately DO NOT stuff full manual text here any more — Saffi
+    // calls `search_manuals` on demand, which is faster and more relevant.
+    const [userRes, bizRes, manualsCountRes] = await Promise.all([
       db.from("users").select("name, business_name, industry").eq("id", userId).single(),
       db.from("business_info").select("*").eq("user_id", userId).single(),
-      db.from("manuals").select("name, extracted_text").eq("user_id", userId).not("extracted_text", "is", null).order("created_at", { ascending: true }),
+      db.from("manuals").select("id", { count: "exact", head: true }).eq("user_id", userId),
     ]);
     const userData = userRes.data;
     const bizInfo = bizRes.data;
-    const manuals = manualsRes.data ?? [];
+    const manualsCount = manualsCountRes.count ?? 0;
 
     let bizContext = "";
     if (bizInfo) {
@@ -3962,22 +4037,13 @@ Rules:
       if (bizInfo.website_url) bizContext += `\nWebsite: ${bizInfo.website_url}`;
       if (bizInfo.products?.length) bizContext += `\n\nProducts:\n${(bizInfo.products as any[]).map((p:any)=>`- ${p.name}${p.price?` — ${p.price}`:""}${p.description?`: ${p.description}`:""}`).join("\n")}`;
     }
-    let manualContext = "";
-    if (manuals.length) {
-      let total = 0;
-      const parts: string[] = [];
-      for (const m of manuals) {
-        if (total >= 6000) break;
-        const chunk = ((m.extracted_text as string) || "").slice(0, 6000 - total);
-        parts.push(`=== ${m.name} ===\n${chunk}`);
-        total += chunk.length;
-      }
-      manualContext = `\n\nManuals:\n${parts.join("\n\n")}`;
-    }
+    const manualHint = manualsCount > 0
+      ? `\n\nManuals available: ${manualsCount}. For ANY product/training/policy/aftercare question, call the search_manuals tool — do not guess.`
+      : "";
     // Live website + hardcoded knowledge
     const websiteContext = `\n\n${ENDOPULSE_KNOWLEDGE}`;
 
-    const systemPrompt = `You are Safi, the fully agentic AI assistant for ${userData?.business_name ?? "this business"}.${bizContext}${manualContext}${websiteContext}
+    const systemPrompt = `You are Saffi, the fully agentic AI assistant for ${userData?.business_name ?? "this business"}.${bizContext}${manualHint}${websiteContext}
 
 You are a fully autonomous business AI and you're also warm, friendly, and genuinely helpful — like a trusted colleague who knows the business inside out. Keep your tone conversational and natural. Use first names when you know them. Be encouraging but efficient — no waffle, just good energy and clear communication.
 
@@ -3996,6 +4062,11 @@ If the user says no/cancel: discard warmly and ask what they'd like to do instea
 
 Read-only actions (fetching data, showing lists, generating reports) do NOT need approval — do those immediately.
 
+Tool use rules (for speed and accuracy):
+- For any "what's happening?", "today's overview", "how's the business looking?" question, call **get_dashboard_overview** ONCE — do not fan out to four separate tools.
+- For any product, course, treatment, aftercare, consent, or policy question, call **search_manuals** with a short query — do not guess from memory.
+- If a manual returns "text not indexed yet", tell the user to open Manuals and tap Re-extract on that file.
+
 Reply in clear, concise markdown. Use bullet points or short lists where helpful.
 When you retrieve data, summarise it clearly and add a brief observation where useful (e.g. "3 invoices overdue — worth chasing those this week").
 
@@ -4008,8 +4079,12 @@ Key business facts:
 - Payment plans via Clearpay and Klarna
 - Website: ${bizInfo?.website_url ?? "www.endopulse.co.uk"}${sectionContext ? `\n\n--- CURRENT SECTION CONTEXT ---\n${sectionContext}` : ""}`;
 
-    // Convert OpenAI-style tools for xAI
-    const xaiTools = SAFI_TOOLS.map(t => ({
+    // Convert OpenAI-style tools for xAI, plus the new shared read-only tools.
+    const allToolDefs = [
+      ...SAFI_TOOLS,
+      ...SAFFI_READ_ONLY_TOOL_DEFS,
+    ];
+    const xaiTools = allToolDefs.map(t => ({
       type: "function" as const,
       function: {
         name: t.name,
@@ -4027,11 +4102,18 @@ Key business facts:
     // Agentic loop — keep calling until no more tool calls
     const MAX_STEPS = 5;
     for (let step = 0; step < MAX_STEPS; step++) {
-      const grokRes = await fetch("https://api.x.ai/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${process.env.XAI_API_KEY}` },
-        body: JSON.stringify({ model: "grok-3-mini", messages, tools: xaiTools, tool_choice: "auto", max_tokens: 1000 }),
-      });
+      let grokRes: Response;
+      try {
+        grokRes = await fetch("https://api.x.ai/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${process.env.XAI_API_KEY}` },
+          body: JSON.stringify({ model: "grok-3-mini", messages, tools: xaiTools, tool_choice: "auto", max_tokens: 1000 }),
+          signal: AbortSignal.timeout(20_000),
+        });
+      } catch (e: any) {
+        const isTimeout = e?.name === "TimeoutError" || /timeout/i.test(e?.message ?? "");
+        return res.status(504).json({ message: isTimeout ? "AI timed out — try again." : `AI error: ${e?.message ?? "unknown"}` });
+      }
 
       if (!grokRes.ok) {
         const err = await grokRes.text();
@@ -4065,7 +4147,18 @@ Key business facts:
           let args: any = {};
           try { args = JSON.parse(tc.function?.arguments ?? tc.arguments ?? "{}"); } catch {}
 
-          // Attach userId to db proxy for tool executor
+          // Read-only shared tools (also used by voice) — execute via the
+          // shared module so behaviour is identical across surfaces.
+          if (
+            toolName === "get_dashboard_overview" ||
+            toolName === "search_manuals" ||
+            toolName === "get_business_snapshot"
+          ) {
+            const r = await executeReadOnlyTool(toolName, args, db, userId);
+            return { tool_call_id: tc.id, role: "tool" as const, content: r.summary };
+          }
+
+          // Existing CRUD/agentic tools
           const dbWithUser = Object.assign(Object.create(Object.getPrototypeOf(db)), db, { _userId: userId });
           const result = await executeSafiTool(toolName, args, dbWithUser);
           return { tool_call_id: tc.id, role: "tool" as const, content: result };
@@ -4075,18 +4168,9 @@ Key business facts:
       messages.push(...toolResults);
     }
 
-    // Ask the model for a proper confirmation after tool execution
-    try {
-      messages.push({ role: "user", content: "Please give me a short friendly confirmation of what you just did." });
-      const confirmRes = await fetch("https://api.x.ai/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.XAI_API_KEY}` },
-        body: JSON.stringify({ model: "grok-3-mini", messages, max_tokens: 200 }),
-      });
-      const confirmData = await confirmRes.json() as any;
-      const confirmReply = confirmData.choices?.[0]?.message?.content?.trim() ?? "";
-      if (confirmReply) return res.json({ reply: confirmReply, messages });
-    } catch { /* fall through */ }
+    // No trailing extra xAI confirmation call. The agentic loop above already
+    // produces a real final reply when no more tool calls are needed; cutting
+    // this avoids 1-2s of pointless latency.
     return res.json({ reply: "Done — all sorted.", messages });
   });
 
