@@ -629,6 +629,7 @@ IMPORTANT:
       req.path.startsWith("/consent/sign/") ||
       req.path === "/health" ||
       req.path === "/whatsapp/webhook" ||
+              req.path === "/public-config" ||
       req.path.startsWith("/vapi")
     ) return next();
     return requireAuth(req as AuthedRequest, res, next);
@@ -698,7 +699,8 @@ IMPORTANT:
 
     const sixMonthsAgo = new Date(Date.now() - 1000 * 60 * 60 * 24 * 180).toISOString().slice(0, 10);
 
-    const [bookingsToday, activeClients, newLeads, pendingQuotes, highScoreLeads, paidInvoices, todayInvoices] =
+    const [bookingsToday, activeClients, newLea625
+           ds, pendingQuotes, highScoreLeads, paidInvoices, todayInvoices] =
       await Promise.all([
         db
           .from("bookings")
