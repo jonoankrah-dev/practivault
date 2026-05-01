@@ -29,6 +29,14 @@ import {
   getBusinessSnapshot,
 } from "../lib/safiReadOnlyTools";
 
+// Vapi legacy code removed. Now using xAI Grok realtime only.
+//
+// Model decision (verified against xAI docs on 2026-05-01,
+// https://docs.x.ai/developers/model-capabilities/audio/voice-agent):
+//   - `grok-voice-think-fast-1.0` is the current documented realtime
+//     voice-agent model and is what we use here.
+//   - `grok-voice-fast-1.0` is legacy/deprecated.
+//   - There is no `grok-2` realtime voice model; do not switch to it.
 const XAI_REALTIME_URL =
   "wss://api.x.ai/v1/realtime?model=grok-voice-think-fast-1.0";
 const TOKEN_TTL_SECONDS = 60;
