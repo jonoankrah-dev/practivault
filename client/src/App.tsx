@@ -142,6 +142,8 @@ function AppRouter() {
           <Clients />
         </Protected>
       </Route>
+      {/* /ai-front-desk and /phone-receptionist will be unified under /safi
+          in a future step. Until then they keep their dedicated pages. */}
       <Route path="/ai-front-desk">
         <Protected>
           <AiFrontDesk />
@@ -235,12 +237,6 @@ function AppRouter() {
         <Protected><SafiMemory /></Protected>
       </Route>
       <Route path="/saphie">
-        <Protected><Safi /></Protected>
-      </Route>
-      <Route path="/ai-front-desk">
-        <Protected><Safi /></Protected>
-      </Route>
-      <Route path="/phone-receptionist">
         <Protected><Safi /></Protected>
       </Route>
       <Route component={NotFound} />
