@@ -34,7 +34,13 @@ type Status =
 
 const INPUT_SAMPLE_RATE = 16000; // Hz, sent to xAI
 const OUTPUT_SAMPLE_RATE = 24000; // Hz, returned by xAI
-const FRAME_SAMPLES = 1024; // ~64 ms at 16 kHz
+
+// Mic capture is driven by an AudioWorklet (`/mic-processor.js`,
+// `class MicProcessor`). It posts ~100 ms float32 chunks to the main thread,
+// which then downsamples to 16 kHz, encodes PCM16 LE, base64s, and ships
+// each chunk as `input_audio_buffer.append` over the realtime WebSocket.
+// Using AudioWorklet for better browser compatibility and performance
+// (replaced deprecated ScriptProcessorNode).
 
 function floatTo16BitPCM(input: Float32Array): Int16Array {
   const out = new Int16Array(input.length);
@@ -104,7 +110,8 @@ export function SaffiVoiceConversation({ open, onClose }: Props) {
   const pendingStreamRef = useRef<MediaStream | null>(null);
   const autoStartedRef = useRef<boolean>(false);
   const inputCtxRef = useRef<AudioContext | null>(null);
-  const inputProcRef = useRef<ScriptProcessorNode | null>(null);
+  // AudioWorkletNode replaces the old ScriptProcessorNode-based capture.
+  const inputWorkletRef = useRef<AudioWorkletNode | null>(null);
   const inputSrcRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
   const outputCtxRef = useRef<AudioContext | null>(null);
@@ -115,10 +122,16 @@ export function SaffiVoiceConversation({ open, onClose }: Props) {
     try { wsRef.current?.close(1000, "client_close"); } catch {}
     wsRef.current = null;
     try {
-      inputProcRef.current?.disconnect();
+      // Detach the worklet first; disconnect inputs.
+      const w = inputWorkletRef.current;
+      if (w) {
+        try { w.port.onmessage = null; } catch {}
+        try { (w.port as MessagePort).close?.(); } catch {}
+        try { w.disconnect(); } catch {}
+      }
       inputSrcRef.current?.disconnect();
     } catch {}
-    inputProcRef.current = null;
+    inputWorkletRef.current = null;
     inputSrcRef.current = null;
     try { inputCtxRef.current?.close(); } catch {}
     inputCtxRef.current = null;
@@ -282,31 +295,49 @@ export function SaffiVoiceConversation({ open, onClose }: Props) {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      setStatus("listening");
       // Start mic capture once the socket is open.
-      try {
-        const ctx = new AudioContext();
-        inputCtxRef.current = ctx;
-        const src = ctx.createMediaStreamSource(stream);
-        inputSrcRef.current = src;
-        const proc = ctx.createScriptProcessor(FRAME_SAMPLES, 1, 1);
-        inputProcRef.current = proc;
-        proc.onaudioprocess = (ev) => {
-          if (ws.readyState !== WebSocket.OPEN) return;
-          const ch = ev.inputBuffer.getChannelData(0);
-          const ds = downsampleTo16k(ch, ctx.sampleRate);
-          const i16 = floatTo16BitPCM(ds);
-          const b64 = int16ToBase64(i16);
-          ws.send(JSON.stringify({
-            type: "input_audio_buffer.append",
-            audio: b64,
-          }));
-        };
-        src.connect(proc);
-        proc.connect(ctx.destination); // ScriptProcessor needs a sink to fire
-      } catch (e: any) {
-        fail("Could not start microphone capture.");
-      }
+      // Using AudioWorklet for better browser compatibility and performance
+      // (replaced deprecated ScriptProcessorNode).
+      void (async () => {
+        try {
+          const ctx = new AudioContext();
+          inputCtxRef.current = ctx;
+
+          // Load the worklet module from /public. Vite serves anything in
+          // client/public/ at the site root, so /mic-processor.js resolves
+          // to the same file in dev and in the production build.
+          await ctx.audioWorklet.addModule("/mic-processor.js");
+
+          const src = ctx.createMediaStreamSource(stream);
+          inputSrcRef.current = src;
+
+          const node = new AudioWorkletNode(ctx, "mic-processor");
+          inputWorkletRef.current = node;
+
+          node.port.onmessage = (ev: MessageEvent) => {
+            if (ws.readyState !== WebSocket.OPEN) return;
+            const audio = (ev.data as { audio?: Float32Array })?.audio;
+            if (!audio || audio.length === 0) return;
+            const ds = downsampleTo16k(audio, ctx.sampleRate);
+            const i16 = floatTo16BitPCM(ds);
+            const b64 = int16ToBase64(i16);
+            ws.send(JSON.stringify({
+              type: "input_audio_buffer.append",
+              audio: b64,
+            }));
+          };
+
+          // Wire: mic source → worklet. The worklet does NOT need to be
+          // connected to ctx.destination because process() runs on the
+          // audio thread regardless.
+          src.connect(node);
+
+          setStatus("listening");
+        } catch (e: any) {
+          console.warn("[saffi-voice] worklet capture failed:", e?.message);
+          fail("Could not start microphone capture.");
+        }
+      })();
     };
 
     ws.onmessage = (ev) => {
