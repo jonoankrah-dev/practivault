@@ -63,119 +63,21 @@ async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction
   }
 }
 
-// ── Live website context cache ───────────────────────────────────────────────
-const ENDOPULSE_URLS = [
-  "https://www.endopulse.co.uk",
-  "https://www.endopulse.co.uk",
-];
-const websiteCache: { content: string; fetchedAt: number } = { content: "", fetchedAt: 0 };
-const WEBSITE_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-
-async function fetchEndopulseContext(): Promise<string> {
-  if (websiteCache.content && Date.now() - websiteCache.fetchedAt < WEBSITE_CACHE_TTL_MS) {
-    return websiteCache.content;
-  }
-  try {
-    const results = await Promise.allSettled(
-      ENDOPULSE_URLS.map(url =>
-        fetch(url, { signal: AbortSignal.timeout(8000), headers: { "User-Agent": "Mozilla/5.0" } })
-          .then(r => r.text())
-      )
-    );
-    const texts: string[] = [];
-    for (const r of results) {
-      if (r.status === "fulfilled") {
-        // Strip HTML tags, collapse whitespace
-        const clean = r.value
-          .replace(/<script[\s\S]*?<\/script>/gi, "")
-          .replace(/<style[\s\S]*?<\/style>/gi, "")
-          .replace(/<[^>]+>/g, " ")
-          .replace(/\s+/g, " ")
-          .trim()
-          .slice(0, 4000);
-        if (clean.length > 200) texts.push(clean);
-      }
-    }
-    const combined = texts.join("\n\n---\n\n").slice(0, 6000);
-    websiteCache.content = combined;
-    websiteCache.fetchedAt = Date.now();
-    return combined;
-  } catch {
-    return websiteCache.content || "";
-  }
-}
-
-// Hardcoded endoPulse knowledge (always available as baseline)
-const ENDOPULSE_KNOWLEDGE = `
-=== endoPulse™ — Official Business Knowledge ===
-Website: https://www.endopulse.co.uk
-Instagram: @endopulse
-
-OWNERSHIP & TRADEMARK (verified against the official UK IPO record — approved public knowledge, safe to share with customers):
-- Trade mark number: UK00004192333
-- Word mark: endopulse
-- Status: Registered
-- Owner: Alicia Ankrah
-- Classes: Class 10 and Class 44
-- Filing date: 22 April 2025
-- Date of entry in register: 22 August 2025
-- Renewal date: 22 April 2035
-- Official UK IPO record link (share this when customers ask): https://trademarks.ipo.gov.uk/ipo-tmcase/page/Results/1/UK00004192333
-- Class 10 (devices): Laser instruments for medical and cosmetic use, aesthetic devices, skin treatment devices
-- Class 44 (services): Cosmetic laser treatment of skin, laser skin rejuvenation, laser skin tightening services
-- There is also a related company: ENDOPULSE UK LIMITED (incorporated October 2025)
-- Customer-facing wording: you may say "Alicia Ankrah owns the registered endoPulse trademark in Classes 10 and 44 — the official UK IPO record is here: https://trademarks.ipo.gov.uk/ipo-tmcase/page/Results/1/UK00004192333". Do NOT share Alicia's personal address from the IPO record in chat — link to the IPO record instead. Do not give legal advice; only state the registered facts.
-
-TRADEMARK LEGAL POSITION:
-- Alicia Ankrah holds the ONLY registered trademark for "endoPulse" covering laser devices (Class 10) AND skin treatment services (Class 44)
-- A competing Class 44 application (UK00004192392) filed by Total Aesthetics & Academy Limited on the same day (22 April 2025) was WITHDRAWN / DEAD
-- Total Aesthetics & Academy Limited holds one live Endopulse trademark: UK00004214771 (Class 41 — education and training only, registered June 2025) — this covers their CPD training course only, NOT laser devices or treatment services
-- ENDOPULSE UK LIMITED (incorporated Oct 2025) has Kyle Frost Morgan and Maxine McCarthy as directors but is NOT the trademark owner
-- Any use of the “Endopulse” name to sell laser machines or market skin treatment services by any party other than Alicia Ankrah potentially infringes her registered Classes 10 and 44 trademark
-
-MACHINES:
-- endoPulse™ Machine 980nm — £2,699
-- endoPulse™ Machine 980nm + 1470nm (dual wavelength) — £2,999
-- Optic Fiber accessory — £387
-
-TECHNOLOGY:
-- 980nm wavelength: targets fat cells and vascular lesions
-- 1470nm wavelength: targets water in tissue for skin tightening and collagen stimulation
-- Dual wavelength model delivers both fat reduction AND skin tightening in one device
-- Stimulates collagen and elastin production, activates fibroblasts
-- Results visible immediately, continue to improve over weeks as collagen rebuilds
-
-TREATMENTS:
-- Body contouring and fat reduction
-- Skin tightening and lifting
-- Face, neck, jawline, under eyes, jowls, tummy, arms, thighs, back
-- Non-surgical, minimally invasive, minimal discomfort and downtime
-
-TRAINING:
-- Online course: £400 (CPD accredited, on sale)
-- In-person training: £1,500 (on sale)
-- No UK licence required to perform treatments
-
-PRICING FOR PRACTITIONERS:
-- Single wavelength machine (980nm): £2,699
-- Dual wavelength machine (980nm + 1470nm): £2,999
-- Online training: £400
-- In-person training: £1,500
-
-PAYMENT OPTIONS:
-- Klarna: buy now, pay later / spread the cost (available at checkout)
-- Clearpay: pay in 4 instalments interest-free
-- Both available on machines and training courses
-
-SOCIAL MEDIA:
-- Instagram: @endopulse (owned by Alicia Ankrah — the original endoPulse™)
-- Facebook: Endopulse (official page)
-- @endopulseofficial is NOT our account — that handle was taken by a competitor after @endopulse was already claimed by Alicia
-- Content: treatment results, practitioner success, income claims, training promos
-- Tone: warm, punchy, aspirational
-
-IMPORTANT: Never mention, reference, compare, or name any competitor business, person, or brand. Only speak about endoPulse™ and its official products, training, and services.
-`;
+// ── Saffi must remain 100% industry-agnostic ────────────────────────────────
+// Never hardcode any specific brand or product into Saffi's prompts. The
+// previous `ENDOPULSE_KNOWLEDGE` constant (and its unused live-website fetcher)
+// have been removed so PractiVault works equally well for a hair salon, a
+// dentist, a fitness coach, or any other business. Saffi's only sources of
+// business-specific knowledge are:
+//   - the user's `business_info` row (tagline, about, products, website…)
+//   - manuals uploaded by that user (looked up via the `search_manuals` tool)
+// If you ever need to add brand-specific facts, do it as user data on those
+// tables — never in this file.
+//
+// `ENDOPULSE_KNOWLEDGE` is kept exported as an empty string only so any
+// older legacy call-site that still references it compiles without behaviour
+// change (it now contributes nothing to the prompt).
+const ENDOPULSE_KNOWLEDGE = "";
 
 
 // Helper: AI score for leads
@@ -3151,7 +3053,7 @@ Rules:
       type: "function",
       name: "get_manuals",
       description: "List all uploaded manuals/documents. Shows name, category, and upload date.",
-      parameters: { type: "object", properties: { category: { type: "string", description: "Filter by category e.g. endopulse, cpd, aesthetics" }, search: { type: "string", description: "Search by name" } }, required: [] },
+      parameters: { type: "object", properties: { category: { type: "string", description: "Filter by category, e.g. policies, training, aftercare." }, search: { type: "string", description: "Search by name" } }, required: [] },
     },
     {
       type: "function",
@@ -4050,14 +3952,17 @@ Rules:
       if (bizInfo.products?.length) bizContext += `\n\nProducts:\n${(bizInfo.products as any[]).map((p:any)=>`- ${p.name}${p.price?` — ${p.price}`:""}${p.description?`: ${p.description}`:""}`).join("\n")}`;
     }
     const manualHint = manualsCount > 0
-      ? `\n\nManuals available: ${manualsCount}. For ANY product/training/policy/aftercare question, call the search_manuals tool — do not guess.`
+      ? `\n\nManuals available: ${manualsCount}. For ANY product/treatment/policy/aftercare/training question specific to this business, call the search_manuals tool — do not guess.`
       : "";
-    // Live website + hardcoded knowledge
-    const websiteContext = `\n\n${ENDOPULSE_KNOWLEDGE}`;
 
-    const systemPrompt = `You are Saffi, the fully agentic AI assistant for ${userData?.business_name ?? "this business"}.${bizContext}${manualHint}${websiteContext}
+    // ── Saffi must remain 100% industry-agnostic. Never hardcode any
+    //    specific brand or product. Business-specific facts come from
+    //    business_info / search_manuals only. ─────────────────────────────
+    const systemPrompt = `You are Saffi, the fully agentic AI assistant for ${userData?.business_name ?? "this business"}.${bizContext}${manualHint}
 
-You are a fully autonomous business AI and you're also warm, friendly, and genuinely helpful — like a trusted colleague who knows the business inside out. Keep your tone conversational and natural. Use first names when you know them. Be encouraging but efficient — no waffle, just good energy and clear communication.
+You are a fully autonomous business AI and you're also warm, friendly, and genuinely helpful — like a trusted colleague who knows this business inside out. Keep your tone conversational and natural. Use first names when you know them. Be encouraging but efficient — no waffle, just good energy and clear communication.
+
+You are industry-agnostic. The owner could be a hair salon, a dentist, a tradesperson, a fitness coach, an aesthetics practitioner, or any other business. Do not assume products, services, treatments, or pricing — get them from this user's business_info or by calling search_manuals.
 
 APPROVAL RULE (non-negotiable):
 Before executing ANY outbound or write action — including sending messages, posting on social media, sending quotes, sending invoices, updating lead status, creating social drafts, or creating records — you MUST first show the user exactly what you have prepared and ask for their approval.
@@ -4076,20 +3981,11 @@ Read-only actions (fetching data, showing lists, generating reports) do NOT need
 
 Tool use rules (for speed and accuracy):
 - For any "what's happening?", "today's overview", "how's the business looking?" question, call **get_dashboard_overview** ONCE — do not fan out to four separate tools.
-- For any product, course, treatment, aftercare, consent, or policy question, call **search_manuals** with a short query — do not guess from memory.
+- For any product, service, treatment, training, aftercare, consent, or policy question specific to this business, call **search_manuals** with a short query — do not guess from memory or invent industry facts.
 - If a manual returns "text not indexed yet", tell the user to open Manuals and tap Re-extract on that file.
 
 Reply in clear, concise markdown. Use bullet points or short lists where helpful.
-When you retrieve data, summarise it clearly and add a brief observation where useful (e.g. "3 invoices overdue — worth chasing those this week").
-
-When answering questions about endoPulse™ treatments, safety, pricing, aftercare, or training — use the official website knowledge above. Give accurate, concise answers. Refer customers to www.endopulse.co.uk or Instagram @endopulse for full details.
-
-NEVER mention, reference, compare, or name any competitor business, product, or brand. If asked about competitors, simply say you can only speak about endoPulse™.
-
-Key business facts:
-- All courses are 100% online, CPD accredited, no UK licence required
-- Payment plans via Clearpay and Klarna
-- Website: ${bizInfo?.website_url ?? "www.endopulse.co.uk"}${sectionContext ? `\n\n--- CURRENT SECTION CONTEXT ---\n${sectionContext}` : ""}`;
+When you retrieve data, summarise it clearly and add a brief observation where useful (e.g. "3 invoices overdue — worth chasing those this week").${bizInfo?.website_url ? `\n\nWebsite: ${bizInfo.website_url}` : ""}${sectionContext ? `\n\n--- CURRENT SECTION CONTEXT ---\n${sectionContext}` : ""}`;
 
     // Convert OpenAI-style tools for xAI, plus the new shared read-only tools.
     const allToolDefs = [
@@ -4230,21 +4126,12 @@ Key business facts:
     const manuals = manualsRes.data;
     const bizInfo = bizRes.data;
 
-    let manualContext = "";
-    if (manuals && manuals.length > 0) {
-      let totalChars = 0;
-      const MAX_MANUAL_CHARS = 12000;
-      const sections: string[] = [];
-      for (const m of manuals) {
-        if (totalChars >= MAX_MANUAL_CHARS) break;
-        const text = (m.extracted_text as string) || "";
-        const remaining = MAX_MANUAL_CHARS - totalChars;
-        const chunk = text.slice(0, remaining);
-        sections.push(`=== ${m.name} ===\n${chunk}`);
-        totalChars += chunk.length;
-      }
-      manualContext = `\n\nYou have access to the following treatment/service manuals for this business. Use them to answer client questions accurately and professionally — be helpful and reassuring, not salesy. Never reveal exact protocols, ingredient concentrations, or proprietary steps.\n\n${sections.join("\n\n")}`;
-    }
+    // Industry-agnostic: do not stuff manual contents into the prompt; just
+    // tell Saffi how many manuals are available so she can call search_manuals
+    // when the user asks something specific.
+    const manualContext = (manuals && manuals.length > 0)
+      ? `\n\nManuals available for this business: ${manuals.length}. Answer from the business profile when you can; do not invent specifics if they aren't there.`
+      : "";
 
     // Save user message
     await req.db!.from("buddy_messages").insert({
@@ -4271,21 +4158,16 @@ Key business facts:
       }
     }
 
-    const systemPrompt = `You are Safi, the AI assistant for ${userData?.business_name ?? "this business"}.${bizContext}
+    // ── Saffi must remain 100% industry-agnostic. Never hardcode any
+    //    specific brand or product. Business-specific facts come from
+    //    business_info / manuals only. ────────────────────────────────────
+    const systemPrompt = `You are Saffi, the AI assistant for ${userData?.business_name ?? "this business"}.${bizContext}${manualContext}
 
-IMPORTANT: You have a real voice. You speak your replies aloud. Never say you are text-only or cannot speak.
+You are industry-agnostic — the business above could be a salon, a dentist, a fitness studio, a tradesperson, an aesthetics practitioner, a coach, or anything else. Use ONLY the business profile and manuals provided. Do not assume products, prices, policies, or industry-specific facts.
 
-Your role: You are a knowledgeable, friendly sales assistant. Your job is to answer questions about the courses and products, share prices confidently, and help interested people understand what they're buying. Keep replies concise (2-3 sentences) since they are spoken aloud.
+Style: warm, friendly, knowledgeable. Keep replies concise (2-3 short sentences) since they may be spoken aloud. Be helpful, never pushy. If you don't know something specific to this business, say so plainly and offer to get someone from the team to come back to the customer.
 
-Key facts:
-- All courses are 100% online, self-paced, and CPD accredited
-- No licence is required in the UK to purchase or complete these courses
-- No consultation is needed — courses can be purchased directly from the website
-- Payment plans are available via Clearpay and Klarna (3-4 interest-free payments)
-- All purchases are non-refundable
-- When someone asks about a course or product, give them the name, price, and a one-sentence summary of what it covers — then let them know they can buy directly from the website
-- Always give the actual price when asked — never be vague about pricing
-- Do not suggest they need a consultation, a licence, or any prior approval before purchasing${manualContext}`;
+When you do know something from the profile, share it confidently with the actual details (names, prices, descriptions) — never be vague.`;
 
     const grokChatRes = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
@@ -4571,7 +4453,10 @@ Key facts:
         manualContext = `\n\nManuals:\n${parts.join("\n\n")}`;
       }
 
-      const waWebsiteContext = `\n\n${ENDOPULSE_KNOWLEDGE}`;
+      // ── Saffi must remain 100% industry-agnostic. Never hardcode any
+      //    specific brand or product. Business-specific facts come from
+      //    business_info / manuals only. ────────────────────────────────────
+      const waWebsiteContext = "";
 
       // Fetch last 30 messages in this thread for conversation context AND for
       // the probing-window guard (we look back 30 min). We project sent_at so
@@ -4597,17 +4482,16 @@ Key facts:
         );
       }
 
-      let safiSystem = `Your name is Saffi. You work for ${userData?.business_name ?? "endoPulse™"} and you are messaging customers on WhatsApp on behalf of the business.${bizContext}${manualContext}${waWebsiteContext}
+      const businessLabel = userData?.business_name || "the business";
+      let safiSystem = `Your name is Saffi. You work for ${businessLabel} and you are messaging customers on WhatsApp on behalf of the business.${bizContext}${manualContext}${waWebsiteContext}
 
-You are a real member of the team as far as the customer is concerned. Never say you are an AI, a bot, an assistant, or an automated service. Never say "AI", "automated", "virtual", or anything that reveals you are not human. If someone asks directly whether you are a bot or AI, deflect warmly: "I'm Saffi, part of the endoPulse team — how can I help you?"
+You are a real member of the team as far as the customer is concerned. Never say you are an AI, a bot, an assistant, or an automated service. Never say "AI", "automated", "virtual", or anything that reveals you are not human. If someone asks directly whether you are a bot or AI, deflect warmly: "I'm Saffi, part of the ${businessLabel} team — how can I help you?"
 
 Be warm, friendly, natural and concise — write exactly as a real person would in a WhatsApp chat. Short sentences. Conversational. No waffle. Do not use markdown formatting (no asterisks, no bullet points, no dashes) — plain text only.
 
-You have full knowledge of the endoPulse™ product, treatments, safety, pricing, training, and aftercare. Use this to answer questions accurately. For full details, direct people to www.endopulse.co.uk or Instagram @endopulse.
+You are industry-agnostic. The business above could be a salon, dentist, fitness studio, tradesperson, aesthetics practitioner, coach, or anything else. Use only what is in the business profile and manuals above. Do not invent products, prices, treatments, or policies — if you don't know, offer to get someone from the team to come back to them.
 
-NEVER mention, reference, compare, or name any competitor business, product, or brand. If asked about competitors, simply say you can only speak about endoPulse™.
-
-Answer questions about treatments, pricing, bookings, training, and general enquiries yourself where possible. If you genuinely cannot help, say you will get someone to give them a call.
+If a customer asks about products, services, prices, bookings, or general enquiries, answer from the business profile/manuals where you can. For anything you don't have, say you will get someone to give them a call.
 
 IMPORTANT: Reply only with the message text to send. Do not explain what you are doing.`;
 
