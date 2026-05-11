@@ -1,22 +1,37 @@
 # PractiVault
 
-**The private AI-powered practice vault for fundraising conversations**
+**Multi-tenant business platform with industry-aware theming**
 
-Practivault lets fundraisers rehearse real donor conversations with realistic AI donors in a safe, no-pressure environment — so they show up confident and prepared.
+PractiVault is a full-featured SaaS platform that helps businesses manage leads, quotes, invoices, bookings, AI front desk, phone reception, social studio, and more — all with customizable branding per industry.
 
-## ✨ Features
+## ✨ Key Features
 
-- 🎭 **Realistic AI Donors** — Practice with different donor personalities and scenarios
-- 📊 **Instant AI Feedback** — Get scored on clarity, empathy, persuasion & objection handling
-- 🧠 **Personalized Coaching** — AI highlights what you did well and where to improve
-- 📈 **Progress Tracking** — See your improvement over time
-- 🔒 **100% Private** — All sessions stay completely confidential
+- 🏢 **Industry Theming** — Custom sidebar colors, navigation, and branding per industry
+- 📋 **Leads & Pipeline Management**
+- 💰 **Quotes, Invoices & Payments**
+- 📅 **Bookings & Scheduling**
+- 🤖 **AI Front Desk & Phone Receptionist**
+- 📱 **Social Studio**
+- 🧑‍💼 **Team Management & Client Portal**
+- 🛠 **Setup Assistant** for new users
+- 🔒 **Secure Supabase authentication**
 
-## 🛠️ Tech Stack
+## 🛠 Tech Stack
 
-- **Frontend**: Vite + React + TypeScript + Tailwind CSS
+- **Frontend**: Vite + React + TypeScript + Tailwind CSS + Wouter
 - **Backend**: Node.js + TypeScript
 - **Database**: Supabase + Drizzle ORM
-- **Deployment**: Railway
+- **Deployment**: Railway + Vercel
 
 ## 📁 Project Structure
+
+- `client/` — React frontend
+- `server/` — Node.js backend
+- `shared/` — Shared types and utilities
+- `supabase/` — Database migrations
+
+## 🚀 Getting Started
+
+```bash
+npm install
+npm run dev
