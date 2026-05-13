@@ -5,15 +5,26 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MessageCircle, X, Copy, Check } from 'lucide-react';
 
 interface SaffiProps {
-  onNavigate: (section: 'dashboard' | 'clients' | 'settings') => void;
-  onAddClient: () => void;
+  onNavigate?: (section: 'dashboard' | 'clients' | 'settings') => void;
+  businessId?: string;
+  clientCount?: number;
+  revenue?: string;
 }
 
-export default function Saffi({ onNavigate, onAddClient }: SaffiProps) {
+export default function Saffi({ 
+  onNavigate, 
+  businessId = "LUM-2026-0427",
+  clientCount = 47,
+  revenue = "£3,284"
+}: SaffiProps) {
+  
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([
-    { role: "assistant", content: "Hi! I'm Saffi. I can open Dashboard, Clients, Settings, and run the OurPai install script. Try saying 'install ourpai' or 'open settings'." }
+    { 
+      role: "assistant", 
+      content: `Hi! I'm Saffi. I'm currently on the dashboard. You have ${clientCount} clients and today's revenue is ${revenue}. Your Business ID is ${businessId}. How can I help you today?` 
+    }
   ]);
   const [copied, setCopied] = useState(false);
 
@@ -22,26 +33,21 @@ export default function Saffi({ onNavigate, onAddClient }: SaffiProps) {
     let reply = "Got it! What would you like me to do next?";
 
     if (lower.includes("dashboard") || lower.includes("home")) {
-      onNavigate('dashboard');
-      reply = "Opening Dashboard for you.";
+      onNavigate?.('dashboard');
+      reply = "Opening the Dashboard for you.";
     } 
     else if (lower.includes("client")) {
-      onNavigate('clients');
+      onNavigate?.('clients');
       reply = "Here are your clients.";
     } 
     else if (lower.includes("setting") || lower.includes("business") || lower.includes("id")) {
-      onNavigate('settings');
-      reply = "Showing your Business Settings and Business ID.";
+      onNavigate?.('settings');
+      reply = `Your Business ID is **${businessId}**.`;
     } 
-    else if (lower.includes("add client") || lower.includes("new client")) {
-      onAddClient();
-      reply = "Opening the Add Client form for you.";
-    } 
-    else if (lower.includes("ourpai") || lower.includes("install script") || lower.includes("install ourpai")) {
+    else if (lower.includes("ourpai") || lower.includes("install")) {
       reply = "Here's the OurPai install command:";
       setMessages(prev => [...prev, { role: "assistant", content: reply }]);
       
-      // Show the command with copy button
       setTimeout(() => {
         setMessages(prev => [...prev, { 
           role: "assistant", 
@@ -64,7 +70,7 @@ export default function Saffi({ onNavigate, onAddClient }: SaffiProps) {
 
     setTimeout(() => {
       handleCommand(currentInput);
-    }, 400);
+    }, 500);
   };
 
   const copyCommand = () => {
@@ -100,7 +106,7 @@ export default function Saffi({ onNavigate, onAddClient }: SaffiProps) {
                   <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center">S</div>
                   <div>
                     <div className="font-semibold">Saffi AI</div>
-                    <div className="text-xs opacity-80">Now with OurPai install support</div>
+                    <div className="text-xs opacity-80">Super Intelligent • Business-Aware</div>
                   </div>
                 </div>
                 <button onClick={() => setIsOpen(false)}>
@@ -135,7 +141,7 @@ export default function Saffi({ onNavigate, onAddClient }: SaffiProps) {
                   value={input} 
                   onChange={(e) => setInput(e.target.value)} 
                   onKeyDown={(e) => e.key === 'Enter' && sendMessage()} 
-                  placeholder="Try: install ourpai, open settings, show clients..." 
+                  placeholder="Try: open settings, show clients, install ourpai..." 
                   className="flex-1 bg-white border border-[#C7D2FE] rounded-2xl px-5 py-3 focus:outline-none" 
                 />
                 <button 
