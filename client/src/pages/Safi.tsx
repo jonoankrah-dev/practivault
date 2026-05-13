@@ -23,7 +23,7 @@ export default function Saffi({
   const [messages, setMessages] = useState([
     { 
       role: "assistant", 
-      content: `Hi! I'm Saffi. I'm currently on the dashboard. You have ${clientCount} clients and today's revenue is ${revenue}. Your Business ID is ${businessId}. How can I help you today?` 
+      content: `Hi! I'm Saffi, powered by OurPai.ai. I'm currently on the dashboard. You have ${clientCount} clients and today's revenue is ${revenue}. Your Business ID is ${businessId}. How can I help you today?` 
     }
   ]);
   const [copied, setCopied] = useState(false);
@@ -106,7 +106,7 @@ export default function Saffi({
                   <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center">S</div>
                   <div>
                     <div className="font-semibold">Saffi AI</div>
-                    <div className="text-xs opacity-80">Super Intelligent • Business-Aware</div>
+                    <div className="text-xs opacity-80">Powered by OurPai.ai • Super Intelligent</div>
                   </div>
                 </div>
                 <button onClick={() => setIsOpen(false)}>
