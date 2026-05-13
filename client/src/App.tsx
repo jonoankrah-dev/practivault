@@ -36,7 +36,6 @@ import Stock from "@/pages/Stock";
 import Safi from "@/pages/Safi";
 import SafiMemory from "@/pages/SafiMemory";
 import WhatsApp from "@/pages/WhatsApp";
-
 import SetupAssistant from "@/pages/SetupAssistant";
 import NotFound from "@/pages/not-found";
 import { SaffiVoiceConversation } from "@/components/SaffiVoiceConversation";
@@ -49,8 +48,6 @@ function Protected({ children }: { children: React.ReactNode }) {
   const [setupIndustry, setSetupIndustry] = useState<string | undefined>(undefined);
   const [voiceOpen, setVoiceOpen] = useState(false);
 
-  // Global open/close hooks so any page can request the voice controller
-  // without prop-drilling. Pages dispatch `saffi:openVoice` / `saffi:closeVoice`.
   useEffect(() => {
     const onOpen = () => setVoiceOpen(true);
     const onClose = () => setVoiceOpen(false);
@@ -68,7 +65,6 @@ function Protected({ children }: { children: React.ReactNode }) {
     }
   }, [loading, session, navigate]);
 
-  // Check if setup assistant should fire
   useEffect(() => {
     if (!session || !user || setupChecked) return;
     supabase
@@ -92,7 +88,9 @@ function Protected({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
+
   if (!session) return null;
+
   return (
     <>
       <AppShell>{children}</AppShell>
@@ -113,7 +111,6 @@ function Protected({ children }: { children: React.ReactNode }) {
 function AppRouter() {
   return (
     <Switch>
-      {/* Public routes — must come first so they are never intercepted by Protected / redirect */}
       <Route path="/login" component={Login} />
       <Route path="/consent/public/:token">
         {(params) => <ConsentPublic token={params.token} />}
@@ -122,6 +119,7 @@ function AppRouter() {
         {(params) => <ClientPortal token={params.token} />}
       </Route>
       <Route path="/pricing" component={Pricing} />
+
       <Route path="/">
         <Protected>
           <Redirect to="/dashboard" />
@@ -142,8 +140,6 @@ function AppRouter() {
           <Clients />
         </Protected>
       </Route>
-      {/* /ai-front-desk and /phone-receptionist will be unified under /safi
-          in a future step. Until then they keep their dedicated pages. */}
       <Route path="/ai-front-desk">
         <Protected>
           <AiFrontDesk />
@@ -195,7 +191,9 @@ function AppRouter() {
         </Protected>
       </Route>
       <Route path="/business-info">
-        <Protected><BusinessInfo /></Protected>
+        <Protected>
+          <BusinessInfo />
+        </Protected>
       </Route>
       <Route path="/manuals">
         <Protected>
@@ -228,16 +226,19 @@ function AppRouter() {
         </Protected>
       </Route>
       <Route path="/whatsapp">
-        <Protected><WhatsApp /></Protected>
+        <Protected>
+          <WhatsApp />
+        </Protected>
       </Route>
       <Route path="/safi">
-        <Protected><Safi /></Protected>
+        <Protected>
+          <Safi />
+        </Protected>
       </Route>
       <Route path="/safi-memory">
-        <Protected><SafiMemory /></Protected>
-      </Route>
-      <Route path="/saphie">
-        <Protected><Safi /></Protected>
+        <Protected>
+          <SafiMemory />
+        </Protected>
       </Route>
       <Route component={NotFound} />
     </Switch>
@@ -249,12 +250,12 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <IndustryProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Router hook={useHashLocation}>
-            <AppRouter />
-          </Router>
-        </TooltipProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router hook={useHashLocation}>
+              <AppRouter />
+            </Router>
+          </TooltipProvider>
         </IndustryProvider>
       </AuthProvider>
     </QueryClientProvider>
