@@ -5,6 +5,7 @@ import { Link } from "wouter";
 import PageHeader from "@/components/PageHeader";
 import StatusBadge from "@/components/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 
 type Stats = {
   todaysRevenue: number;
@@ -57,7 +58,10 @@ function KpiCard({
 }
 
 export default function Dashboard() {
-  const { data, isLoading } = useQuery<Stats>({ queryKey: ["/api/dashboard/stats"] });
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery<Stats>({
+    queryKey: ["/api/dashboard/stats"],
+  });
+  const todaysBookings = data?.todaysBookings ?? [];
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -65,6 +69,23 @@ export default function Dashboard() {
         title="Dashboard"
         subtitle={`Welcome back — here's what's happening today, ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}`}
       />
+
+      {isError && (
+        <div
+          className="mb-6 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-foreground flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+          role="alert"
+        >
+          <div className="flex items-start gap-2 min-w-0">
+            <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+            <span className="min-w-0">
+              Could not load dashboard data.{error instanceof Error ? ` ${error.message}` : ""}
+            </span>
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+            {isFetching ? "Retrying…" : "Retry"}
+          </Button>
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -75,7 +96,7 @@ export default function Dashboard() {
             <KpiCard
               label="Today's Revenue"
               value={`£${Math.round(data?.todaysRevenue || 0).toLocaleString()}`}
-              sub={`${data?.todaysBookings.length ?? 0} bookings today`}
+              sub={`${todaysBookings.length} bookings today`}
               icon={TrendingUp}
               tone="berry"
             />
@@ -117,13 +138,13 @@ export default function Dashboard() {
           </div>
           {isLoading ? (
             <Skeleton className="h-32" />
-          ) : !data?.todaysBookings.length ? (
+          ) : !todaysBookings.length ? (
             <div className="text-sm text-muted-foreground py-8 text-center">
               No bookings scheduled for today.
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {data.todaysBookings.map((b: any) => (
+              {todaysBookings.map((b: any) => (
                 <div key={b.id} className="flex items-center gap-4 py-3">
                   <div className="w-14 text-sm font-medium tabular-nums text-foreground">
                     {b.time?.slice(0, 5)}
