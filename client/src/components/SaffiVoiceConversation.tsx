@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getAuthToken } from "@/lib/queryClient";
-import { ChevronDown, ChevronUp, Loader2, Mic, MicOff, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Mic, MicOff, Volume2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Status =
@@ -419,6 +419,17 @@ export function SaffiVoiceConversation({ open, onClose }: Props) {
   const isLoading = status === "requesting" || status === "connecting";
   const isLive = status === "listening" || status === "thinking" || status === "speaking";
 
+  const orbIcon =
+    isLoading || status === "thinking" ? (
+      <Loader2 className="h-4 w-4 animate-spin" />
+    ) : status === "speaking" ? (
+      <Volume2 className="h-4 w-4" />
+    ) : status === "listening" ? (
+      <MicOff className="h-4 w-4" />
+    ) : (
+      <Mic className="h-4 w-4" />
+    );
+
   // Non-blocking floating controller. Fixed bottom-right; the rest of the app
   // stays interactive. No backdrop, no full-screen modal.
   return (
@@ -478,13 +489,7 @@ export function SaffiVoiceConversation({ open, onClose }: Props) {
                   : "bg-[#E83A8E] text-white",
               )}
             >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : isLive ? (
-                <MicOff className="h-4 w-4" />
-              ) : (
-                <Mic className="h-4 w-4" />
-              )}
+              {orbIcon}
             </div>
           </div>
 
