@@ -26,6 +26,4 @@ export interface PaiSkill {
 // Re-export all skills
 export * from "./business";
 export * from "./clients";
-export * from "./quotes-invoices";
-export * from "./bookings";
 export * from "./memory";

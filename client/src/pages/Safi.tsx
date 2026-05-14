@@ -106,7 +106,7 @@ export default function Saffi({
                   <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center">S</div>
                   <div>
                     <div className="font-semibold">Saffi AI</div>
-                    <div className="text-xs opacity-80">Powered by OurPai.ai • Super Intelligent</div>
+                    <div className="text-xs opacity-80">Powered by PractiVault</div>
                   </div>
                 </div>
                 <button onClick={() => setIsOpen(false)}>
