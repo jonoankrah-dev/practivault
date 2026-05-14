@@ -369,6 +369,15 @@ export default function PhoneReceptionist() {
               <div className="text-sm text-muted-foreground leading-relaxed">{topic.body}</div>
             </div>
           ))}
+          {/* Show user's main services if they have any */}
+          {businessInfo?.products?.length > 0 && (
+            <div className="rounded-xl border bg-white p-5 md:col-span-2">
+              <div className="font-semibold text-sm mb-1.5">Your Current Services</div>
+              <div className="text-sm text-muted-foreground">
+                {businessInfo.products.map((p: any) => p.name).join(" • ")}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
