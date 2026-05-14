@@ -163,7 +163,7 @@ function matchCategoriesForText(text: string): GuardCategory[] {
       }
     }
   }
-  return [...hits];
+  return Array.from(hits);
 }
 
 export function classifyInbound(

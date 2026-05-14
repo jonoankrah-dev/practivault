@@ -76,9 +76,8 @@ function downsampleTo16k(buffer: Float32Array, sourceRate: number): Float32Array
 function int16ToBase64(buf: Int16Array): string {
   const bytes = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
   let bin = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  for (let i = 0; i < bytes.length; i++) {
+    bin += String.fromCharCode(bytes[i]!);
   }
   return btoa(bin);
 }

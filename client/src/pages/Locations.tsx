@@ -78,7 +78,7 @@ export default function Locations() {
       <PageHeader
         title="Locations"
         subtitle="Manage multiple sites, vans, or chairs — all under one account"
-        action={
+        actions={
           <Button onClick={() => setModalOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Add Location

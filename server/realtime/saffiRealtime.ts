@@ -225,8 +225,8 @@ export function registerSaffiRealtime(httpServer: HttpServer, _app: Express): vo
         if (snap.ok && snap.summary) {
           businessContext = snap.summary;
           // If upstream is already up, push an updated session.
-          if (upstreamOpen && upstream) {
-            try { upstream.send(buildSessionUpdate(businessContext)); } catch {}
+          if (upstreamOpen) {
+            try { (upstream as WS | null)?.send(buildSessionUpdate(businessContext)); } catch {}
           }
         }
       } catch {

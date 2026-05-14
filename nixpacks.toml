@@ -1,2 +1,4 @@
+# Node 22 — matches package.json engines, .node-version, and CI (.github/workflows/ci.yml).
+# Railway reads this file via railway.json → build.nixpacksConfigPath.
 [variables]
-NODE_VERSION = "20"
+NODE_VERSION = "22"

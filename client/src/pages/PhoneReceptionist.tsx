@@ -544,7 +544,7 @@ function CallLogSection({
     }
     let topType: string | null = null;
     let topCount = 0;
-    for (const [k, v] of typeCount.entries()) {
+    for (const [k, v] of Array.from(typeCount.entries())) {
       if (v > topCount) {
         topCount = v;
         topType = k;

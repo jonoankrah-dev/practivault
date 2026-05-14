@@ -9,7 +9,7 @@
  *     plus structured `data` for richer text rendering.
  */
 
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { PostgrestResponse, SupabaseClient } from "@supabase/supabase-js";
 
 export interface ToolResult {
   ok: boolean;
@@ -42,9 +42,9 @@ const SHORT_DATE = (iso: string | null | undefined): string => {
 
 const TOOL_TIMEOUT_MS = 8_000;
 
-function withTimeout<T>(p: Promise<T>, ms = TOOL_TIMEOUT_MS): Promise<T> {
+function withTimeout<T>(p: PromiseLike<T>, ms = TOOL_TIMEOUT_MS): Promise<T> {
   return Promise.race([
-    p,
+    Promise.resolve(p),
     new Promise<T>((_, reject) =>
       setTimeout(() => reject(new Error("tool_timeout")), ms),
     ),
@@ -189,7 +189,17 @@ export async function searchManuals(
   try {
     // Pull a wide candidate set; project only what we need so we don't drag
     // megabytes of extracted_text across the wire when not necessary.
-    const { data, error } = await withTimeout(
+    type ManualRow = {
+      id: string;
+      name: string | null;
+      description: string | null;
+      category: string | null;
+      file_name: string | null;
+      file_url: string | null;
+      extracted_text: string | null;
+      created_at: string | null;
+    };
+    const { data, error }: PostgrestResponse<ManualRow> = await withTimeout(
       db
         .from("manuals")
         .select("id, name, description, category, file_name, file_url, extracted_text, created_at")
@@ -211,7 +221,9 @@ export async function searchManuals(
     if (candidates.length === 0) {
       // Tell Saffi clearly so she doesn't guess. Also surface manuals that have
       // no extracted_text yet so Jono knows to re-index them.
-      const { data: missingData } = await withTimeout(
+      const { data: missingData }: PostgrestResponse<
+        Pick<ManualRow, "id" | "name" | "file_name">
+      > = await withTimeout(
         db
           .from("manuals")
           .select("id, name, file_name")
@@ -232,7 +244,13 @@ export async function searchManuals(
 
     // Score: name hit > category > description > extracted_text term-frequency.
     const ql = q.toLowerCase();
-    const scored = candidates.map((m: any) => {
+    type ScoredManual = {
+      m: ManualRow;
+      score: number;
+      snippet: string | null;
+      indexed: boolean;
+    };
+    const scored: ScoredManual[] = candidates.map((m: ManualRow) => {
       let score = 0;
       const name = (m.name ?? "").toLowerCase();
       const desc = (m.description ?? "").toLowerCase();
@@ -270,7 +288,7 @@ export async function searchManuals(
       return { m, score, snippet, indexed };
     });
 
-    scored.sort((a, b) => b.score - a.score);
+    scored.sort((a: ScoredManual, b: ScoredManual) => b.score - a.score);
     const top = scored.slice(0, cap);
 
     const lines: string[] = [];
@@ -280,7 +298,7 @@ export async function searchManuals(
       lines.push(`• ${m.name}${cat}${m.description ? ` — ${m.description}` : ""}${indexed ? "" : "  (text not indexed yet)"}`);
       if (snippet) lines.push(`  "${snippet}"`);
     }
-    const unindexed = top.filter((s) => !s.indexed).length;
+    const unindexed = top.filter((s: ScoredManual) => !s.indexed).length;
     if (unindexed > 0) {
       lines.push(`Note: ${unindexed} of these manual${unindexed === 1 ? " was" : "s were"} matched on title/category only — open Manuals and use Re-extract to read the contents.`);
     }
@@ -289,7 +307,7 @@ export async function searchManuals(
       ok: true,
       summary: lines.join("\n"),
       data: {
-        matches: top.map(({ m, score, snippet, indexed }) => ({
+        matches: top.map(({ m, score, snippet, indexed }: ScoredManual) => ({
           id: m.id, name: m.name, category: m.category,
           description: m.description, file_url: m.file_url,
           score, snippet, indexed,

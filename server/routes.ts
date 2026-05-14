@@ -20,9 +20,9 @@ import type { Server } from "node:http";
 import { WebSocketServer, WebSocket as WS } from "ws";
 import multer from "multer";
 import Groq from "groq-sdk";
-import pdfParse from "pdf-parse";
+import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
-import { supabase, supabaseForUser } from "./supabase";
+import { supabase, supabaseForUser, supabaseAdmin } from "./supabase";
 import {
   clientInsertSchema,
   treatmentInsertSchema,
@@ -78,6 +78,22 @@ async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction
 // older legacy call-site that still references it compiles without behaviour
 // change (it now contributes nothing to the prompt).
 const ENDOPULSE_KNOWLEDGE = "";
+
+/** Extract plain text from a PDF buffer (pdf-parse v2 API). */
+async function extractPdfText(buffer: Buffer, timeoutMs: number): Promise<string | null> {
+  const parser = new PDFParse({ data: buffer });
+  const run = parser.getText().then((r) => r.text?.trim() || null);
+  const timeout = new Promise<null>((_, reject) =>
+    setTimeout(() => reject(new Error("timeout")), timeoutMs),
+  );
+  try {
+    return await Promise.race([run, timeout]);
+  } catch {
+    return null;
+  } finally {
+    await parser.destroy().catch(() => {});
+  }
+}
 
 
 // Helper: AI score for leads
@@ -256,9 +272,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     req.on("data", (c: Buffer) => chunks.push(c));
     await new Promise((r) => req.on("end", r));
     const buf = Buffer.concat(chunks);
-    const { error: upErr } = await db.storage.from("client-photos").upload(path, buf, { contentType, upsert: true });
+    const { error: upErr } = await supabaseAdmin.storage.from("client-photos").upload(path, buf, { contentType, upsert: true });
     if (upErr) return res.status(500).json({ message: upErr.message });
-    const { data: urlData } = db.storage.from("client-photos").getPublicUrl(path);
+    const { data: urlData } = supabaseAdmin.storage.from("client-photos").getPublicUrl(path);
     const logoUrl = urlData.publicUrl;
     await db.from("users").update({ logo_url: logoUrl }).eq("id", req.user!.id);
     res.json({ logo_url: logoUrl });
@@ -1581,8 +1597,7 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
         const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
           Promise.race([promise, new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms))]);
         if (mime === "application/pdf" || fname.endsWith(".pdf")) {
-          const parsed = await withTimeout(pdfParse(file.buffer), 10_000);
-          extractedText = (parsed as any).text?.trim() || null;
+          extractedText = await extractPdfText(file.buffer, 10_000);
         } else if (mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || fname.endsWith(".docx")) {
           const result = await withTimeout(mammoth.extractRawText({ buffer: file.buffer }), 10_000);
           extractedText = (result as any).value?.trim() || null;
@@ -1654,8 +1669,7 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
         const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
           Promise.race([p, new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms))]);
         if (lower.endsWith(".pdf")) {
-          const parsed = await withTimeout(pdfParse(buffer), 12_000);
-          extractedText = (parsed as any).text?.trim() || null;
+          extractedText = await extractPdfText(buffer, 12_000);
         } else if (lower.endsWith(".docx")) {
           const result = await withTimeout(mammoth.extractRawText({ buffer }), 12_000);
           extractedText = (result as any).value?.trim() || null;
@@ -2173,7 +2187,14 @@ Rules:
   // DEMO SYSTEM — public, no auth required
   // ============================================================
   app.get("/api/demo/seed/:industry", async (req: Request, res: Response) => {
-    const { industry } = req.params;
+    const rawIndustry = req.params.industry;
+    const industry =
+      typeof rawIndustry === "string"
+        ? rawIndustry
+        : Array.isArray(rawIndustry)
+          ? rawIndustry[0] ?? ""
+          : "";
+    if (!industry) return res.status(400).json({ message: "Missing industry" });
     const demo = DEMO_INDUSTRIES[industry];
     if (!demo) return res.status(404).json({ message: `Unknown industry: ${industry}` });
 
@@ -2212,7 +2233,11 @@ Rules:
           const si2 = await supabase.auth.signInWithPassword({ email: demoEmail, password: demoPassword });
           if (!si2.data?.session) {
             // Confirm email via SQL then sign in
-            await supabase.rpc("confirm_user_email" as any, { user_email: demoEmail }).catch(() => {});
+            try {
+              await supabase.rpc("confirm_user_email" as any, { user_email: demoEmail });
+            } catch {
+              /* ignore */
+            }
             const si3 = await supabase.auth.signInWithPassword({ email: demoEmail, password: demoPassword });
             if (!si3.data?.session) return res.status(500).json({ message: "Demo user created but could not sign in. Please disable email confirmation in Supabase Auth settings." });
             token = si3.data.session.access_token;
@@ -3652,7 +3677,7 @@ When you retrieve data, summarise it clearly and add a brief observation where u
     // Agentic loop — keep calling until no more tool calls
     const MAX_STEPS = 5;
     for (let step = 0; step < MAX_STEPS; step++) {
-      let grokRes: Response;
+      let grokRes: globalThis.Response;
       try {
         grokRes = await fetch("https://api.x.ai/v1/chat/completions", {
           method: "POST",
@@ -3838,9 +3863,11 @@ When you do know something from the profile, share it confidently with the actua
     const reply = grokChatData.choices?.[0]?.message?.content ?? "Sorry, I couldn't get a response.";
 
     // Save assistant reply in background — don't await, reply to client immediately
-    req.db!.from("buddy_messages").insert({
-      user_id: req.user!.id, role: "assistant", content: reply,
-    }).then(() => {}).catch(() => {});
+    void Promise.resolve(
+      req.db!.from("buddy_messages").insert({
+        user_id: req.user!.id, role: "assistant", content: reply,
+      }),
+    ).catch(() => {});
 
     res.json({ reply });
   });
