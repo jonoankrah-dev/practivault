@@ -1380,17 +1380,67 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
     res.json(data || []);
   });
 
-  // Invite team member
+  // Invite team member (creates pending record + sends email via Resend)
   app.post("/api/team/invite", requireAuth, async (req: AuthedRequest, res: Response) => {
     const { name, email, role } = req.body;
     if (!name || !email) return res.status(400).json({ message: "Name and email required" });
     const token = require("crypto").randomBytes(24).toString("hex");
+    const userId = req.user!.id;
+
     const { data, error } = await req.db!
       .from("team_members")
-      .insert({ owner_id: req.user!.id, name, email, role: role || "practitioner", status: "pending", invite_token: token })
+      .insert({ owner_id: userId, name, email, role: role || "practitioner", status: "pending", invite_token: token })
       .select()
       .single();
     if (error) return res.status(500).json({ message: error.message });
+
+    // Send invitation email (best-effort)
+    try {
+      const { data: userData } = await req.db!.from("users").select("business_name, name").eq("id", userId).single();
+      const bizName = userData?.business_name || userData?.name || "the practice";
+      const appUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+        : "https://practivault-backend-production.up.railway.app";
+      const joinLink = `${appUrl}/join/${token}`;
+
+      const resendKey = process.env.RESEND_API_KEY;
+      if (resendKey) {
+        const resend = new Resend(resendKey);
+        await resend.emails.send({
+          from: "Saffi <noreply@practivault.com>",
+          to: email,
+          subject: `You're invited to join ${bizName} on PractiVault`,
+          html: `
+            <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 24px; background: #fff; color: #111;">
+              <div style="margin-bottom: 24px;">
+                <div style="display:inline-block; background:#E83A8E; color:white; font-weight:600; padding:4px 12px; border-radius:999px; font-size:12px; letter-spacing:0.5px;">PRACTIVAULT</div>
+              </div>
+              <h1 style="font-size:22px; line-height:1.3; margin:0 0 16px;">You've been invited to join the team</h1>
+              <p style="font-size:15px; line-height:1.6; color:#444; margin:0 0 20px;">
+                <strong>${name}</strong>, ${userData?.name ? userData.name : "your colleague"} at <strong>${bizName}</strong> has invited you to join their team on PractiVault as <strong>${role || "practitioner"}</strong>.
+              </p>
+              <p style="font-size:15px; line-height:1.6; color:#444; margin:0 0 28px;">
+                Accept your invite to activate your status in their roster. They'll be notified once you're active.
+              </p>
+              <p style="text-align:center; margin:32px 0;">
+                <a href="${joinLink}" style="background:#E83A8E; color:white; text-decoration:none; padding:14px 32px; border-radius:10px; font-weight:600; font-size:15px; display:inline-block;">Accept Invite &amp; Activate</a>
+              </p>
+              <p style="font-size:13px; color:#666; text-align:center; margin:0 0 24px;">
+                Or copy this link: <span style="color:#E83A8E;">${joinLink}</span>
+              </p>
+              <hr style="border:none; border-top:1px solid #eee; margin:28px 0 20px;" />
+              <p style="font-size:12px; color:#999; text-align:center; margin:0;">
+                This invite was sent on behalf of ${bizName}. If you weren't expecting this, you can safely ignore it.
+              </p>
+            </div>
+          `,
+        }).catch(() => {});
+      }
+    } catch (e) {
+      // email is best-effort; don't fail the request
+      console.warn("Team invite email failed (non-fatal):", (e as any)?.message || e);
+    }
+
     res.json(data);
   });
 
@@ -1418,7 +1468,7 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
     res.json({ ok: true });
   });
 
-  // Accept invite (public route)
+  // Accept invite (public route - JSON for API clients / SPA)
   app.get("/api/team/join/:token", async (req: Request, res: Response) => {
     const { data, error } = await supabase
       .from("team_members")
@@ -1428,6 +1478,89 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
       .single();
     if (error || !data) return res.status(404).json({ message: "Invalid or expired invite" });
     res.json({ ok: true, name: (data as any).name, role: (data as any).role });
+  });
+
+  // Public beautiful invite acceptance page (used in emails). Self-contained HTML.
+  app.get("/join/:token", async (req: Request, res: Response) => {
+    const token = req.params.token;
+    let activated = false;
+    let memberName = "";
+    let memberRole = "";
+    let bizHint = "the practice";
+
+    try {
+      const { data, error } = await supabase
+        .from("team_members")
+        .update({ status: "active", joined_at: new Date().toISOString(), invite_token: null })
+        .eq("invite_token", token)
+        .select("name, role, owner_id")
+        .single();
+      if (!error && data) {
+        activated = true;
+        memberName = (data as any).name || "";
+        memberRole = (data as any).role || "team member";
+        // Try to get nice business name for the success page
+        const { data: owner } = await supabase.from("users").select("business_name, name").eq("id", (data as any).owner_id).single();
+        if (owner?.business_name) bizHint = owner.business_name;
+        else if (owner?.name) bizHint = owner.name;
+      }
+    } catch (e) {
+      // fall through to error UI
+    }
+
+    const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${activated ? "Invite Accepted" : "Invite Link"} • PractiVault</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Playfair+Display:wght@700&amp;display=swap');
+    body { font-family: Inter, system-ui, sans-serif; background: #f8f7f6; margin:0; padding:0; color:#111; }
+    .card { max-width: 520px; margin: 60px auto; background: white; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.06); overflow: hidden; border: 1px solid #eee; }
+    .brand { background: linear-gradient(135deg, #E83A8E, #c42d77); color: white; padding: 28px 32px; text-align: center; }
+    .brand .logo { font-weight: 700; font-size: 21px; letter-spacing: -.3px; }
+    .content { padding: 36px 32px 40px; }
+    h1 { font-family: 'Playfair Display', Georgia, serif; font-size: 26px; margin: 0 0 12px; line-height: 1.2; }
+    p { font-size: 15px; line-height: 1.65; color: #444; margin: 0 0 16px; }
+    .success { background: #f0fdf4; border: 1px solid #86efac; color: #166534; padding: 14px 16px; border-radius: 12px; margin: 20px 0; }
+    .pill { display: inline-block; background: #E83A8E; color: white; font-size: 12px; padding: 2px 10px; border-radius: 999px; font-weight: 600; }
+    .btn { display: inline-block; background: #111; color: white; padding: 12px 26px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 14px; margin-top: 8px; }
+    .muted { color: #777; font-size: 13px; }
+    .footer { text-align: center; padding: 18px; font-size: 12px; color: #888; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <div class="logo">practivault</div>
+    </div>
+    <div class="content">
+      ${activated ? `
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+          <span class="pill">INVITE ACCEPTED</span>
+        </div>
+        <h1>Welcome aboard, ${memberName || "team member"}!</h1>
+        <p>Your status has been set to <strong>active</strong> as <strong>${memberRole}</strong> on <strong>${bizHint}</strong>'s PractiVault workspace.</p>
+        <div class="success">
+          The owner has been notified and will see you in their team roster right away.
+        </div>
+        <p class="muted">You don't need a separate login — your status is now recorded in their system. If they need anything from you, they'll reach out.</p>
+        <a href="https://practivault-backend-production.up.railway.app" class="btn">Open PractiVault</a>
+      ` : `
+        <h1>Invite link expired or invalid</h1>
+        <p>This invite may have already been used, or the link is older than 30 days. Please ask the sender to issue a fresh invitation from their Team section.</p>
+        <a href="https://practivault-backend-production.up.railway.app" class="btn">Go to PractiVault</a>
+      `}
+    </div>
+    <div class="footer">
+      Powered by PractiVault — the operating system for aesthetic practices
+    </div>
+  </div>
+</body>
+</html>`;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.status(activated ? 200 : 404).send(html);
   });
 
   // ========== INVOICES ==========
@@ -2759,6 +2892,43 @@ Rules:
     },
     {
       type: "function",
+      name: "update_team_role",
+      description: "Change the role of an existing team member. Roles: owner, practitioner, receptionist. Use after confirming with the user.",
+      parameters: {
+        type: "object",
+        properties: {
+          identifier: { type: "string", description: "Team member's id, or their full name, or email address" },
+          new_role: { type: "string", enum: ["owner","practitioner","receptionist"], description: "The new role" },
+        },
+        required: ["identifier", "new_role"],
+      },
+    },
+    {
+      type: "function",
+      name: "remove_team_member",
+      description: "Remove a team member from the roster (active or pending). Requires explicit user approval first.",
+      parameters: {
+        type: "object",
+        properties: {
+          identifier: { type: "string", description: "Team member's id, full name, or email" },
+        },
+        required: ["identifier"],
+      },
+    },
+    {
+      type: "function",
+      name: "resend_invite",
+      description: "Regenerate the invite link and re-send the email for a pending team member (use for stale invites).",
+      parameters: {
+        type: "object",
+        properties: {
+          identifier: { type: "string", description: "Team member's id, name or email (must be pending status)" },
+        },
+        required: ["identifier"],
+      },
+    },
+    {
+      type: "function",
       name: "get_manuals",
       description: "List all uploaded manuals/documents. Shows name, category, and upload date.",
       parameters: { type: "object", properties: { category: { type: "string", description: "Filter by category, e.g. policies, training, aftercare." }, search: { type: "string", description: "Search by name" } }, required: [] },
@@ -3279,10 +3449,10 @@ Rules:
             }
             analysis += `  → Consider re-sending invites to these members.\n`;
           }
-          analysis += `\nFULL TEAM LIST:\n`;
+          analysis += `\nFULL TEAM LIST (use exact id or name for other tools):\n`;
           analysis += data.map((m: any) => {
             const daysPending = m.status === "pending" ? Math.floor((now.getTime() - new Date(m.created_at).getTime()) / (1000 * 60 * 60 * 24)) : null;
-            return `  • ${m.name} — ${m.role} — ${m.status === "active" ? `✅ Active${m.joined_at ? ` (joined ${new Date(m.joined_at).toLocaleDateString("en-GB")})` : ""}` : `⏳ Pending${daysPending !== null ? ` (${daysPending}d ago)` : ""}`} — ${m.email}`;
+            return `  • id=${m.id} | ${m.name} — ${m.role} — ${m.status === "active" ? `✅ Active${m.joined_at ? ` (joined ${new Date(m.joined_at).toLocaleDateString("en-GB")})` : ""}` : `⏳ Pending${daysPending !== null ? ` (${daysPending}d ago)` : ""}`} — ${m.email}`;
           }).join("\n");
           return analysis;
         }
@@ -3290,8 +3460,109 @@ Rules:
           const token = require("crypto").randomBytes(24).toString("hex");
           const { data, error } = await db.from("team_members").insert({ owner_id: userId, name: args.name, email: args.email, role: args.role, status: "pending", invite_token: token }).select("id, name, email, role").single();
           if (error) return `Failed to send invite: ${error.message}`;
-          return `Invite sent to ${data.name} (${data.email}) as ${data.role}. They'll receive a join link to activate their account.`;
+
+          // Best-effort email (same as REST endpoint)
+          try {
+            const { data: u } = await db.from("users").select("business_name, name").eq("id", userId).single();
+            const biz = u?.business_name || u?.name || "the practice";
+            const appUrl = process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "https://practivault-backend-production.up.railway.app";
+            const link = `${appUrl}/join/${token}`;
+            const key = process.env.RESEND_API_KEY;
+            if (key) {
+              const r = new Resend(key);
+              await r.emails.send({
+                from: "Saffi <noreply@practivault.com>",
+                to: args.email,
+                subject: `You're invited to join ${biz} on PractiVault`,
+                html: `<div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px"><h2 style="color:#E83A8E">Team invite from ${biz}</h2><p>Hi ${args.name},</p><p>You've been invited as <strong>${args.role}</strong>. <a href="${link}" style="color:#E83A8E">Accept your invite here</a>.</p></div>`
+              }).catch(()=>{});
+            }
+          } catch {}
+          return `Invite sent to ${data.name} (${data.email}) as ${data.role}. I've emailed them the activation link.`;
         }
+
+        case "update_team_role": {
+          const ident = (args.identifier || "").trim();
+          const newRole = args.new_role;
+          if (!ident || !newRole) return "Missing identifier or new_role.";
+          // Find member: exact id, or ilike name or email
+          let member = null;
+          const { data: byId } = await db.from("team_members").select("*").eq("owner_id", userId).eq("id", ident).single();
+          if (byId) member = byId;
+          else {
+            const { data: byName } = await db.from("team_members").select("*").eq("owner_id", userId).ilike("name", `%${ident}%`).limit(1).single();
+            if (byName) member = byName;
+            else {
+              const { data: byEmail } = await db.from("team_members").select("*").eq("owner_id", userId).ilike("email", `%${ident}%`).limit(1).single();
+              if (byEmail) member = byEmail;
+            }
+          }
+          if (!member) return `Could not find a team member matching "${ident}".`;
+          const { error } = await db.from("team_members").update({ role: newRole }).eq("id", member.id).eq("owner_id", userId);
+          if (error) return `Failed to update role: ${error.message}`;
+          return `Updated ${member.name} (${member.email}) → role is now "${newRole}".`;
+        }
+
+        case "remove_team_member": {
+          const ident = (args.identifier || "").trim();
+          if (!ident) return "Missing identifier (name, email or id).";
+          let member = null;
+          const { data: byId } = await db.from("team_members").select("id,name,email").eq("owner_id", userId).eq("id", ident).single();
+          if (byId) member = byId;
+          else {
+            const { data: byName } = await db.from("team_members").select("id,name,email").eq("owner_id", userId).ilike("name", `%${ident}%`).limit(1).single();
+            if (byName) member = byName;
+            else {
+              const { data: byEmail } = await db.from("team_members").select("id,name,email").eq("owner_id", userId).ilike("email", `%${ident}%`).limit(1).single();
+              if (byEmail) member = byEmail;
+            }
+          }
+          if (!member) return `No matching team member for "${ident}".`;
+          const { error } = await db.from("team_members").delete().eq("id", member.id).eq("owner_id", userId);
+          if (error) return `Remove failed: ${error.message}`;
+          return `Removed ${member.name} (${member.email}) from the team roster.`;
+        }
+
+        case "resend_invite": {
+          const ident = (args.identifier || "").trim();
+          if (!ident) return "Missing identifier.";
+          let member = null;
+          const { data: byId } = await db.from("team_members").select("*").eq("owner_id", userId).eq("id", ident).single();
+          if (byId) member = byId;
+          else {
+            const { data: byName } = await db.from("team_members").select("*").eq("owner_id", userId).ilike("name", `%${ident}%`).limit(1).single();
+            if (byName) member = byName;
+            else {
+              const { data: byEmail } = await db.from("team_members").select("*").eq("owner_id", userId).ilike("email", `%${ident}%`).limit(1).single();
+              if (byEmail) member = byEmail;
+            }
+          }
+          if (!member) return `Couldn't find "${ident}" on the team.`;
+          if (member.status !== "pending") return `${member.name} is already active — no need to resend.`;
+          const newToken = require("crypto").randomBytes(24).toString("hex");
+          const { error: updErr } = await db.from("team_members").update({ invite_token: newToken }).eq("id", member.id);
+          if (updErr) return `Could not refresh invite token: ${updErr.message}`;
+
+          // Send fresh email
+          try {
+            const { data: u } = await db.from("users").select("business_name, name").eq("id", userId).single();
+            const biz = u?.business_name || u?.name || "the practice";
+            const appUrl = process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "https://practivault-backend-production.up.railway.app";
+            const link = `${appUrl}/join/${newToken}`;
+            const key = process.env.RESEND_API_KEY;
+            if (key) {
+              const r = new Resend(key);
+              await r.emails.send({
+                from: "Saffi <noreply@practivault.com>",
+                to: member.email,
+                subject: `Reminder: your invite to join ${biz} on PractiVault`,
+                html: `<div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px"><h2 style="color:#E83A8E">Invite reminder from ${biz}</h2><p>Hi ${member.name},</p><p>Here's a fresh link to activate your ${member.role} status: <a href="${link}" style="color:#E83A8E">Accept invite</a>.</p></div>`
+              }).catch(()=>{});
+            }
+          } catch {}
+          return `Fresh invite link sent to ${member.name} (${member.email}). They have  a new activation link.`;
+        }
+
         case "get_manuals": {
           let q = db.from("manuals").select("id, name, description, category, file_name, file_url, created_at").eq("user_id", userId).order("created_at", { ascending: false });
           if (args.category) q = q.ilike("category", `%${args.category}%`);
