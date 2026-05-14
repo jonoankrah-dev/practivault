@@ -10,7 +10,7 @@ import {
   ImageIcon, Receipt, Users2, Video, Package, GraduationCap,
   MapPin, Warehouse, Wrench, HardHat, Zap, Leaf, ClipboardList,
   HeartPulse, Hammer, Wind, Bot, Building2, MessageCircle,
-  BrainCircuit,
+  BrainCircuit, BarChart3,
 } from "lucide-react";
 
 export type NavItemDef = {
@@ -60,6 +60,7 @@ const NAV = {
   patients:    { href: "/clients",          label: "Patients",        icon: Users },
   safi:        { href: "/safi",             label: "Saffi AI",        icon: Bot },
   safiMemory:  { href: "/safi-memory",      label: "Saffi Memory",    icon: BrainCircuit },
+  usage:       { href: "/usage",            label: "Usage & Transparency", icon: BarChart3, badgeKey: undefined },
   aiFrontDesk: { href: "/ai-front-desk",   label: "AI Front Desk",   icon: MessageSquare,  badgeKey: "afdToday" },
   aiPhone:     { href: "/phone-receptionist",label:"AI Receptionist", icon: Phone,          badgeKey: "missedCallsToday" },
   social:      { href: "/social-studio",    label: "Social Studio",   icon: Camera },
@@ -102,7 +103,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
     },
     nav: [
       NAV.dashboard, NAV.appointments, NAV.clients,
-      NAV.safi, NAV.safiMemory, NAV.social, NAV.whatsapp,
+      NAV.safi, NAV.safiMemory, NAV.usage, NAV.social, NAV.whatsapp,
       NAV.leads, NAV.quotes, NAV.consent,
       NAV.team, NAV.invoices, NAV.photos,
       NAV.manuals, NAV.videos, NAV.packages,
@@ -305,7 +306,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
     },
     nav: [
       NAV.dashboard, NAV.bookings, NAV.clients,
-      NAV.safi, NAV.social, NAV.whatsapp,
+      NAV.safi, NAV.safiMemory, NAV.usage, NAV.social, NAV.whatsapp,
       NAV.leads, NAV.quotes, NAV.consent,
       NAV.team, NAV.invoices, NAV.photos,
       NAV.manuals, NAV.videos, NAV.packages,

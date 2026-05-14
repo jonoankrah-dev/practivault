@@ -371,6 +371,105 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // ---- USAGE & TRANSPARENCY DASHBOARD ----
+  app.get("/api/usage/summary", requireAuth, async (req: AuthedRequest, res) => {
+    const db = req.db!;
+    const userId = req.user!.id;
+
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    try {
+      const [
+        jobsThisMonth,
+        jobsAllTime,
+        callsThisMonth,
+        callsAllTime,
+        waThisMonth,
+        waAllTime,
+        socialDraftsThisMonth,
+        socialDraftsAllTime,
+        safiEventsThisMonth,
+      ] = await Promise.all([
+        // Completed jobs this month + all time
+        db.from("bookings").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "completed").gte("created_at", monthStart),
+        db.from("bookings").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "completed"),
+
+        // Phone calls (Vapi / call_logs)
+        db.from("call_logs").select("duration_secs, created_at").eq("user_id", userId).gte("created_at", monthStart),
+        db.from("call_logs").select("duration_secs, created_at").eq("user_id", userId),
+
+        // WhatsApp outbound messages
+        db.from("whatsapp_messages").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("direction", "outbound").gte("sent_at", monthStart),
+        db.from("whatsapp_messages").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("direction", "outbound"),
+
+        // Social Studio activity
+        db.from("activity_events").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("source", "social_studio").gte("created_at", monthStart),
+        db.from("activity_events").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("source", "social_studio"),
+
+        // General Safi / AI assistant events (broader)
+        db.from("activity_events").select("id", { count: "exact", head: true }).eq("user_id", userId).in("source", ["safi", "voice", "ai-front-desk"]).gte("created_at", monthStart),
+      ]);
+
+      const voiceSecsThisMonth = (callsThisMonth.data || []).reduce((sum: number, c: any) => sum + (Number(c.duration_secs) || 0), 0);
+      const voiceSecsAll = (callsAllTime.data || []).reduce((sum: number, c: any) => sum + (Number(c.duration_secs) || 0), 0);
+
+      const voiceMinutesThisMonth = Math.round(voiceSecsThisMonth / 60);
+      const voiceMinutesAll = Math.round(voiceSecsAll / 60);
+
+      const jobsThis = jobsThisMonth.count || 0;
+      const jobsTotal = jobsAllTime.count || 0;
+
+      const waCountMonth = waThisMonth.count || 0;
+      const waCountAll = waAllTime.count || 0;
+
+      const socialCountMonth = socialDraftsThisMonth.count || 0;
+      const socialCountAll = socialDraftsAllTime.count || 0;
+
+      const aiInteractionsMonth = (safiEventsThisMonth.count || 0) + socialCountMonth;
+
+      // Rough "what you'd pay elsewhere" estimate (Jobber-style thinking)
+      // Example: 3 users + AI receptionist add-on + per-job overages
+      const hypotheticalJobberCost = Math.max(180, jobsThis * 2 + voiceMinutesThisMonth * 0.8 + aiInteractionsMonth * 0.6);
+
+      res.json({
+        period: {
+          month: now.toLocaleString("en-GB", { month: "long", year: "numeric" }),
+          monthStart,
+          thirtyDaysAgo,
+        },
+        jobs: {
+          thisMonth: jobsThis,
+          allTime: jobsTotal,
+        },
+        aiVoice: {
+          minutesThisMonth: voiceMinutesThisMonth,
+          minutesAllTime: voiceMinutesAll,
+          callsThisMonth: callsThisMonth.data?.length || 0,
+        },
+        messagesSent: {
+          whatsappThisMonth: waCountMonth,
+          whatsappAllTime: waCountAll,
+          aiGeneratedThisMonth: aiInteractionsMonth,
+        },
+        socialStudio: {
+          draftsThisMonth: socialCountMonth,
+          draftsAllTime: socialCountAll,
+        },
+        savings: {
+          hypotheticalJobberCost: Math.round(hypotheticalJobberCost),
+          yourPrice: 129, // Team plan reference
+          note: "Estimate based on typical Jobber per-user + AI add-on pricing for similar activity.",
+        },
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      console.error("[usage/summary] error:", err);
+      res.status(500).json({ message: "Failed to compute usage summary" });
+    }
+  });
+
   // ---- CLIENTS ----
   app.get("/api/clients", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
