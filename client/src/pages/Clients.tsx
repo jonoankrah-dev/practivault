@@ -39,7 +39,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useIndustry } from "@/contexts/IndustryContext";
 import StatusBadge from "@/components/StatusBadge";
 import SafiSectionChat from "@/components/SafiSectionChat";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Plus, Pencil, Trash2, Users, Search, Loader2, Bot } from "lucide-react";
 import type { Client, ClientStage } from "@shared/schema";
 
@@ -71,8 +71,13 @@ function formatMoney(n: number) {
 export default function Clients() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [location] = useLocation();
   const { config } = useIndustry();
   const entityLabel = config.labels.clients;
+  /** In DemoApp, routes live under `/demo/:industry/...`; keep profile links inside that tree. */
+  const demoRoutePrefix = /^\/demo\/[^/]+/.exec(location)?.[0] ?? "";
+  const clientProfileHref = (id: string) =>
+    demoRoutePrefix ? `${demoRoutePrefix}/clients/${id}` : `/clients/${id}`;
 
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -319,7 +324,7 @@ export default function Clients() {
                 <TableRow key={c.id}>
                   <TableCell className="font-medium">
                     <div>
-                      <Link href={`/clients/${c.id}`}>
+                      <Link href={clientProfileHref(c.id)}>
                         <a className="text-primary hover:underline">{c.name}</a>
                       </Link>
                     </div>
