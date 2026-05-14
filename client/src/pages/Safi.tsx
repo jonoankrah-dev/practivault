@@ -23,7 +23,7 @@ export default function Saffi({
   const [messages, setMessages] = useState([
     { 
       role: "assistant", 
-      content: `Hi! I'm Saffi, powered by OurPai.ai. I'm currently on the dashboard. You have ${clientCount} clients and today's revenue is ${revenue}. Your Business ID is ${businessId}. How can I help you today?` 
+      content: `Hi, I'm Saffi. My brain runs on OurPai.ai (PAI). I'm connected to your PractiVault data. You have ${clientCount} clients and today's revenue is ${revenue}. Business ID: ${businessId}. What would you like me to handle?` 
     }
   ]);
   const [copied, setCopied] = useState(false);
@@ -44,8 +44,8 @@ export default function Saffi({
       onNavigate?.('settings');
       reply = `Your Business ID is **${businessId}**.`;
     } 
-    else if (lower.includes("ourpai") || lower.includes("install")) {
-      reply = "Here's the OurPai install command:";
+    else if (lower.includes("ourpai") || lower.includes("install") || lower.includes("pai brain")) {
+      reply = "To install the OurPai.ai (PAI) runtime that powers my brain:";
       setMessages(prev => [...prev, { role: "assistant", content: reply }]);
       
       setTimeout(() => {
