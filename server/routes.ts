@@ -2657,6 +2657,19 @@ Rules:
     },
     {
       type: "function",
+      name: "delete_client",
+      description:
+        "Permanently delete a client after the user has clearly confirmed (e.g. yes / go ahead). Match by name — must be unambiguous.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Client name to find and delete" },
+        },
+        required: ["name"],
+      },
+    },
+    {
+      type: "function",
       name: "get_consent_forms",
       description: "List consent forms. Can filter by status — pending, signed, overdue.",
       parameters: {
@@ -3108,6 +3121,14 @@ Rules:
           const { data, error } = await db.from("clients").update(updates).eq("id", found.id).select("name, stage, email, phone").single();
           if (error) return `Failed to update client: ${error.message}`;
           return `Client updated: ${data.name} — stage: ${data.stage} — email: ${data.email ?? "unchanged"} — phone: ${data.phone ?? "unchanged"}`;
+        }
+        case "delete_client": {
+          if (!args.name) return "Client name is required.";
+          const { data: found } = await db.from("clients").select("id, name").eq("user_id", userId).ilike("name", `%${args.name}%`).limit(1).single();
+          if (!found) return `No client found matching "${args.name}".`;
+          const { error } = await db.from("clients").delete().eq("id", found.id).eq("user_id", userId);
+          if (error) return `Failed to delete client: ${error.message}`;
+          return `Deleted client **${found.name}** (id \`${found.id}\`).`;
         }
         case "get_consent_forms": {
           let q = db.from("consent_forms").select("id, form_type, status, created_at, signed_at, token, clients(name, email)").eq("user_id", userId).order("created_at", { ascending: false }).limit(args.limit ?? 15);
@@ -3674,15 +3695,50 @@ When you retrieve data, summarise it clearly and add a brief observation where u
       { role: "user", content: message },
     ];
 
+    const trivialSafiReply = (s: string) => {
+      const t = (s ?? "").trim();
+      return !t || /^(ok\.?|okay\.?|done\.?|sure\.?|got it\.?|noted\.?)$/i.test(t);
+    };
+
+    /** When the model returns only tool calls then "ok" / empty text, turn tool output into a user-visible answer. */
+    async function synthesizeSafiMarkdownReply(msgs: any[]): Promise<string> {
+      try {
+        const synthRes = await fetch("https://api.x.ai/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${process.env.XAI_API_KEY}` },
+          body: JSON.stringify({
+            model: "grok-3-mini",
+            messages: [
+              ...msgs,
+              {
+                role: "user",
+                content:
+                  "Reply to the user in clear markdown only. Use bullet lists or short tables when the tool results include lists or records. Do not call tools. If tools returned an error or empty data, say so plainly.",
+              },
+            ],
+            tool_choice: "none",
+            max_tokens: 2500,
+            temperature: 0.2,
+          }),
+          signal: AbortSignal.timeout(25_000),
+        });
+        if (!synthRes.ok) return "";
+        const d = await synthRes.json() as any;
+        return String(d.choices?.[0]?.message?.content ?? "").trim();
+      } catch {
+        return "";
+      }
+    }
+
     // Agentic loop — keep calling until no more tool calls
-    const MAX_STEPS = 5;
+    const MAX_STEPS = 6;
     for (let step = 0; step < MAX_STEPS; step++) {
       let grokRes: globalThis.Response;
       try {
         grokRes = await fetch("https://api.x.ai/v1/chat/completions", {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${process.env.XAI_API_KEY}` },
-          body: JSON.stringify({ model: "grok-3-mini", messages, tools: xaiTools, tool_choice: "auto", max_tokens: 1000 }),
+          body: JSON.stringify({ model: "grok-3-mini", messages, tools: xaiTools, tool_choice: "auto", max_tokens: 2000 }),
           signal: AbortSignal.timeout(20_000),
         });
       } catch (e: any) {
@@ -3703,16 +3759,22 @@ When you retrieve data, summarise it clearly and add a brief observation where u
 
       messages.push(assistantMsg);
 
-      // No tool calls — we have the final answer
+      // No tool calls — we have the final answer (or need one synthesis pass after tools)
       if (!assistantMsg.tool_calls?.length) {
         const reply = (assistantMsg.content ?? "").trim();
-        // Filter out trivial acknowledgements the model sometimes returns after tool calls
-        const isTrivial = /^(ok\.?|okay\.?|done\.?|sure\.?|got it\.?|noted\.?)$/i.test(reply);
-        if (!isTrivial || messages.length <= 2) {
+        if (!trivialSafiReply(reply)) {
           return res.json({ reply, messages });
         }
-        // If trivial, fall through to get a better final response
-        break;
+        const synthesized = await synthesizeSafiMarkdownReply(messages);
+        if (synthesized) {
+          return res.json({ reply: synthesized, messages });
+        }
+        return res.json({
+          reply:
+            reply ||
+            "I ran your request but couldn't format a clear answer. Try asking again in one short sentence (for example: **List my clients**).",
+          messages,
+        });
       }
 
       // Execute all tool calls in parallel
@@ -3743,10 +3805,24 @@ When you retrieve data, summarise it clearly and add a brief observation where u
       messages.push(...toolResults);
     }
 
-    // No trailing extra xAI confirmation call. The agentic loop above already
-    // produces a real final reply when no more tool calls are needed; cutting
-    // this avoids 1-2s of pointless latency.
-    return res.json({ reply: "Done — all sorted.", messages });
+    // Still here: hit step limit mid-tool loop, or model never returned usable text.
+    let fallback = "";
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === "assistant" && typeof m.content === "string") {
+        const t = m.content.trim();
+        if (t && !trivialSafiReply(t)) {
+          fallback = t;
+          break;
+        }
+      }
+    }
+    if (!fallback) fallback = await synthesizeSafiMarkdownReply(messages);
+    if (!fallback) {
+      fallback =
+        "I couldn't finish that reply in time. Please try again with a shorter question, or split it into two steps (e.g. first **list clients**, then **add one**).";
+    }
+    return res.json({ reply: fallback, messages });
   });
 
     // ─── Saphie AI — chat + voice transcription + manuals ──────────────────────
