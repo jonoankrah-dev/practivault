@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -148,7 +147,10 @@ export default function Clients() {
       setDialogOpen(false);
       resetForm();
     },
-    onError: (e: Error) => toast({ title: e.message || "Failed to create", variant: "destructive" }),
+    onError: (e: unknown) => {
+      const msg = e instanceof Error ? e.message : "Failed to create";
+      toast({ title: "Could not add client", description: msg, variant: "destructive" });
+    },
   });
 
   const updateMutation = useMutation({
@@ -160,7 +162,10 @@ export default function Clients() {
       setDialogOpen(false);
       resetForm();
     },
-    onError: (e: Error) => toast({ title: e.message || "Failed to save", variant: "destructive" }),
+    onError: (e: unknown) => {
+      const msg = e instanceof Error ? e.message : "Failed to save";
+      toast({ title: "Could not save changes", description: msg, variant: "destructive" });
+    },
   });
 
   const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
@@ -171,7 +176,10 @@ export default function Clients() {
       toast({ title: "Removed" });
       setDeleteTarget(null);
     },
-    onError: (e: Error) => toast({ title: e.message || "Failed to delete", variant: "destructive" }),
+    onError: (e: unknown) => {
+      const msg = e instanceof Error ? e.message : "Failed to delete";
+      toast({ title: "Could not remove client", description: msg, variant: "destructive" });
+    },
   });
 
   function buildPayload(): Record<string, unknown> {
@@ -354,6 +362,7 @@ export default function Clients() {
       )}
 
       <Dialog
+        modal={false}
         open={dialogOpen}
         onOpenChange={(o) => {
           setDialogOpen(o);
@@ -424,13 +433,15 @@ export default function Clients() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
+            <Button
+              type="button"
+              variant="destructive"
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
               disabled={deleteMutation.isPending}
             >
               {deleteMutation.isPending ? "Removing…" : "Remove"}
-            </AlertDialogAction>
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

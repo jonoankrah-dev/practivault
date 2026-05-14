@@ -25,6 +25,7 @@ import mammoth from "mammoth";
 import { supabase, supabaseForUser, supabaseAdmin } from "./supabase";
 import {
   clientInsertSchema,
+  clientPatchSchema,
   treatmentInsertSchema,
   bookingInsertSchema,
   leadInsertSchema,
@@ -415,7 +416,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
     const { data, error } = await db
       .from("clients")
-      .insert({ ...parsed.data, user_id: req.user!.id, stage: parsed.data.stage || "prospect" })
+      .insert({
+        ...parsed.data,
+        user_id: req.user!.id,
+        stage: parsed.data.stage || "prospect",
+        ltv: 0,
+      })
       .select()
       .single();
     if (error) return res.status(500).json({ message: error.message });
@@ -425,9 +431,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/clients/:id", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const { id } = req.params;
+    const parsed = clientPatchSchema.safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+    const updates = Object.fromEntries(
+      Object.entries(parsed.data).filter(([, v]) => v !== undefined),
+    ) as Record<string, unknown>;
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ message: "No valid fields to update" });
+    }
     const { data, error } = await db
       .from("clients")
-      .update(req.body || {})
+      .update(updates)
       .eq("id", id)
       .eq("user_id", req.user!.id)
       .select()

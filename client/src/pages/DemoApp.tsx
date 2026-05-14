@@ -23,6 +23,7 @@ import {
 import Dashboard from "@/pages/Dashboard";
 import Bookings from "@/pages/Bookings";
 import Clients from "@/pages/Clients";
+import ClientDetail from "@/pages/ClientDetail";
 import Leads from "@/pages/Leads";
 import Quotes from "@/pages/Quotes";
 import Invoices from "@/pages/Invoices";
@@ -181,6 +182,9 @@ function DemoRouter({ base }: { base: string }) {
     <Switch>
       <Route path={`${base}/dashboard`} component={Dashboard} />
       <Route path={`${base}/bookings`}  component={Bookings} />
+      <Route path={`${base}/clients/:id`}>
+        {(params) => <ClientDetail clientId={params.id} clientsListHref={`${base}/clients`} />}
+      </Route>
       <Route path={`${base}/clients`}   component={Clients} />
       <Route path={`${base}/leads`}     component={Leads} />
       <Route path={`${base}/quotes`}    component={Quotes} />

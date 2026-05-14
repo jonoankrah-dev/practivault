@@ -174,12 +174,19 @@ export type TimelineEvent = {
 // Zod schemas for validation
 export const clientInsertSchema = z.object({
   name: z.string().min(1),
-  email: z.string().email().nullable().optional(),
+  email: z
+    .preprocess(
+      (val) => (val === "" || val === undefined || val === null ? null : val),
+      z.union([z.string().email(), z.null()]).optional(),
+    ),
   phone: z.string().nullable().optional(),
   address: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
   stage: z.enum(["lead", "prospect", "active", "vip", "lapsed", "archived"]).optional(),
 });
+
+/** PATCH /api/clients/:id — only these fields may be updated from the API. */
+export const clientPatchSchema = clientInsertSchema.partial();
 
 export const treatmentInsertSchema = z.object({
   name: z.string().min(1),

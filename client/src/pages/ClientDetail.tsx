@@ -20,7 +20,14 @@ function formatMoney(n: number) {
   return `£${Number(n || 0).toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
 }
 
-export default function ClientDetail({ clientId }: { clientId: string }) {
+export default function ClientDetail({
+  clientId,
+  clientsListHref = "/clients",
+}: {
+  clientId: string;
+  /** e.g. `/demo/aesthetics/clients` when embedded in DemoApp */
+  clientsListHref?: string;
+}) {
   const { config } = useIndustry();
   const label = config.labels.clients;
 
@@ -35,7 +42,7 @@ export default function ClientDetail({ clientId }: { clientId: string }) {
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div className="flex items-start gap-3">
         <Button variant="ghost" size="icon" className="shrink-0 mt-0.5" asChild>
-          <Link href="/clients">
+          <Link href={clientsListHref}>
             <a aria-label={`Back to ${label}`}>
               <ArrowLeft className="h-4 w-4" />
             </a>
@@ -146,7 +153,7 @@ export default function ClientDetail({ clientId }: { clientId: string }) {
 
           <p className="text-xs text-muted-foreground">
             To edit or remove this record, use{" "}
-            <Link href="/clients" className="text-primary underline">
+            <Link href={clientsListHref} className="text-primary underline">
               {label}
             </Link>{" "}
             and the row actions.
