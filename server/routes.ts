@@ -323,6 +323,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           .eq("issue_date", today),
       ]);
 
+    const dashErr =
+      bookingsToday.error?.message ||
+      activeClients.error?.message ||
+      newLeads.error?.message ||
+      pendingQuotes.error?.message ||
+      highScoreLeads.error?.message ||
+      paidInvoices.error?.message ||
+      todayInvoices.error?.message;
+    if (dashErr) {
+      console.error("[dashboard/stats]", dashErr);
+      return res.status(500).json({ message: dashErr });
+    }
+
     const todaysRevenue =
       todayInvoices.data?.reduce((sum: number, inv: any) => sum + Number(inv.total || 0), 0) || 0;
 
