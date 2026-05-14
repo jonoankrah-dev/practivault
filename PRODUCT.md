@@ -1,82 +1,126 @@
-# PractiVault — Product Overview (White-Label Edition)
+# PractiVault — Product Overview
 
 ## Positioning
 
-- **Product name:** PractiVault (White-Label Edition)  
-- **Tagline:** The premium all-in-one operating system for aesthetic clinics.  
-- **Vision:** A modern, fully white-label clinic management platform any aesthetic clinic can rebrand as its own and use to run the business professionally.
+**Product name:** PractiVault  
+**Tagline:** The premium all-in-one operating system for service businesses.  
+**Vision:** A modern, fully white-label platform that allows service businesses to run their entire operation professionally — with powerful AI included at no extra cost.
 
-### Target market
+PractiVault is built on a clear principle: service businesses should not be penalised for growing. There are no per-user fees, no hidden AI charges, and no surprise add-ons. One flat price. Everything included.
 
-- Aesthetic / medspa clinics; laser, body contouring, skin tightening, injectable clinics.  
-- UK and international (multi-currency and multi-language are roadmap concerns; wire with explicit locale/currency sources before claiming “ready”).  
-- Solo practitioners through multi-location groups.
+### Target Market
 
-### Default demo tenant — endoPulse
+- Aesthetic clinics, medspas, salons, and injectable businesses
+- Trades and field service businesses (plumbers, electricians, joiners, landscapers, builders, HVAC, decorators, and more)
+- Training academies and multi-location groups
+- Solo operators through to larger teams
 
-| Field | Value |
-|--------|--------|
-| Company | endoPulse |
-| Website | https://endopulse.co.uk |
-| Focus | Non-invasive laser (skin tightening, fat reduction, collagen stimulation, body contouring) |
-| Signature | endoPulse™ machine (980nm + 1470nm) |
-| Instagram | https://www.instagram.com/endopulse |
-| Facebook | https://www.facebook.com/endopulse.co.uk |
-| TikTok | https://www.tiktok.com/@endopulse |
-
-**In-app:** Defaults are codified in `client/src/lib/demoBranding.ts`. Settings → “Apply endoPulse demo links” writes them to `business_info`. The shell footer uses those URLs until the tenant saves their own social/website row (any field populated switches the footer off demo fallbacks).
+PractiVault is designed as a broad platform for service businesses that want a professional, scalable system with intelligent automation built in.
 
 ---
 
-## Competitive framing (2026)
+## Pricing — Truly All-Inclusive
 
-| Competitor | PractiVault angle |
-|-------------|-------------------|
-| Per-user platforms | Deeper aesthetics workflows (consent, before/after, protocols), stronger white-label, premium UI tuned for clinics. |
-| **Faces Consent** | Full clinic OS, not consent-only; white-label; Saffi + OurPai.ai agent layer. |
-| **ServiceTitan** | Lighter, more affordable, aesthetics-first UX vs enterprise trades tooling. |
+| Plan   | Monthly Price | Team Size          | What’s Included                              | Best For                     |
+|--------|---------------|--------------------|----------------------------------------------|------------------------------|
+| **Solo**   | £39           | 1 owner + 1 tech   | Full platform + AI tools                     | Solopreneurs & small teams   |
+| **Team**   | £129          | Unlimited          | Everything included                          | Growing businesses           |
+| **Growth** | £249          | Unlimited          | Everything + Priority support + White Label  | Scaling teams & resellers    |
 
-**Summary:** Premium, white-label, aesthetics-specific middle ground: more complete than consent-only tools, more beautiful and focused than generic field service, more approachable than enterprise suites.
-
----
-
-## White-label (product requirements)
-
-- [x] Sidebar business name + default demo name (`endoPulse`) when no tenant name is set.  
-- [x] Optional **hide “Powered by PractiVault”** (`users.hide_powered_by`) — Settings → White-label; requires Supabase migration `20260514200000_users_hide_powered_by.sql`.  
-- [ ] Full dynamic theme from DB (today: industry packs + CSS variables).  
-- [ ] Onboarding wizard (logo, colours, services, team) as a single guided flow.  
-- [ ] Client-facing surfaces (booking, consent, portal, PDFs) 100% tenant-branded.  
-- [ ] Custom domains (e.g. `book.yourclinic.com`).  
-- [ ] Tiered reseller plans (Starter / Pro / Enterprise).
+**Key differentiators:**
+- No per-user fees
+- Full AI capabilities included on every plan
+- No surprise charges for features or usage
 
 ---
 
-## Core modules (roadmap vs shipped)
+## Competitive Positioning
 
-| Area | Direction |
-|------|-----------|
-| **Dashboard** | Live KPIs, bookings, chart; activity feed TBD. |
-| **Clients** | CRM list + add/edit/delete; profile route `/clients/:id` (overview, bookings, timeline); photos/consent deep links TBD. |
-| **Bookings** | Full calendar + public booking page TBD (currently Saffi-forward in UI). |
-| **Consent & forms** | Module present; flagship flows and comparisons TBD. |
-| **Photos** | Module present; side-by-side compare TBD. |
-| **Saffi** | Section tools, memory, voice; Clients embed with live table snapshot. |
-| **Marketing** | Social Studio, WhatsApp, leads — mix of UI and Saffi-forward. |
-| **Finance / ops** | Invoices, team, stock, manuals, packages, CPD — iterate toward “complete OS”. |
+PractiVault positions itself as the premium, all-inclusive alternative for service businesses that want reliability, powerful automation, and predictable costs.
 
----
+**Core advantages:**
+- **All-inclusive pricing** — One flat monthly fee with unlimited users and full access to AI features.
+- **Powerful AI built in** — Intelligent automation across operations, client communication, and marketing, without requiring additional subscriptions.
+- **Strong white-label capabilities** — Designed to run seamlessly under another brand.
+- **Premium, modern experience** — Fast, beautiful, and intuitive for both operators and their teams.
 
-## Technical stack
-
-- **Frontend:** React + Vite, TanStack Query, Tailwind, shadcn-style UI.  
-- **Backend:** Node (Express), Supabase (auth + RLS + Postgres).  
-- **Agent:** Saffi (OurPai.ai / xAI per environment); voice via realtime bridge where configured.
+PractiVault delivers the depth and quality expected from high-end platforms, while remaining accessible and predictable in cost.
 
 ---
 
-## Operational notes
+## White-Label Capabilities
 
-1. Run new SQL migrations in Supabase (including `hide_powered_by`) before toggling white-label in production.  
-2. After changing social links in Settings, the footer refetches `/api/business-info`.  
-3. “Powered by PractiVault” is a trust line for the platform; hiding it is a deliberate commercial/reseller choice.
+PractiVault is built to be rebranded and operated under another company’s name:
+
+- Full business name and logo throughout the platform
+- Optional removal of PractiVault attribution
+- Custom colours and industry-specific theming
+- Branded client portal, invoices, quotes, and consent forms
+- Guided onboarding wizard to help new users get started quickly
+
+White Label Mode is available on the Growth plan and is designed for businesses that want to present the platform as their own.
+
+---
+
+## Saffi — Intelligent Operations
+
+**Saffi** is PractiVault’s built-in AI assistant. It is designed to act as a capable, proactive team member that helps run the business day-to-day.
+
+Key capabilities include:
+- Managing clients, bookings, quotes, and invoices
+- Supporting marketing efforts through content creation
+- Handling phone and message enquiries 24/7 via the AI Phone Receptionist
+- Learning the business owner’s communication style over time
+- Suggesting relevant upsells and helping with pricing decisions
+- Anticipating operational needs based on context and history
+
+Saffi is continuously evolving to reduce manual work and help business owners focus on growth and client delivery.
+
+---
+
+## Core Modules
+
+| Module                    | Status                     | Notes |
+|---------------------------|----------------------------|-------|
+| Dashboard                 | Live                       | Real-time KPIs and overview |
+| Clients                   | Live                       | Full CRM with profiles and history |
+| Bookings & Calendar       | Live                       | Scheduling and management |
+| Quotes & Invoices         | Live                       | End-to-end financial workflows |
+| AI Phone Receptionist     | Live & actively improved   | 24/7 call handling with dynamic configuration |
+| Saffi (AI Assistant)      | Live & evolving            | Agentic AI across operations and client communication |
+| Social Studio             | Live                       | AI-assisted marketing content |
+| Usage & Transparency      | Live                       | Clear visibility into platform usage and value |
+| Onboarding Wizard         | Improved                   | Guided setup with service and contact collection |
+| White Label Mode          | Available                  | Branding and attribution controls |
+
+---
+
+## Technical Stack
+
+- **Frontend:** React + Vite, Tailwind, modern component library
+- **Backend:** Node.js + Express + TypeScript
+- **Database & Auth:** Supabase (PostgreSQL + Row Level Security)
+- **AI & Voice:** Advanced agentic AI with real-time voice capabilities
+- **Deployment:** Railway
+
+---
+
+## Strategic Direction
+
+PractiVault is being developed as a premium, all-inclusive operating system for service businesses that want reliability, powerful AI, and predictable costs.
+
+Current priorities include:
+- Making the AI Phone Receptionist seamless to activate and highly effective
+- Expanding white-label features for resellers and branded deployments
+- Continuing to improve Saffi’s ability to handle real operational work intelligently
+- Refining the onboarding experience so new users see value extremely quickly
+
+---
+
+## Operational Notes
+
+- “Powered by PractiVault” can be hidden on higher-tier plans.
+- The Usage Dashboard is available across all plans to provide transparency.
+- The platform is intentionally designed so that adding team members does not increase monthly costs.
+- All AI features are included as standard — there are no separate charges for usage.
+```
