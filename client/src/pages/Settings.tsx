@@ -93,7 +93,7 @@ export default function SettingsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/me"] });
-      toast({ title: "White-label preference saved" });
+      toast({ title: "White Label setting updated" });
     },
     onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
@@ -414,25 +414,37 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* White-label */}
+      {/* White Label Mode */}
       <div className="bg-card border border-card-border rounded-xl p-6 shadow-sm mb-6">
-        <div className="flex items-center gap-2 mb-3">
+        <div className="flex items-center gap-2 mb-2">
           <Palette className="h-4 w-4 text-primary" />
-          <h2 className="text-sm font-semibold">White-label</h2>
+          <h2 className="text-sm font-semibold">White Label Mode</h2>
+          <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-[#E83A8E]/10 text-[#E83A8E] font-medium">Growth &amp; Scale plans</span>
         </div>
-        <p className="text-xs text-muted-foreground mb-4">
-          Hide the small &quot;Powered by PractiVault&quot; line under your business name in the sidebar (for paid / resale deployments).
+
+        <p className="text-xs text-muted-foreground mb-4 max-w-prose">
+          Run PractiVault under your own brand. Your clients and team see your business name, colours, and logo throughout the platform.
         </p>
-        <div className="flex items-center justify-between gap-4 rounded-lg border border-border px-4 py-3">
-          <div>
-            <div className="text-sm font-medium">Hide PractiVault attribution</div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">Requires column <code className="text-[10px]">hide_powered_by</code> in Supabase (see migration).</div>
+
+        <div className="space-y-3">
+          {/* Main toggle */}
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-border px-4 py-3.5">
+            <div className="flex-1">
+              <div className="text-sm font-medium">Hide "Powered by PractiVault"</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Removes PractiVault attribution from the sidebar and most surfaces.
+              </div>
+            </div>
+            <Switch
+              checked={!!me?.hide_powered_by}
+              onCheckedChange={(v) => updateWhiteLabel.mutate(v)}
+              disabled={updateWhiteLabel.isPending}
+            />
           </div>
-          <Switch
-            checked={!!me?.hide_powered_by}
-            onCheckedChange={(v) => updateWhiteLabel.mutate(v)}
-            disabled={updateWhiteLabel.isPending}
-          />
+
+          <div className="text-[11px] text-muted-foreground px-1">
+            More white-label controls coming soon: custom Saffi introductions, branded invoice footers, AI receptionist voice personality, and email templates.
+          </div>
         </div>
       </div>
 
