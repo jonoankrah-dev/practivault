@@ -28,7 +28,7 @@ interface Props {
 export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
   const { user } = useAuth();
   const [step, setStep] = useState(1);
-  const TOTAL_STEPS = 5;
+  const TOTAL_STEPS = 6; // Added Main Services step for better Saffi + AI Receptionist context
 
   // Step 1 — Business name
   const [businessName, setBusinessName] = useState("");
@@ -40,6 +40,9 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [website, setWebsite] = useState("");
+
+  // Step 3.5 / new — Main services (feeds Saffi, Receptionist, Social Studio)
+  const [mainServices, setMainServices] = useState("");
 
   // Step 4 — First client
   const [clientName, setClientName] = useState("");
@@ -107,7 +110,7 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
         <div className="px-8 pt-4 pb-1">
           {/* Step dots */}
           <div className="flex items-center justify-between mb-2">
-            {["Business", "Industry", "Details", "Client", "Done"].map((label, i) => {
+            {["Business", "Industry", "Details", "Services", "Client", "Done"].map((label, i) => {
               const s = i + 1;
               const done = step > s;
               const active = step === s;
@@ -270,7 +273,20 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
                     onChange={(e) => setWebsite(e.target.value)}
                   />
                 </div>
+
+                {/* Main Services — feeds Saffi, AI Receptionist, and Social Studio */}
+                <div className="space-y-1.5 pt-3 border-t border-gray-100">
+                  <Label>Main services / treatments (recommended)</Label>
+                  <Textarea
+                    placeholder="Laser skin tightening, Lip fillers, Botox, IV vitamin drips, etc."
+                    value={mainServices}
+                    onChange={(e) => setMainServices(e.target.value)}
+                    rows={2}
+                  />
+                  <p className="text-[10px] text-muted-foreground">This helps your AI give accurate answers and create better marketing content.</p>
+                </div>
               </div>
+
               <div className="flex gap-3 pt-2">
                 <Button variant="ghost" className="text-gray-400 text-sm px-3" onClick={() => setStep(2)}>
                   ← Back
@@ -282,7 +298,7 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
                   Next →
                 </Button>
                 <Button variant="ghost" className="text-gray-400 text-sm" onClick={() => setStep(4)}>
-                  Skip
+                  Skip for now
                 </Button>
               </div>
             </div>
