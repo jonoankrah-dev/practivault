@@ -113,17 +113,56 @@ Style:
 - Never reveal you are an AI model from xAI. You are simply Saffi, the owner's assistant.
 `.trim();
 
-function buildSessionUpdate(businessContext: string | null): string {
+// Strong, professional, sales-aware receptionist persona for inbound calls
+const RECEPTIONIST_INSTRUCTIONS = `
+You are the AI Phone Receptionist for this business. You answer the phone warmly and professionally. Your goal is to help the caller, qualify their enquiry, and book them in if possible.
+
+Core behaviour:
+- Greet naturally ("Hello, [Business] speaking, how can I help you?").
+- Be friendly, calm, and efficient. Never sound scripted or robotic.
+- Ask clarifying questions to understand what they need.
+- Check availability and offer real booking options when appropriate.
+- If they ask about price, give clear ranges or the most common price and offer to confirm exact quote.
+- Handle objections confidently and honestly (safety, pain, results, timing, etc.).
+- If the caller is not ready to book, capture their details and offer to send more information or call back.
+
+Tone:
+- Warm British English. Professional but human. Short, clear sentences.
+- Never pushy or salesy. Helpful first, booking second.
+- Sound like a well-trained, experienced receptionist who genuinely cares.
+
+Business context:
+- Use the provided business snapshot for accurate services, pricing ranges, availability rules, and policies.
+- Never invent treatments, prices, or dates.
+
+Boundaries:
+- You cannot actually send texts or WhatsApps in this voice session — if the caller wants a confirmation or follow-up message, tell them you will prepare it and the owner will send it.
+- If something is outside your knowledge, say you'll check with the team and get back to them.
+
+Style:
+- Keep most replies under 20–25 seconds of speech.
+- One clear question or offer per turn.
+- End calls politely when the caller is happy.
+`.trim();
+
+function buildSessionUpdate(businessContext: string | null, mode: 'default' | 'receptionist' = 'default'): string {
+  const base = mode === 'receptionist' ? RECEPTIONIST_INSTRUCTIONS : SAFFI_CONCIERGE_INSTRUCTIONS;
+
   const instructions =
-    SAFFI_CONCIERGE_INSTRUCTIONS +
+    base +
     (businessContext
       ? `\n\nBusiness context (already loaded for you — use this without asking):\n${businessContext}`
       : "") +
-    `\n\nYou have these read-only tools — call them whenever they're relevant, never invent data:\n` +
-    `- get_dashboard_overview: a single snapshot of today's appointments, leads, quotes, revenue, unpaid invoices, low stock.\n` +
-    `- search_manuals: search uploaded manuals/courses/policies for any product/training/aftercare/policy question.\n` +
-    `- get_business_snapshot: refresh the owner/business identity if the conversation drifts.\n` +
-    `You have NO write/send/post tools. If asked to send/post/quote/invoice, say you'll prepare it and Jono can approve in the app.`;
+    (mode === 'receptionist'
+      ? `\n\nYou have these read-only tools — call them whenever they're relevant:\n` +
+        `- get_business_snapshot: get services, pricing, availability rules, and policies.\n` +
+        `- search_manuals: look up detailed treatment or policy information.\n` +
+        `Never invent prices, dates, or services. If you need fresh data, use the tools.`
+      : `\n\nYou have these read-only tools — call them whenever they're relevant, never invent data:\n` +
+        `- get_dashboard_overview: a single snapshot of today's appointments, leads, quotes, revenue, unpaid invoices, low stock.\n` +
+        `- search_manuals: search uploaded manuals/courses/policies for any product/training/aftercare/policy question.\n` +
+        `- get_business_snapshot: refresh the owner/business identity if the conversation drifts.\n` +
+        `You have NO write/send/post tools. If asked to send/post/quote/invoice, say you'll prepare it and the owner can approve in the app.`);
 
   return JSON.stringify({
     type: "session.update",
@@ -184,6 +223,7 @@ export function registerSaffiRealtime(httpServer: HttpServer, _app: Express): vo
       const url = new URL(req.url ?? "", "http://internal");
       if (url.pathname !== "/ws/saffi/realtime") return; // not for us
       const token = url.searchParams.get("token") ?? "";
+      const mode = (url.searchParams.get("mode") === "receptionist" ? "receptionist" : "default") as 'default' | 'receptionist';
       const verified = verifyToken(token);
       const apiKey = process.env.XAI_API_KEY;
       if (!verified || !apiKey) {
@@ -192,7 +232,7 @@ export function registerSaffiRealtime(httpServer: HttpServer, _app: Express): vo
         return;
       }
       wss.handleUpgrade(req, socket, head, (clientSock) => {
-        wss.emit("connection", clientSock, req, verified.userId);
+        wss.emit("connection", clientSock, req, verified.userId, mode);
       });
     } catch {
       try {
@@ -202,7 +242,7 @@ export function registerSaffiRealtime(httpServer: HttpServer, _app: Express): vo
     }
   });
 
-  wss.on("connection", (clientSock: WS, _req: IncomingMessage, userId: string) => {
+  wss.on("connection", (clientSock: WS, _req: IncomingMessage, userId: string, mode: 'default' | 'receptionist' = 'default') => {
     const apiKey = process.env.XAI_API_KEY!;
     let upstream: WS | null = null;
     let upstreamOpen = false;
@@ -226,7 +266,7 @@ export function registerSaffiRealtime(httpServer: HttpServer, _app: Express): vo
           businessContext = snap.summary;
           // If upstream is already up, push an updated session.
           if (upstreamOpen) {
-            try { (upstream as WS | null)?.send(buildSessionUpdate(businessContext)); } catch {}
+            try { (upstream as WS | null)?.send(buildSessionUpdate(businessContext, mode)); } catch {}
           }
         }
       } catch {
@@ -248,7 +288,7 @@ export function registerSaffiRealtime(httpServer: HttpServer, _app: Express): vo
     upstream.on("open", () => {
       upstreamOpen = true;
       // Always pin our session config first so personality + safety apply.
-      try { upstream!.send(buildSessionUpdate(businessContext)); } catch {}
+      try { upstream!.send(buildSessionUpdate(businessContext, mode)); } catch {}
       // Flush anything the browser sent before upstream was ready.
       while (pending.length) {
         const msg = pending.shift()!;

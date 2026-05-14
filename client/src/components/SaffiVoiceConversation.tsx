@@ -94,9 +94,11 @@ function base64ToInt16(b64: string): Int16Array {
 interface Props {
   open: boolean;
   onClose: () => void;
+  /** When true, uses the professional inbound receptionist persona instead of the owner concierge persona */
+  receptionistMode?: boolean;
 }
 
-export function SaffiVoiceConversation({ open, onClose }: Props) {
+export function SaffiVoiceConversation({ open, onClose, receptionistMode = false }: Props) {
   const [status, setStatus] = useState<Status>("idle");
   const [errorText, setErrorText] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string>("");
@@ -283,7 +285,8 @@ export function SaffiVoiceConversation({ open, onClose }: Props) {
 
     // 3. WebSocket
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const url = `${proto}//${window.location.host}${wsPath}?token=${encodeURIComponent(token)}`;
+    const modeParam = receptionistMode ? "&mode=receptionist" : "";
+    const url = `${proto}//${window.location.host}${wsPath}?token=${encodeURIComponent(token)}${modeParam}`;
     let ws: WebSocket;
     try {
       ws = new WebSocket(url);
