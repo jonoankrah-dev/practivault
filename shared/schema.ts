@@ -52,6 +52,21 @@ export type Booking = {
   created_at: string;
 };
 
+export type TeamMemberRole = "owner" | "practitioner" | "receptionist";
+export type TeamMemberStatus = "pending" | "active";
+
+export type TeamMember = {
+  id: string;
+  owner_id: string;
+  name: string;
+  email: string;
+  role: TeamMemberRole;
+  status: TeamMemberStatus;
+  joined_at: string | null;
+  created_at: string;
+  invite_token: string | null;
+};
+
 export type LeadSource =
   | "instagram"
   | "facebook"

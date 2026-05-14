@@ -31,6 +31,7 @@ import ClientPortal from "@/pages/ClientPortal";
 import Videos from "@/pages/Videos";
 import Packages from "@/pages/Packages";
 import Pricing from "@/pages/Pricing";
+import Usage from "@/pages/Usage";
 import CpdLog from "@/pages/CpdLog";
 import Locations from "@/pages/Locations";
 import Stock from "@/pages/Stock";
@@ -161,6 +162,11 @@ function AppRouter() {
       <Route path="/social-studio">
         <Protected>
           <SocialStudio />
+        </Protected>
+      </Route>
+      <Route path="/usage">
+        <Protected>
+          <Usage />
         </Protected>
       </Route>
       <Route path="/leads">
