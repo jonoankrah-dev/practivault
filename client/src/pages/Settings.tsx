@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Trash2, Sparkles, Upload, Building2, CreditCard, FileText as FileTextIcon } from "lucide-react";
+import { Plus, Trash2, Sparkles, Upload, Building2, CreditCard, FileText as FileTextIcon, Instagram, Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -12,14 +12,91 @@ import PageHeader from "@/components/PageHeader";
 import { apiRequest, queryClient, getAuthToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { Link } from "wouter";
+import { ENDOPULSE_DEMO } from "@/lib/demoBranding";
 
 export default function SettingsPage() {
   const { toast } = useToast();
   const { user } = useAuth();
   const { data: me } = useQuery<any>({ queryKey: ["/api/me"] });
+  const { data: bi } = useQuery<any>({ queryKey: ["/api/business-info"] });
   const { data: treatments, isLoading } = useQuery<any[]>({ queryKey: ["/api/treatments"] });
-  const [editing, setEditing] = useState<any | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
+  const [socialIg, setSocialIg] = useState("");
+  const [socialFb, setSocialFb] = useState("");
+  const [socialTt, setSocialTt] = useState("");
+  const [socialWeb, setSocialWeb] = useState("");
+
+  useEffect(() => {
+    if (!bi) return;
+    setSocialIg(bi.instagram_url || "");
+    setSocialFb(bi.facebook_url || "");
+    setSocialTt(bi.tiktok_url || "");
+    setSocialWeb(bi.website_url || "");
+  }, [bi]);
+
+  const saveSocialLinks = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        tagline: bi?.tagline ?? "",
+        about: bi?.about ?? "",
+        logo_url: bi?.logo_url ?? "",
+        website_url: socialWeb.trim() || null,
+        instagram_url: socialIg.trim() || null,
+        tiktok_url: socialTt.trim() || null,
+        facebook_url: socialFb.trim() || null,
+        youtube_url: bi?.youtube_url ?? "",
+        products: bi?.products ?? [],
+        faqs: bi?.faqs ?? [],
+      };
+      const r = await apiRequest("POST", "/api/business-info", payload);
+      return r.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/business-info"] });
+      toast({ title: "Social links saved" });
+    },
+    onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+  });
+
+  const applyEndoPulseSocial = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        tagline: ENDOPULSE_DEMO.tagline,
+        about: bi?.about ?? "",
+        logo_url: bi?.logo_url ?? "",
+        website_url: ENDOPULSE_DEMO.website,
+        instagram_url: ENDOPULSE_DEMO.instagram_url,
+        tiktok_url: ENDOPULSE_DEMO.tiktok_url,
+        facebook_url: ENDOPULSE_DEMO.facebook_url,
+        youtube_url: bi?.youtube_url ?? "",
+        products: bi?.products ?? [],
+        faqs: bi?.faqs ?? [],
+      };
+      const r = await apiRequest("POST", "/api/business-info", payload);
+      return r.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/business-info"] });
+      setSocialIg(ENDOPULSE_DEMO.instagram_url);
+      setSocialFb(ENDOPULSE_DEMO.facebook_url);
+      setSocialTt(ENDOPULSE_DEMO.tiktok_url);
+      setSocialWeb(ENDOPULSE_DEMO.website);
+      toast({ title: "endoPulse demo links applied" });
+    },
+    onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  const updateWhiteLabel = useMutation({
+    mutationFn: async (hide: boolean) => {
+      const r = await apiRequest("PATCH", "/api/me", { hide_powered_by: hide });
+      return r.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+      toast({ title: "White-label preference saved" });
+    },
+    onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+  });
 
   // Personal profile
   const [name, setName] = useState("");
@@ -35,6 +112,8 @@ export default function SettingsPage() {
   const [bankDetails, setBankDetails] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   useEffect(() => {
     if (!me) return;
@@ -279,6 +358,82 @@ export default function SettingsPage() {
         <Button onClick={() => updateBusiness.mutate()} disabled={updateBusiness.isPending} className="bg-primary text-primary-foreground hover:bg-primary/90">
           {updateBusiness.isPending ? "Saving…" : "Save business profile"}
         </Button>
+      </div>
+
+      {/* Social links (footer + Saffi context) */}
+      <div className="bg-card border border-card-border rounded-xl p-6 shadow-sm mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Instagram className="h-4 w-4 text-primary" />
+          <h2 className="text-sm font-semibold">Social &amp; website</h2>
+          <span className="ml-auto text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">Footer + Saffi</span>
+        </div>
+        <p className="text-xs text-muted-foreground mb-4">
+          Shown in the app footer. Full story, FAQs, and products live on{" "}
+          <Link href="/business-info" className="text-primary underline">
+            Business Info
+          </Link>
+          .
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <div className="space-y-1.5">
+            <Label>Website</Label>
+            <Input value={socialWeb} onChange={(e) => setSocialWeb(e.target.value)} placeholder="https://…" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Instagram</Label>
+            <Input value={socialIg} onChange={(e) => setSocialIg(e.target.value)} placeholder="https://instagram.com/…" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Facebook</Label>
+            <Input value={socialFb} onChange={(e) => setSocialFb(e.target.value)} placeholder="https://facebook.com/…" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>TikTok</Label>
+            <Input value={socialTt} onChange={(e) => setSocialTt(e.target.value)} placeholder="https://tiktok.com/@…" />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => saveSocialLinks.mutate()}
+            disabled={saveSocialLinks.isPending}
+          >
+            {saveSocialLinks.isPending ? "Saving…" : "Save social links"}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => applyEndoPulseSocial.mutate()}
+            disabled={applyEndoPulseSocial.isPending}
+          >
+            Apply endoPulse demo links
+          </Button>
+        </div>
+      </div>
+
+      {/* White-label */}
+      <div className="bg-card border border-card-border rounded-xl p-6 shadow-sm mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Palette className="h-4 w-4 text-primary" />
+          <h2 className="text-sm font-semibold">White-label</h2>
+        </div>
+        <p className="text-xs text-muted-foreground mb-4">
+          Hide the small &quot;Powered by PractiVault&quot; line under your business name in the sidebar (for paid / resale deployments).
+        </p>
+        <div className="flex items-center justify-between gap-4 rounded-lg border border-border px-4 py-3">
+          <div>
+            <div className="text-sm font-medium">Hide PractiVault attribution</div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">Requires column <code className="text-[10px]">hide_powered_by</code> in Supabase (see migration).</div>
+          </div>
+          <Switch
+            checked={!!me?.hide_powered_by}
+            onCheckedChange={(v) => updateWhiteLabel.mutate(v)}
+            disabled={updateWhiteLabel.isPending}
+          />
+        </div>
       </div>
 
       {/* Treatments */}

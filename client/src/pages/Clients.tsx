@@ -40,6 +40,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useIndustry } from "@/contexts/IndustryContext";
 import StatusBadge from "@/components/StatusBadge";
 import SafiSectionChat from "@/components/SafiSectionChat";
+import { Link } from "wouter";
 import { Plus, Pencil, Trash2, Users, Search, Loader2, Bot } from "lucide-react";
 import type { Client, ClientStage } from "@shared/schema";
 
@@ -309,7 +310,11 @@ export default function Clients() {
               {clients.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell className="font-medium">
-                    <div>{c.name}</div>
+                    <div>
+                      <Link href={`/clients/${c.id}`}>
+                        <a className="text-primary hover:underline">{c.name}</a>
+                      </Link>
+                    </div>
                     <div className="text-xs text-muted-foreground md:hidden mt-0.5">
                       {[c.email, c.phone].filter(Boolean).join(" · ") || "—"}
                     </div>

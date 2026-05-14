@@ -13,6 +13,7 @@ import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Bookings from "@/pages/Bookings";
 import Clients from "@/pages/Clients";
+import ClientDetail from "@/pages/ClientDetail";
 import AiFrontDesk from "@/pages/AiFrontDesk";
 import PhoneReceptionist from "@/pages/PhoneReceptionist";
 import SocialStudio from "@/pages/SocialStudio";
@@ -134,6 +135,13 @@ function AppRouter() {
         <Protected>
           <Bookings />
         </Protected>
+      </Route>
+      <Route path="/clients/:id">
+        {(params) => (
+          <Protected>
+            <ClientDetail clientId={params.id} />
+          </Protected>
+        )}
       </Route>
       <Route path="/clients">
         <Protected>

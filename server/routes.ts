@@ -247,6 +247,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "name", "avatar_url",
       "business_name", "business_phone", "business_address", "business_website",
       "payment_terms", "bank_details", "logo_url", "vat_number", "company_number",
+      "hide_powered_by",
     ];
     const updates: Record<string, any> = {};
     for (const key of allowed) {

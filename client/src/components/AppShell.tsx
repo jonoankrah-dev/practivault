@@ -5,6 +5,7 @@ import { LogOut, CreditCard } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIndustry } from "@/contexts/IndustryContext";
 import { Logo } from "@/components/Logo";
+import ShellFooter from "@/components/ShellFooter";
 import { cn } from "@/lib/utils";
 
 function useSidebarCounts() {
@@ -41,7 +42,7 @@ function formatMoney(n: number) {
 export default function AppShell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { user, signOut } = useAuth();
-  const { config, businessName } = useIndustry();
+  const { config, businessName, hidePoweredBy } = useIndustry();
   const { newLeads, pipelineValue, pendingConsent, afdToday, missedCallsToday, unreadWhatsApp } = useSidebarCounts();
 
   const badgeValues: Record<string, string | number | undefined> = {
@@ -53,9 +54,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     unreadWhatsApp: unreadWhatsApp > 0 ? unreadWhatsApp : undefined,
   };
 
-  const displayName = businessName
-    ? businessName
-    : "PractiVault";
+  const displayName = businessName?.trim() || "endoPulse";
 
   return (
     <div className="min-h-screen flex bg-background">
@@ -74,7 +73,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
               {displayName}
             </span>
           </div>
-          {businessName && (
+          {!hidePoweredBy && (
             <p className="text-[10px] pl-8 opacity-50">Powered by PractiVault</p>
           )}
           {/* Industry pill */}
@@ -174,10 +173,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 min-w-0 overflow-auto">{children}</main>
-
-
+      {/* Main content + footer */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <main className="flex-1 min-w-0 overflow-auto">{children}</main>
+        <ShellFooter />
+      </div>
     </div>
   );
 }
