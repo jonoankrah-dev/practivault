@@ -28,7 +28,7 @@ interface Props {
 export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
   const { user } = useAuth();
   const [step, setStep] = useState(1);
-  const TOTAL_STEPS = 5;
+  const TOTAL_STEPS = 6; // Added Main Services step for better Saffi + AI Receptionist context
 
   // Step 1 — Business name
   const [businessName, setBusinessName] = useState("");
@@ -40,6 +40,9 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [website, setWebsite] = useState("");
+
+  // Step 3.5 / new — Main services (feeds Saffi, Receptionist, Social Studio)
+  const [mainServices, setMainServices] = useState("");
 
   // Step 4 — First client
   const [clientName, setClientName] = useState("");
@@ -55,6 +58,8 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
   async function saveAndFinish() {
     if (!user) return;
     setSaving(true);
+
+    // Save core business details
     await supabase.from("users").update({
       business_name: businessName || null,
       industry: industry || null,
@@ -63,6 +68,15 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
       business_website: website || null,
       setup_complete: true,
     }).eq("id", user.id);
+
+    // If user entered main services, save them to business_info for Saffi + Receptionist
+    if (mainServices.trim()) {
+      await supabase.from("business_info").upsert({
+        user_id: user.id,
+        products: mainServices.split(",").map(s => ({ name: s.trim() })),
+      }, { onConflict: "user_id" });
+    }
+
     setSaving(false);
     onComplete();
   }
@@ -107,7 +121,7 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
         <div className="px-8 pt-4 pb-1">
           {/* Step dots */}
           <div className="flex items-center justify-between mb-2">
-            {["Business", "Industry", "Details", "Client", "Done"].map((label, i) => {
+            {["Business", "Industry", "Details", "Services", "Client", "Done"].map((label, i) => {
               const s = i + 1;
               const done = step > s;
               const active = step === s;
@@ -154,23 +168,23 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
             <div className="space-y-5">
               <div>
                 <h2 className="text-2xl font-bold text-[#241f19] leading-tight">
-                  Welcome to PractiVault! 👋
+                  Let's set up your operating system
                 </h2>
                 <p className="text-sm text-gray-500 mt-2">
-                  Let's get you set up in about 2 minutes. First — what's your business called?
+                  This will power your client management, AI assistant, bookings, and more. Takes about 2 minutes.
                 </p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="biz-name">Business name</Label>
                 <Input
                   id="biz-name"
-                  placeholder="e.g. Dave's Plumbing Pro"
+                  placeholder="e.g. London Lipo Clinic"
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
                   autoFocus
                 />
                 <p className="text-xs text-gray-400">
-                  This appears in your sidebar — "Dave's Plumbing Pro · Powered by PractiVault"
+                  This is how your team and clients will see the platform.
                 </p>
               </div>
               <div className="flex gap-3 pt-2">
@@ -233,43 +247,57 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
             </div>
           )}
 
-          {/* ── STEP 3: Business details ── */}
+          {/* ── STEP 3: Contact Details (important for AI) ── */}
           {step === 3 && (
             <div className="space-y-5">
               <div>
                 <h2 className="text-2xl font-bold text-[#241f19] leading-tight">
-                  A few more details
+                  Your main business phone
                 </h2>
                 <p className="text-sm text-gray-500 mt-2">
-                  These appear on your invoices and client communications. All optional.
+                  This is the number your AI Phone Receptionist will answer 24/7. You can change it later in Settings.
                 </p>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label>Business phone</Label>
+                  <Label>Business phone number</Label>
                   <Input
-                    placeholder="e.g. 07700 900000"
+                    placeholder="+44 7537 167007"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                   />
+                  <p className="text-xs text-muted-foreground">This powers your AI receptionist — one of the most valuable features.</p>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Business address</Label>
+                  <Label>Address (optional)</Label>
                   <Input
-                    placeholder="e.g. 12 Main Street, Manchester, M1 1AA"
+                    placeholder="e.g. 12 Harley Street, London"
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Website <span className="text-gray-400 font-normal">(optional)</span></Label>
+                  <Label>Website (optional)</Label>
                   <Input
-                    placeholder="e.g. www.davesplumbing.co.uk"
+                    placeholder="https://yourbusiness.com"
                     value={website}
                     onChange={(e) => setWebsite(e.target.value)}
                   />
                 </div>
+
+                {/* Main Services — feeds Saffi, AI Receptionist, and Social Studio */}
+                <div className="space-y-1.5 pt-3 border-t border-gray-100">
+                  <Label>Main services / treatments (recommended)</Label>
+                  <Textarea
+                    placeholder="Laser skin tightening, Lip fillers, Botox, IV vitamin drips, etc."
+                    value={mainServices}
+                    onChange={(e) => setMainServices(e.target.value)}
+                    rows={2}
+                  />
+                  <p className="text-[10px] text-muted-foreground">This helps your AI give accurate answers and create better marketing content.</p>
+                </div>
               </div>
+
               <div className="flex gap-3 pt-2">
                 <Button variant="ghost" className="text-gray-400 text-sm px-3" onClick={() => setStep(2)}>
                   ← Back
@@ -281,7 +309,7 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
                   Next →
                 </Button>
                 <Button variant="ghost" className="text-gray-400 text-sm" onClick={() => setStep(4)}>
-                  Skip
+                  Skip for now
                 </Button>
               </div>
             </div>
@@ -361,41 +389,47 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
             </div>
           )}
 
-          {/* ── STEP 5: All done ── */}
+          {/* ── STEP 5: All done — Premium completion screen */}
           {step === 5 && (
-            <div className="space-y-5 text-center">
-              <div className="text-6xl py-2">🎉</div>
+            <div className="space-y-6 text-center">
+              <div className="text-6xl py-1">🎉</div>
               <div>
                 <h2 className="text-2xl font-bold text-[#241f19] leading-tight">
-                  You're all set!
+                  You're ready to run your business
                 </h2>
-                <p className="text-sm text-gray-500 mt-2">
-                  {businessName ? `${businessName} is` : "Your account is"} ready to go. Here's what to explore first:
+                <p className="text-sm text-gray-500 mt-2 max-w-sm mx-auto">
+                  Your operating system is live. The biggest time-savers are the AI features.
                 </p>
               </div>
-              <div className="text-left space-y-2">
-                {[
-                  { icon: "📅", label: "Bookings", desc: "Schedule your first appointment" },
-                  { icon: "👥", label: "Clients", desc: "View and manage your client list" },
-                  { icon: "🧾", label: "Invoices", desc: "Send your first invoice in seconds" },
-                  { icon: "🤖", label: "AI Front Desk", desc: "Let Buddy handle your enquiries" },
-                ].map((item) => (
-                  <div key={item.label} className="flex items-center gap-3 bg-[#f6f3ef] rounded-xl px-4 py-3">
-                    <span className="text-xl">{item.icon}</span>
+
+              <div className="bg-[#f8f5f0] rounded-xl p-5 text-left space-y-3 border border-gray-100">
+                <div className="text-xs font-semibold text-[#E83A8E] tracking-wider">START HERE</div>
+                <div className="space-y-3 text-sm">
+                  <div className="flex gap-3">
+                    <div>📞</div>
                     <div>
-                      <p className="text-sm font-semibold text-[#241f19]">{item.label}</p>
-                      <p className="text-xs text-gray-500">{item.desc}</p>
+                      <div className="font-medium">AI Phone Receptionist</div>
+                      <div className="text-xs text-gray-500">Connect your number so calls are answered 24/7</div>
                     </div>
                   </div>
-                ))}
+                  <div className="flex gap-3">
+                    <div>🤖</div>
+                    <div>
+                      <div className="font-medium">Talk to Saffi</div>
+                      <div className="text-xs text-gray-500">Your AI that manages clients, quotes, marketing & more</div>
+                    </div>
+                  </div>
+                </div>
               </div>
+
               <Button
-                className="w-full bg-[#E83A8E] hover:bg-[#c42d77] text-white text-base py-5"
+                className="w-full bg-[#E83A8E] hover:bg-[#c42d77] text-white text-base py-5 mt-2"
                 onClick={saveAndFinish}
                 disabled={saving}
               >
-                {saving ? "Saving…" : "Go to my dashboard →"}
+                {saving ? "Saving…" : "Enter my operating system →"}
               </Button>
+              <p className="text-[10px] text-gray-400">You can finish branding, services and AI setup in Settings.</p>
             </div>
           )}
 

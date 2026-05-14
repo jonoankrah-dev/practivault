@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageCircle, X, Copy, Check } from 'lucide-react';
+import { useIndustry } from '@/contexts/IndustryContext';
 
 interface SaffiProps {
   onNavigate?: (section: 'dashboard' | 'clients' | 'settings') => void;
@@ -18,12 +19,15 @@ export default function Saffi({
   revenue = "£3,284"
 }: SaffiProps) {
   
+  const { businessName, hidePoweredBy } = useIndustry();
+  const displayName = businessName || "your business";
+
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([
     { 
       role: "assistant", 
-      content: `Hi! I'm Saffi, powered by OurPai.ai. I'm currently on the dashboard. You have ${clientCount} clients and today's revenue is ${revenue}. Your Business ID is ${businessId}. How can I help you today?` 
+      content: `Hi, I'm Saffi — your AI assistant for ${displayName}. You have ${clientCount} clients and today's revenue is ${revenue}. How can I help you today?` 
     }
   ]);
   const [copied, setCopied] = useState(false);
@@ -44,8 +48,8 @@ export default function Saffi({
       onNavigate?.('settings');
       reply = `Your Business ID is **${businessId}**.`;
     } 
-    else if (lower.includes("ourpai") || lower.includes("install")) {
-      reply = "Here's the OurPai install command:";
+    else if (lower.includes("ourpai") || lower.includes("install") || lower.includes("pai brain")) {
+      reply = "To install the OurPai.ai (PAI) runtime that powers my brain:";
       setMessages(prev => [...prev, { role: "assistant", content: reply }]);
       
       setTimeout(() => {
@@ -105,8 +109,10 @@ export default function Saffi({
                 <div className="flex items-center gap-x-3">
                   <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center">S</div>
                   <div>
-                    <div className="font-semibold">Saffi AI</div>
-                    <div className="text-xs opacity-80">Powered by OurPai.ai • Super Intelligent</div>
+                    <div className="font-semibold">Saffi</div>
+                    <div className="text-xs opacity-80">
+                      {hidePoweredBy ? `Your AI for ${displayName}` : "Powered by PractiVault"}
+                    </div>
                   </div>
                 </div>
                 <button onClick={() => setIsOpen(false)}>
