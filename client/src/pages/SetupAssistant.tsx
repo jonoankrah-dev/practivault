@@ -58,6 +58,8 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
   async function saveAndFinish() {
     if (!user) return;
     setSaving(true);
+
+    // Save core business details
     await supabase.from("users").update({
       business_name: businessName || null,
       industry: industry || null,
@@ -66,6 +68,15 @@ export default function SetupAssistant({ initialIndustry, onComplete }: Props) {
       business_website: website || null,
       setup_complete: true,
     }).eq("id", user.id);
+
+    // If user entered main services, save them to business_info for Saffi + Receptionist
+    if (mainServices.trim()) {
+      await supabase.from("business_info").upsert({
+        user_id: user.id,
+        products: mainServices.split(",").map(s => ({ name: s.trim() })),
+      }, { onConflict: "user_id" });
+    }
+
     setSaving(false);
     onComplete();
   }
