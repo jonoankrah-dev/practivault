@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageCircle, X, Copy, Check } from 'lucide-react';
+import { useIndustry } from '@/contexts/IndustryContext';
 
 interface SaffiProps {
   onNavigate?: (section: 'dashboard' | 'clients' | 'settings') => void;
@@ -18,12 +19,15 @@ export default function Saffi({
   revenue = "£3,284"
 }: SaffiProps) {
   
+  const { businessName, hidePoweredBy } = useIndustry();
+  const displayName = businessName || "your business";
+
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([
     { 
       role: "assistant", 
-      content: `Hi, I'm Saffi. My brain runs on OurPai.ai (PAI). I'm connected to your PractiVault data. You have ${clientCount} clients and today's revenue is ${revenue}. Business ID: ${businessId}. What would you like me to handle?` 
+      content: `Hi, I'm Saffi — your AI assistant for ${displayName}. You have ${clientCount} clients and today's revenue is ${revenue}. How can I help you today?` 
     }
   ]);
   const [copied, setCopied] = useState(false);
@@ -105,8 +109,10 @@ export default function Saffi({
                 <div className="flex items-center gap-x-3">
                   <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center">S</div>
                   <div>
-                    <div className="font-semibold">Saffi AI</div>
-                    <div className="text-xs opacity-80">Powered by PractiVault</div>
+                    <div className="font-semibold">Saffi</div>
+                    <div className="text-xs opacity-80">
+                      {hidePoweredBy ? `Your AI for ${displayName}` : "Powered by PractiVault"}
+                    </div>
                   </div>
                 </div>
                 <button onClick={() => setIsOpen(false)}>
