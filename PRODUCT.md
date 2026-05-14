@@ -32,7 +32,7 @@
 
 | Competitor | PractiVault angle |
 |-------------|-------------------|
-| **Jobber** | Deeper aesthetics workflows (consent, before/after, protocols), stronger white-label, premium UI tuned for clinics. |
+| Per-user platforms | Deeper aesthetics workflows (consent, before/after, protocols), stronger white-label, premium UI tuned for clinics. |
 | **Faces Consent** | Full clinic OS, not consent-only; white-label; Saffi + OurPai.ai agent layer. |
 | **ServiceTitan** | Lighter, more affordable, aesthetics-first UX vs enterprise trades tooling. |
 

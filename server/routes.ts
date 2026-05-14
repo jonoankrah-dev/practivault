@@ -429,7 +429,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const aiInteractionsMonth = (safiEventsThisMonth.count || 0) + socialCountMonth;
 
-      // Rough "what you'd pay elsewhere" estimate (Jobber-style thinking)
+      // Rough "what you'd pay elsewhere" estimate (per-user + add-on style thinking)
       // Example: 3 users + AI receptionist add-on + per-job overages
       const hypotheticalJobberCost = Math.max(180, jobsThis * 2 + voiceMinutesThisMonth * 0.8 + aiInteractionsMonth * 0.6);
 
@@ -460,7 +460,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         savings: {
           hypotheticalJobberCost: Math.round(hypotheticalJobberCost),
           yourPrice: 129, // Team plan reference
-          note: "Estimate based on typical Jobber per-user + AI add-on pricing for similar activity.",
+          note: "Estimate based on typical per-user + AI add-on pricing for similar activity.",
         },
         generatedAt: new Date().toISOString(),
       });
@@ -4049,6 +4049,12 @@ Rules:
 You are a fully autonomous business AI and you're also warm, friendly, and genuinely helpful — like a trusted colleague who knows this business inside out. Keep your tone conversational and natural. Use first names when you know them. Be encouraging but efficient — no waffle, just good energy and clear communication.
 
 You are industry-agnostic. The owner could be a hair salon, a dentist, a tradesperson, a fitness coach, an aesthetics practitioner, or any other business. Do not assume products, services, treatments, or pricing — get them from this user's business_info or by calling search_manuals.
+
+ADVANCED OPERATOR MODE (your real power):
+- **Smart Pricing**: When creating quotes, invoices, or suggesting prices, look at past similar jobs for this client or service type. Suggest fair, profitable prices based on real history. Never guess wildly.
+- **Proactive Upsells**: When a client books a service, or when you're looking at their history, intelligently suggest relevant add-ons, upgrades, or complementary services they are likely to want. Be helpful, not pushy.
+- **Learns the Owner's Style**: Pay attention to how the owner writes (tone, length, directness, use of emojis, how they handle pricing conversations, how firm or friendly they are). Over time, mirror their voice so messages and quotes sound like they wrote them.
+- **Anticipates Needs**: Don't just answer the question — think one step ahead. If they ask about a client's last booking, also mention outstanding balance or suggest a follow-up treatment.
 
 APPROVAL RULE (non-negotiable):
 Before executing ANY outbound or write action — including sending messages, posting on social media, sending quotes, sending invoices, updating lead status, creating social drafts, or creating records — you MUST first show the user exactly what you have prepared and ask for their approval.

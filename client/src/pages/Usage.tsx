@@ -16,7 +16,7 @@ interface UsageSummary {
   aiVoice: { minutesThisMonth: number; minutesAllTime: number; callsThisMonth: number };
   messagesSent: { whatsappThisMonth: number; whatsappAllTime: number; aiGeneratedThisMonth: number };
   socialStudio: { draftsThisMonth: number; draftsAllTime: number };
-  savings: { hypotheticalJobberCost: number; yourPrice: number; note: string };
+  savings: { hypotheticalPerUserCost: number; yourPrice: number; note: string };
   generatedAt: string;
 }
 
@@ -44,9 +44,9 @@ export default function Usage() {
   const voice = data?.aiVoice || { minutesThisMonth: 0, minutesAllTime: 0, callsThisMonth: 0 };
   const msgs = data?.messagesSent || { whatsappThisMonth: 0, whatsappAllTime: 0, aiGeneratedThisMonth: 0 };
   const social = data?.socialStudio || { draftsThisMonth: 0, draftsAllTime: 0 };
-  const savings = data?.savings || { hypotheticalJobberCost: 180, yourPrice: 129, note: "" };
+  const savings = data?.savings || { hypotheticalPerUserCost: 180, yourPrice: 129, note: "" };
 
-  const monthlySavings = Math.max(0, savings.hypotheticalJobberCost - savings.yourPrice);
+  const monthlySavings = Math.max(0, savings.hypotheticalPerUserCost - savings.yourPrice);
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-8">
@@ -140,11 +140,11 @@ export default function Usage() {
             <div className="flex-1">
               <div className="uppercase text-emerald-600 text-xs tracking-[1px] font-semibold mb-2">THE JOBBER ALTERNATIVE COST</div>
               <div className="text-2xl font-semibold text-gray-900 mb-1">What similar activity would cost on traditional per-user + add-on pricing</div>
-              <div className="text-sm text-muted-foreground">{savings.note}</div>
+              <div className="text-sm text-muted-foreground">Estimate based on typical per-user + AI add-on pricing for similar activity.</div>
             </div>
 
             <div className="text-center lg:text-right">
-              <div className="text-5xl font-bold text-emerald-600 tabular-nums">£{savings.hypotheticalJobberCost}</div>
+              <div className="text-5xl font-bold text-emerald-600 tabular-nums">£{savings.hypotheticalPerUserCost}</div>
               <div className="text-xs text-emerald-600/80 mt-0.5">estimated this month</div>
             </div>
 
@@ -166,11 +166,11 @@ export default function Usage() {
         {[
           {
             title: "No per-user fees",
-            body: "Hire two more technicians? Your price stays the same. Jobber would charge you another £58–£87/month instantly.",
+            body: "Hire two more technicians? Your price stays the same. Most platforms would charge you another £58–£87/month instantly.",
           },
           {
             title: "AI Phone + SMS included",
-            body: "24/7 voice receptionist + WhatsApp automation. On Jobber this is a separate £99/mo add-on with limited functionality.",
+            body: "24/7 voice receptionist + WhatsApp automation. Most platforms charge this as a separate £99/mo add-on with limited functionality.",
           },
           {
             title: "Unlimited AI usage",

@@ -123,7 +123,7 @@ export default function PricingPage() {
           </div>
         </div>
 
-        {/* Anti-Jobber trust line */}
+        {/* Strong anti-per-user-fees trust line */}
         <div className="text-center">
           <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-1.5 text-sm text-emerald-700 border border-emerald-100">
             <Shield className="h-4 w-4" />
@@ -205,7 +205,7 @@ export default function PricingPage() {
           })}
         </div>
 
-        {/* Usage Transparency — the trust builder Jobber doesn't have */}
+        {/* Usage Transparency — the trust builder most platforms don't offer */}
         <div className="bg-white rounded-2xl border border-gray-100 p-8 space-y-4">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-xl bg-[#E83A8E]/10 flex items-center justify-center">
@@ -235,17 +235,17 @@ export default function PricingPage() {
           </p>
         </div>
 
-        {/* Jobber Escape Program — the killer acquisition play */}
+        {/* The All-Inclusive Switch — strong acquisition offer without naming competitors */}
         <div className="rounded-2xl border-2 border-[#E83A8E]/30 bg-gradient-to-br from-[#fff7fb] to-white p-8 text-center space-y-4">
           <div className="inline-flex items-center gap-2 text-[#E83A8E] font-semibold text-sm tracking-wider">
             <Sparkles className="h-4 w-4" /> LAUNCH OFFER
           </div>
-          <h2 className="text-2xl font-bold text-gray-900">The Jobber Escape Program</h2>
+          <h2 className="text-2xl font-bold text-gray-900">The All-Inclusive Switch</h2>
           <p className="max-w-lg mx-auto text-muted-foreground">
-            Fed up with per-user fees and surprise add-on bills? We’ll import all your Jobber data for free and give you <span className="font-semibold text-gray-900">3 months at 50% off</span> any plan.
+            Tired of per-user fees and surprise add-on bills? We’ll import all your data for free and give you <span className="font-semibold text-gray-900">3 months at 50% off</span> any plan.
           </p>
           <button className="mt-2 px-8 py-3 bg-[#E83A8E] hover:bg-[#c42d77] text-white font-semibold rounded-xl text-sm flex items-center gap-2 mx-auto transition-all active:scale-[0.985]">
-            Escape Jobber → Import my data free <ArrowRight className="h-4 w-4" />
+            Switch to all-inclusive → Import my data free <ArrowRight className="h-4 w-4" />
           </button>
           <p className="text-[10px] text-muted-foreground">No long contracts. Cancel with 1 click + full data export anytime.</p>
         </div>
@@ -302,15 +302,15 @@ export default function PricingPage() {
           </div>
         </div>
 
-        {/* FAQ — anti-Jobber focused */}
+        {/* FAQ — focused on all-inclusive value */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-8">
           {[
             { q: "Is there really no per-user fee?", a: "Correct. Solo includes 1 owner + 1 tech. Team & Growth = unlimited users at a flat price. No £29/user surprises." },
-            { q: "Is the AI Phone Receptionist actually included?", a: "Yes. Every plan gets 24/7 AI voice + SMS that answers, qualifies, books jobs, and follows up. No £99 add-on like Jobber." },
+            { q: "Is the AI Phone Receptionist actually included?", a: "Yes. Every plan gets 24/7 AI voice + SMS that answers, qualifies, books jobs, and follows up. No separate AI add-on required." },
             { q: "What if I want to cancel or leave?", a: "1-click cancellation + full data export (CSV + PDF). We’ll even help you migrate out if you ever want to. No hostage tactics." },
             { q: "Do you support trades AND beauty?", a: "Yes — the same platform works for plumbers, joiners, electricians, aesthetic clinics, salons, and training academies." },
             { q: "Can I see exactly what I’m using?", a: "Every plan includes the live Usage Dashboard. You’ll see AI minutes, SMS count, route savings, jobs completed — real numbers, not marketing." },
-            { q: "Is there a free trial?", a: "14 days on any plan. No card required. Plus the Jobber Escape offer: free data import + 50% off for 3 months." },
+            { q: "Is there a free trial?", a: "14 days on any plan. No card required. Plus the All-Inclusive Switch offer: free data import + 50% off for 3 months." },
           ].map(({ q, a }) => (
             <div key={q} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-1.5">
               <h3 className="font-semibold text-gray-900 text-sm">{q}</h3>
