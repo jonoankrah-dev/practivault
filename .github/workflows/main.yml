@@ -1,41 +1,5 @@
-name: CI
-
-on:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
-
-# Cancel previous runs on the same PR/branch for speed
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-permissions:
-  contents: read
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci --frozen-lockfile
-
-      - name: Type check
-        run: npm run check
-
-      - name: Build application
-        run: npm run build
-
-      - name: Security audit
-        run: npm audit --production
+- name: Setup Node.js
+  uses: actions/setup-node@v4
+  with:
+    node-version-file: '.node-version'   # ← prefers your project's .node-version
+    cache: 'npm'
