@@ -39,10 +39,30 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useIndustry } from "@/contexts/IndustryContext";
 import StatusBadge from "@/components/StatusBadge";
-import { Plus, Pencil, Trash2, Users, Search, Loader2 } from "lucide-react";
+import SafiSectionChat from "@/components/SafiSectionChat";
+import { Plus, Pencil, Trash2, Users, Search, Loader2, Bot } from "lucide-react";
 import type { Client, ClientStage } from "@shared/schema";
 
 const STAGES: ClientStage[] = ["lead", "prospect", "active", "vip", "lapsed", "archived"];
+
+const SAFFI_CLIENT_SUGGESTIONS = [
+  "Summarise who I should call today from this list",
+  "Who are my VIPs on screen?",
+  "Draft a short follow-up SMS for the top row",
+  "Any duplicates or missing emails here?",
+  "What stages are most common in this view?",
+];
+
+const SAFFI_CLIENT_BASE = `You are Saffi assisting inside the live Clients CRM page.
+
+The user has a full table UI: they can search, filter by stage, add, edit, and delete clients directly. You still have your usual tools (get_clients_detail, create_client, update_client, delete_client, get_bookings).
+
+A snapshot of the rows currently visible in their table is appended below on each message — treat it as ground truth for "who is on my screen" until they change filters.
+
+Rules:
+- Client stages: lead → prospect → active → vip → lapsed → archived
+- Before create_client, update_client, or delete_client, quote what you will do and wait for explicit confirmation.
+- Prefer the snapshot for quick questions about visible rows; use get_clients_detail if they need data beyond the snapshot.`;
 
 function formatMoney(n: number) {
   return `£${Number(n || 0).toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
@@ -179,6 +199,24 @@ export default function Clients() {
   }
 
   const saving = createMutation.isPending || updateMutation.isPending;
+
+  const clientsSaffiContext = useMemo(() => {
+    const filterLine = `Filters: search="${debouncedSearch || ""}" · stage="${stageFilter || "all"}".`;
+    if (!clients.length) {
+      return `${SAFFI_CLIENT_BASE}\n\n${filterLine}\nVisible rows: none (empty list or no matches).`;
+    }
+    const max = 60;
+    const slice = clients.slice(0, max);
+    const lines = slice.map(
+      (c) =>
+        `- id=${c.id} | name=${c.name} | stage=${c.stage} | email=${c.email ?? "—"} | phone=${c.phone ?? "—"} | ltv=${c.ltv}`,
+    );
+    const tail =
+      clients.length > max
+        ? `\n…plus ${clients.length - max} more row(s) not listed — use get_clients_detail if you need the full set.`
+        : "";
+    return `${SAFFI_CLIENT_BASE}\n\n${filterLine}\nVisible rows (${clients.length}):\n${lines.join("\n")}${tail}`;
+  }, [clients, debouncedSearch, stageFilter]);
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -391,6 +429,20 @@ export default function Clients() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <section aria-label="Saffi assistant" className="pt-8 mt-2 border-t border-border/70">
+        <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium mb-2">
+          Assistant
+        </p>
+        <SafiSectionChat
+          variant="embedded"
+          section="Saffi"
+          description={`Same ${entityLabel.toLowerCase()} as the table — filtered list is sent with each message.`}
+          icon={<Bot className="h-3.5 w-3.5 text-[#E83A8E]" />}
+          suggestions={SAFFI_CLIENT_SUGGESTIONS}
+          sectionContext={clientsSaffiContext}
+        />
+      </section>
     </div>
   );
 }
