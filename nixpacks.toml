@@ -2,3 +2,10 @@
 # Railway reads this file via railway.json → build.nixpacksConfigPath.
 [variables]
 NODE_VERSION = "22"
+
+# With NODE_ENV=production during install, plain `npm ci` omits devDependencies.
+# `npm run build` needs tsx, vite, esbuild, etc. railway.json runs `npm prune --omit=dev`
+# after the build so the runtime image stays lean.
+[phases.install]
+dependsOn = ["setup"]
+cmds = ["npm ci --include=dev"]
