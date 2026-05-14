@@ -348,18 +348,14 @@ export default function PhoneReceptionist() {
       <div>
         <div className="flex items-center justify-between mb-3 px-1">
           <div>
-            <div className="font-semibold">What your AI knows</div>
+            <div className="font-semibold">What your AI knows about {businessInfo?.business_name || "your business"}</div>
             <div className="text-xs text-muted-foreground">This knowledge is used on every call</div>
           </div>
           <Button
             variant="outline"
             size="sm"
             onClick={() => {
-              const current = KNOWLEDGE_TOPICS.map(t => `${t.label}: ${t.body}`).join("\n\n");
-              const edited = prompt("Edit the AI's knowledge (one topic per block):", current);
-              if (edited) {
-                toast({ title: "Knowledge updated", description: "This will be used in future voice sessions (demo — full persistence coming)." });
-              }
+              toast({ title: "Coming soon", description: "You'll be able to edit exactly what your AI knows about your services and policies." });
             }}
           >
             Edit knowledge
