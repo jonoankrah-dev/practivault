@@ -62,9 +62,9 @@ type CallLog = {
   created_at: string;
 };
 
-// User's real connected number (provided for this build)
-const CONNECTED_NUMBER = "07462 858288";
-const FORMATTED_NUMBER = "+44 7462 858288";
+// These will be replaced by the user's actual business phone from /api/me or business_info
+const FALLBACK_NUMBER = "Not connected yet";
+const FALLBACK_FORMATTED = "Set your number in Settings";
 
 // ---------- Benefit cards ----------
 const BENEFITS = [
@@ -231,6 +231,13 @@ export default function PhoneReceptionist() {
   const { toast } = useToast();
   const [voiceOpen, setVoiceOpen] = useState(false);
 
+  // Fetch business info so the number and knowledge are dynamic (white-label ready)
+  const { data: me } = useQuery<any>({ queryKey: ["/api/me"] });
+  const { data: businessInfo } = useQuery<any>({ queryKey: ["/api/business-info"] });
+
+  const businessPhone = me?.business_phone || businessInfo?.phone || FALLBACK_NUMBER;
+  const displayNumber = businessPhone === FALLBACK_NUMBER ? FALLBACK_FORMATTED : businessPhone;
+
   const { data: calls, isLoading, refetch } = useQuery<CallLog[]>({
     queryKey: ["/api/calls"],
     queryFn: async () => {
@@ -269,7 +276,7 @@ export default function PhoneReceptionist() {
 
             <h2 className="text-3xl font-bold tracking-tight">Your AI receptionist is live</h2>
             <p className="mt-2 text-lg text-muted-foreground max-w-xl">
-              Calls to <span className="font-mono font-semibold text-foreground">{FORMATTED_NUMBER}</span> are answered instantly by your AI.
+              Calls to <span className="font-mono font-semibold text-foreground">{displayNumber}</span> are answered instantly by your AI.
               It books real appointments into your calendar.
             </p>
 
@@ -293,7 +300,7 @@ export default function PhoneReceptionist() {
           {/* Number display */}
           <div className="lg:text-right">
             <div className="text-sm text-muted-foreground">Connected number</div>
-            <div className="text-4xl font-mono font-semibold tracking-tighter mt-1">{CONNECTED_NUMBER}</div>
+            <div className="text-4xl font-mono font-semibold tracking-tighter mt-1">{businessPhone}</div>
             <div className="flex items-center lg:justify-end gap-2 mt-2">
               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
               <span className="text-sm font-medium text-emerald-600">Active &amp; answering</span>
@@ -409,7 +416,7 @@ export default function PhoneReceptionist() {
               <Phone className="h-10 w-10 mx-auto text-muted-foreground/40 mb-4" />
               <div className="font-medium">No calls yet</div>
               <p className="text-sm text-muted-foreground max-w-xs mx-auto mt-1">
-                When someone calls {FORMATTED_NUMBER}, the full conversation and actions will appear here.
+                When someone calls {displayNumber}, the full conversation and actions will appear here.
               </p>
             </div>
           )}
