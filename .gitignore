@@ -3,3 +3,4 @@ node_modules/
 *.png
 *.jpg
 .env
+xai-api-key.txt
