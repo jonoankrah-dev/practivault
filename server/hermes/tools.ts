@@ -1,85 +1,110 @@
 /**
- * Hermes Tools
+ * Hermes Tools - Advanced Tool Calling Structure
  * 
- * This file defines all the actions Hermes is allowed to propose.
- * Each tool represents something Hermes can ask PractiVault to do
- * (after getting user approval).
+ * This file defines tools in a format that works well with Grok's function calling.
+ * Later, when we connect the real Hermes Agent, these definitions can be sent
+ * directly to Grok so it knows what actions it can propose.
  */
 
-export interface ToolDefinition {
-  name: string;
-  description: string;
-  parameters: Record<string, string>; // Simple description of expected params
+export interface HermesTool {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: {
+      type: "object";
+      properties: Record<string, any>;
+      required?: string[];
+    };
+  };
 }
 
 /**
- * Current set of tools Hermes understands.
- * We will expand this list as we add more features to PractiVault.
+ * Current Hermes tools in proper function calling format.
+ * This structure is compatible with how Grok expects tools to be defined.
  */
-export const HERMES_TOOLS: ToolDefinition[] = [
+export const HERMES_TOOLS: HermesTool[] = [
   {
-    name: "complete_job",
-    description: "Mark a job as completed",
-    parameters: {
-      jobId: "string (ID of the job)",
-      notes: "string (optional notes from the technician)",
+    type: "function",
+    function: {
+      name: "complete_job",
+      description: "Mark a job as completed. Use this when the user indicates a job is finished.",
+      parameters: {
+        type: "object",
+        properties: {
+          jobId: { type: "string", description: "The ID of the job to complete" },
+          notes: { type: "string", description: "Optional notes from the technician or user" },
+        },
+        required: ["jobId"],
+      },
     },
   },
   {
-    name: "deduct_inventory",
-    description: "Remove materials/parts from inventory",
-    parameters: {
-      items: "array of strings (part names)",
-      quantities: "array of numbers",
+    type: "function",
+    function: {
+      name: "deduct_inventory",
+      description: "Remove materials or parts from inventory/stock.",
+      parameters: {
+        type: "object",
+        properties: {
+          items: {
+            type: "array",
+            items: { type: "string" },
+            description: "List of part names to deduct",
+          },
+          quantities: {
+            type: "array",
+            items: { type: "number" },
+            description: "Corresponding quantities for each item",
+          },
+        },
+        required: ["items", "quantities"],
+      },
     },
   },
   {
-    name: "create_note",
-    description: "Add a note to a job or customer record",
-    parameters: {
-      jobId: "string",
-      note: "string",
+    type: "function",
+    function: {
+      name: "create_note",
+      description: "Add a note to a job or customer record.",
+      parameters: {
+        type: "object",
+        properties: {
+          jobId: { type: "string", description: "ID of the job" },
+          note: { type: "string", description: "The note content" },
+        },
+        required: ["jobId", "note"],
+      },
     },
   },
   {
-    name: "update_job_status",
-    description: "Change the status of a job",
-    parameters: {
-      jobId: "string",
-      status: "string (e.g. 'in_progress', 'on_hold', 'completed')",
+    type: "function",
+    function: {
+      name: "send_customer_message",
+      description: "Send a message or update to the customer.",
+      parameters: {
+        type: "object",
+        properties: {
+          customerId: { type: "string" },
+          message: { type: "string" },
+        },
+        required: ["customerId", "message"],
+      },
     },
   },
   {
-    name: "send_customer_message",
-    description: "Send a message to the customer",
-    parameters: {
-      customerId: "string",
-      message: "string",
-    },
-  },
-  {
-    name: "schedule_technician",
-    description: "Assign a technician to a job and set a time",
-    parameters: {
-      jobId: "string",
-      technicianId: "string",
-      scheduledDate: "string (YYYY-MM-DD)",
-      scheduledTime: "string (HH:MM)",
-    },
-  },
-  {
-    name: "create_invoice",
-    description: "Generate an invoice for a completed job",
-    parameters: {
-      jobId: "string",
-    },
-  },
-  {
-    name: "request_stock_reorder",
-    description: "Create a purchase order suggestion when stock is low",
-    parameters: {
-      items: "array of strings",
-      quantities: "array of numbers",
+    type: "function",
+    function: {
+      name: "update_job_status",
+      description: "Change the status of a job (e.g. in_progress, on_hold, completed).",
+      parameters: {
+        type: "object",
+        properties: {
+          jobId: { type: "string" },
+          status: { type: "string" },
+        },
+        required: ["jobId", "status"],
+      },
     },
   },
 ];
