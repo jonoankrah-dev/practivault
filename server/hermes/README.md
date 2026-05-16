@@ -1,44 +1,59 @@
-# Hermes Agent
+# Hermes — The Agentic Brain
 
-Hermes is the **self-improving autonomous brain** for PractiVault, powered by Grok.
+Hermes is the **high-level reasoning engine** for PractiVault.
+
+It understands natural language updates from practitioners (e.g. "Just finished the boiler repair at 123 Main St, used 2 valves and 1 pump, customer was happy") and proposes structured actions that Saffi then presents for user approval.
+
+## Current Architecture (Clean Modular Structure)
+
+```
+server/hermes/
+├── index.ts                 ← Public API (only file Saffi should import)
+├── config.ts                ← Feature flags & settings
+├── types.ts                 ← All TypeScript interfaces
+├── prompts.ts               ← System prompts for future real Grok calls
+├── keywords/
+│   └── index.ts             ← Keyword lists + quick detection
+├── tools/
+│   └── index.ts             ← Tool definitions (function calling format)
+├── core/
+│   └── reasoner.ts          ← The actual reasoning logic (mock today)
+├── test/
+│   └── test-hermes.ts       ← Manual test runner
+└── README.md
+```
+
+## Public API (What Saffi Uses)
+
+```ts
+import { shouldEscalateToHermes, sendToHermes } from "./hermes";
+
+if (shouldEscalateToHermes(userMessage)) {
+  const response = await sendToHermes(userMessage, context);
+  // response contains proposal or directReply
+}
+```
 
 ## Current Status (Phase 1)
 
-- Starting with **text/chat** natural language input.
-- Saffi will automatically escalate certain messages to Hermes using keyword triggers.
-- Hermes will return structured proposals.
-- All proposals will go through **user approval** via Saffi chat before execution.
+- Uses a strong **advanced mock reasoner** (no real Grok call yet)
+- Hybrid escalation: Saffi uses fast keyword check → Hermes does deeper reasoning
+- Returns structured `HermesProposal` with `actions[]`
+- All high-impact actions require explicit user approval via Saffi
 
-## Planned Flow (Option 1 + Hybrid)
+## Running Tests
 
-1. User talks to Saffi normally.
-2. Saffi checks if the message matches trigger keywords.
-3. If yes → message is sent to Hermes for reasoning.
-4. Hermes returns a proposal (what actions it wants to take).
-5. Saffi shows the proposal to the user and asks for approval.
-6. If approved → actions are executed using PractiVault tools.
+```bash
+npx tsx server/hermes/test/test-hermes.ts
+```
 
-## Future Phases
+## Next Steps (Roadmap)
 
-- Phase 2: Connect Hermes with **PAI (OurPai Life OS)** for long-term memory and goals.
-- Improve escalation logic (beyond simple keywords).
-- Allow Hermes to handle more complex multi-step workflows.
-- Add self-improvement loop (Hermes learns from approved/rejected actions).
-
-## Folder Structure
-
-- `types.ts` → TypeScript interfaces
-- `keywords.ts` → Trigger keywords for Phase 1
-- `tools.ts` → Available actions Hermes can propose
-- `reasoner.ts` → Core reasoning logic (mock + future real Grok call)
-- `index.ts` → Public API for Hermes
-
-## Current Status
-
-Hermes is currently in **mock mode**. When a message is sent to it, it returns a fake but realistic proposal so we can test the full flow with Saffi.
-
-Next milestone: Replace the mock with a real call to your Grok-powered Hermes Agent.
+1. Improve the mock reasoner with better endoPulse/aesthetics treatment understanding
+2. Connect to real Grok (via xAI API or your Hermes Agent)
+3. Add proper action execution layer (after approval)
+4. Phase 2: Integrate with PAI (OurPai.ai) for long-term memory & goals
 
 ---
 
-**Note**: This is still early stage. We are building the foundation first.
+**Goal**: Hermes becomes the intelligent "operator brain" that makes PractiVault feel magical while Saffi stays the friendly face.

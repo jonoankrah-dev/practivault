@@ -324,8 +324,8 @@ export default function Clients() {
                 <TableRow key={c.id}>
                   <TableCell className="font-medium">
                     <div>
-                      <Link href={clientProfileHref(c.id)}>
-                        <a className="text-primary hover:underline">{c.name}</a>
+                      <Link href={clientProfileHref(c.id)} className="text-primary hover:underline">
+                        {c.name}
                       </Link>
                     </div>
                     <div className="text-xs text-muted-foreground md:hidden mt-0.5">

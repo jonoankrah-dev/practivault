@@ -4,7 +4,7 @@
 import { useState, useRef } from "react";
 import {
   BookOpen, Upload, X, FileText, Loader2, Trash2,
-  ExternalLink, ChevronDown, ChevronUp, AlertTriangle,
+  ExternalLink, ChevronDown, ChevronUp, AlertTriangle, RefreshCw,
 } from "lucide-react";
 import SafiSectionChat from "@/components/SafiSectionChat";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,13 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -71,6 +78,8 @@ export default function Manuals() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [showUpload, setShowUpload] = useState(true);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [errorDialog, setErrorDialog] = useState<{ name: string; error: string; id: string } | null>(null);
 
   // Delete confirmation state
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -161,6 +170,27 @@ export default function Manuals() {
     } finally {
       setDeleting(false);
       setConfirmDeleteId(null);
+    }
+  };
+
+  const handleRetry = async (id: string) => {
+    setRetryingId(id);
+    try {
+      const res = await fetch(`/api/manuals/${id}/extract`, { method: "POST" });
+      if (!res.ok) throw new Error("Retry failed");
+
+      const data = await res.json();
+      if (data.ok === false) {
+        toast({ title: "Retry failed", description: data.message || "Could not re-process the manual", variant: "destructive" });
+      } else {
+        toast({ title: "Re-extraction started", description: "We'll process this manual in the background." });
+      }
+
+      qc.invalidateQueries({ queryKey: ["/api/manuals"] });
+    } catch (e: any) {
+      toast({ title: "Retry failed", description: e.message, variant: "destructive" });
+    } finally {
+      setRetryingId(null);
     }
   };
 
@@ -307,13 +337,38 @@ export default function Manuals() {
                       <FileText className="h-4 w-4 text-[#E83A8E] shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium truncate">{m.name}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                           <Badge
                             variant="outline"
                             className="text-[9px] px-1 py-0 capitalize border-[#E83A8E]/20 text-[#E83A8E]"
                           >
                             {m.category}
                           </Badge>
+
+                          {/* Extraction status */}
+                          {m.extraction_status === "processing" && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                              Processing…
+                            </span>
+                          )}
+                          {m.extraction_status === "failed" && (
+                            <button
+                              onClick={() => setErrorDialog({
+                                name: m.name,
+                                error: m.extraction_error || "Unknown error",
+                                id: m.id
+                              })}
+                              className="text-[9px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
+                            >
+                              Failed
+                            </button>
+                          )}
+                          {m.extraction_status === "pending" && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                              Queued
+                            </span>
+                          )}
+
                           <span className="text-[10px] text-muted-foreground">
                             {new Date(m.created_at).toLocaleDateString("en-GB")}
                           </span>
@@ -329,6 +384,23 @@ export default function Manuals() {
                         >
                           <ExternalLink className="h-3 w-3" />
                         </a>
+
+                        {/* Retry extraction if failed */}
+                        {m.extraction_status === "failed" && (
+                          <button
+                            onClick={() => handleRetry(m.id)}
+                            disabled={retryingId === m.id}
+                            className="h-6 w-6 flex items-center justify-center rounded hover:bg-amber-100 text-amber-600 disabled:opacity-50"
+                            title="Retry extraction"
+                          >
+                            {retryingId === m.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-3 w-3" />
+                            )}
+                          </button>
+                        )}
+
                         <button
                           onClick={() => setConfirmDeleteId(m.id)}
                           className="h-6 w-6 flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
@@ -390,5 +462,47 @@ export default function Manuals() {
         />
       </div>
     </div>
+
+    {/* Error Details Dialog for failed extractions */}
+    <Dialog open={!!errorDialog} onOpenChange={() => setErrorDialog(null)}>
+      <DialogContent className="sm:max-w-[450px]">
+        <DialogHeader>
+          <DialogTitle>Extraction Failed</DialogTitle>
+          <DialogDescription>
+            {errorDialog?.name}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="rounded-md bg-red-50 p-3 text-sm text-red-800">
+            {errorDialog?.error}
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            You can try re-extracting the file. If the problem persists, the document may be scanned/image-based or too complex for automatic processing.
+          </p>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setErrorDialog(null)}
+          >
+            Close
+          </Button>
+          <Button
+            onClick={() => {
+              if (errorDialog) {
+                handleRetry(errorDialog.id);
+                setErrorDialog(null);
+              }
+            }}
+            disabled={!!retryingId}
+          >
+            Retry Extraction
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

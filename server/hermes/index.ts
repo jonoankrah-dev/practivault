@@ -1,79 +1,57 @@
 /**
- * Hermes Agent - Main Brain for PractiVault
- * 
- * Hermes is the self-improving autonomous brain powered by Grok.
- * 
- * Current Responsibilities (Phase 1):
- * - Receive messages that Saffi escalates
- * - Reason about what actions should be taken
- * - Return structured proposals for user approval
- * 
- * Future (Phase 2):
- * - Connect with PAI for long-term memory and goals
- * - Self-improvement based on user feedback
- * - More complex multi-step workflows
+ * Hermes - The Agentic Brain for PractiVault
+ *
+ * Hermes is the high-level reasoning engine that understands natural language
+ * updates from practitioners (e.g. "Just finished the boiler repair at 123 Main St,
+ * used 2 valves and 1 pump, customer was happy").
+ *
+ * It proposes structured actions that Saffi then presents to the user for approval.
+ *
+ * Current public API (what Saffi calls):
+ *   - shouldEscalateToHermes(message)
+ *   - sendToHermes(message, context)
  */
 
+// Re-export core types and config for consumers
+export * from "./types";
+export { HERMES_CONFIG } from "./config";
+
+// Execution Layer (new)
+export { executeHermesProposal } from "./executor";
+export type { ExecutionContext, ExecutionResult } from "./executor";
+
+// Public API functions
 import { HermesResponse } from "./types";
-import { HERMES_TRIGGER_KEYWORDS } from "./keywords";
-import { getHermesReasoning } from "./reasoner";
+import { HERMES_TRIGGER_KEYWORDS, isJobUpdateMessage } from "./keywords";
+import { getHermesReasoning } from "./core/reasoner";
 import { HERMES_CONFIG } from "./config";
 
-// ============================================
-// Configuration (we can move this to env later)
-// ============================================
-const HERMES_CONFIG = {
-  // This will eventually point to your Hermes Agent (Grok-powered)
-  // For now we're using a mock while we build the structure
-  enabled: true,
-  useMock: true, // Set to false once real Grok integration is ready
-};
-
-// ============================================
-// Keyword Detection (Hybrid approach - Phase 1)
-// ============================================
-
 /**
- * Checks if a user message should be escalated to Hermes.
- * Currently uses simple keyword matching.
- * Later we can make this smarter (LLM-based routing, embeddings, etc.)
+ * Quick check used by Saffi to decide whether to escalate a message to Hermes.
+ * Uses keyword matching as a fast first filter (Phase 1 hybrid approach).
  */
 export function shouldEscalateToHermes(message: string): boolean {
   if (!HERMES_CONFIG.enabled) return false;
 
-  const lowerMessage = message.toLowerCase();
-
-  const matchesKeyword = HERMES_TRIGGER_KEYWORDS.some((keyword) =>
-    lowerMessage.includes(keyword.toLowerCase())
-  );
+  const matchesKeyword = isJobUpdateMessage(message);
 
   if (HERMES_CONFIG.verboseLogging && matchesKeyword) {
-    console.log("[Hermes] Message matched trigger keywords");
+    console.log("[Hermes] Message matched trigger keywords — escalating");
   }
 
   return matchesKeyword;
 }
 
-// ============================================
-// Main Hermes Function
-// ============================================
-
 /**
- * This is the main function Saffi will call when it wants Hermes to handle something.
- * 
- * Right now it returns a mock proposal.
- * Later this will call your actual Hermes Agent (Grok) via API.
- */
-/**
- * Main entry point for sending a message to Hermes.
- * This is what Saffi (or other parts of the system) will call.
+ * Main entry point.
+ * Saffi calls this when it wants Hermes to deeply reason about a message.
  */
 export async function sendToHermes(
   userMessage: string,
   context?: Record<string, any>
 ): Promise<HermesResponse> {
   if (HERMES_CONFIG.verboseLogging) {
-    console.log("[Hermes] Processing message:", userMessage);
+    console.log("[Hermes] sendToHermes called with:", userMessage);
   }
 
   return await getHermesReasoning(userMessage, context, {

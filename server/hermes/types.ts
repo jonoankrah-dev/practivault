@@ -7,12 +7,16 @@
 
 /**
  * Represents a single action Hermes wants to perform.
- * Example: { type: "complete_job", jobId: "123", notes: "..." }
+ * New aesthetics-focused actions:
+ *   - complete_treatment
+ *   - deduct_consumables
+ *   - record_treatment_note
+ *   - log_client_feedback
  */
 export interface HermesAction {
-  type: string;                    // e.g. "complete_job", "deduct_inventory", "create_note"
-  payload: Record<string, any>;    // The data needed for the action
-  description: string;             // Human-readable explanation of what this action does
+  type: string;
+  payload: Record<string, any>;
+  description: string;
 }
 
 /**
@@ -23,6 +27,7 @@ export interface HermesProposal {
   actions: HermesAction[];         // List of actions to perform if approved
   reasoning?: string;              // Optional explanation of why Hermes suggested this
   confidence?: number;             // 0–1 score of how confident Hermes is
+  extractedDetails?: any;          // Rich details from the aesthetics mock (for future UI)
 }
 
 /**

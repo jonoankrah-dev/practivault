@@ -124,26 +124,29 @@ function DemoSidebar({ industry, businessName, base }: { industry: string; busin
           const active = location === `${base}/${item.href.replace("/","")}` || location.startsWith(`${base}/${item.href.replace("/","")}`);
           const Icon = item.icon;
           return (
-            <Link key={`${item.href}-${item.label}`} href={`${base}${item.href}`}>
-              <a
-                className="flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-all"
-                style={active
+            <Link
+              key={`${item.href}-${item.label}`}
+              href={`${base}${item.href}`}
+              className="flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-all"
+              style={
+                active
                   ? { backgroundColor: cfg.primaryHex, color: "#fff", fontWeight: 600 }
                   : { color: cfg.sidebarFg, opacity: 0.75 }
-                }
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                <span>{item.label}</span>
-              </a>
+              }
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              <span>{item.label}</span>
             </Link>
           );
         })}
       </nav>
       <div className="p-4 border-t" style={{ borderColor: "rgba(255,255,255,0.1)" }}>
-        <Link href="/demo">
-          <a className="text-xs flex items-center gap-1.5 transition-colors opacity-50 hover:opacity-80" style={{ color: cfg.sidebarFg }}>
-            ← Choose a different industry
-          </a>
+        <Link
+          href="/demo"
+          className="text-xs flex items-center gap-1.5 transition-colors opacity-50 hover:opacity-80"
+          style={{ color: cfg.sidebarFg }}
+        >
+          ← Choose a different industry
         </Link>
       </div>
     </aside>

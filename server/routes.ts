@@ -1,11 +1,12 @@
 import { registerPublicConfigRoute } from "./routes/publicConfig";
-import { shouldEscalateToHermes, sendToHermes } from "./hermes";
+import { shouldEscalateToHermes, sendToHermes, executeHermesProposal } from "./hermes";
 import { recordActivityEvent, queueAgentAction } from "./lib/safiMemory";
 import { registerSafiMemoryRoutes } from "./routes/safiMemory";
 import { registerSaffiRealtime, saffiRealtimeTokenHandler } from "./realtime/saffiRealtime";
 import {
   SAFFI_READ_ONLY_TOOL_DEFS,
   executeReadOnlyTool,
+  getBusinessSnapshot,
 } from "./lib/safiReadOnlyTools";
 import {
   classifyInbound,
@@ -22,6 +23,7 @@ import { WebSocketServer, WebSocket as WS } from "ws";
 import multer from "multer";
 import Groq from "groq-sdk";
 import { PDFParse } from "pdf-parse";
+import { extractPdfTextImproved } from "./lib/pdfExtractor";
 import mammoth from "mammoth";
 import { supabase, supabaseForUser, supabaseAdmin } from "./supabase";
 import {
@@ -95,6 +97,30 @@ async function extractPdfText(buffer: Buffer, timeoutMs: number): Promise<string
   } finally {
     await parser.destroy().catch(() => {});
   }
+}
+
+function friendlyManualExtractionError(error: string | null | undefined): string {
+  if (!error) return "Processing failed for an unknown reason.";
+
+  const lower = error.toLowerCase();
+
+  if (lower.includes("timeout")) {
+    return "The file took too long to process. It may be very large or complex.";
+  }
+  if (lower.includes("fetch_failed") || lower.includes("failed to fetch")) {
+    return "Could not download the file. Please try uploading it again.";
+  }
+  if (lower.includes("no usable text") || lower.includes("no extractable text")) {
+    return "We couldn't extract readable text from this file. It may be a scanned or image-based PDF.";
+  }
+  if (lower.includes("unsupported")) {
+    return "This file type is not supported for automatic processing.";
+  }
+  if (lower.includes("voyage") || lower.includes("embedding")) {
+    return "The file was extracted, but we had trouble generating search data.";
+  }
+
+  return "Processing failed. You can try re-extracting the file.";
 }
 
 
@@ -1858,7 +1884,9 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
         const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
           Promise.race([promise, new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms))]);
         if (mime === "application/pdf" || fname.endsWith(".pdf")) {
-          extractedText = await extractPdfText(file.buffer, 10_000);
+          // Use the improved pdfjs-based extractor
+          const result = await extractPdfTextImproved(file.buffer, { timeoutMs: 20_000 });
+          extractedText = result.text;
         } else if (mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || fname.endsWith(".docx")) {
           const result = await withTimeout(mammoth.extractRawText({ buffer: file.buffer }), 10_000);
           extractedText = (result as any).value?.trim() || null;
@@ -1884,6 +1912,9 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
           file_name: file.originalname,
           file_size: file.size,
           extracted_text: extractedText,
+          extraction_status: extractedText ? 'completed' : 'pending',
+          extraction_method: extractedText ? 'text' : null,
+          extracted_at: extractedText ? new Date().toISOString() : null,
         })
         .select()
         .single();
@@ -1930,7 +1961,9 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
         const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T> =>
           Promise.race([p, new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms))]);
         if (lower.endsWith(".pdf")) {
-          extractedText = await extractPdfText(buffer, 12_000);
+          // Use the improved extractor (stronger pdfjs-based text extraction)
+          const result = await extractPdfTextImproved(buffer, { timeoutMs: 30_000 });
+          extractedText = result.text;
         } else if (lower.endsWith(".docx")) {
           const result = await withTimeout(mammoth.extractRawText({ buffer }), 12_000);
           extractedText = (result as any).value?.trim() || null;
@@ -1943,16 +1976,28 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
           extractedText = extractedText.slice(0, 60000) + "\n[...truncated]";
         }
       } catch (e: any) {
-        return res.status(500).json({ message: `extract_failed:${e?.message ?? "unknown"}` });
+        console.error("[manual extract] Error:", e);
+        const friendly = friendlyManualExtractionError(e?.message);
+        return res.status(200).json({ ok: false, indexed: false, message: friendly });
       }
 
       if (!extractedText) {
-        return res.status(200).json({ ok: true, indexed: false, message: "No extractable text in this file." });
+        return res.status(200).json({ 
+          ok: true, 
+          indexed: false, 
+          message: "We couldn't extract readable text from this file. It may be a scanned or image-based PDF." 
+        });
       }
 
       const { error: updErr } = await req.db!
         .from("manuals")
-        .update({ extracted_text: extractedText })
+        .update({ 
+          extracted_text: extractedText,
+          extraction_status: 'completed',
+          extraction_method: 'text', // Will be upgraded to 'ocr' when we add OCR fallback
+          extracted_at: new Date().toISOString(),
+          extraction_error: null,
+        })
         .eq("id", id)
         .eq("user_id", userId);
       if (updErr) return res.status(500).json({ message: updErr.message });
@@ -4016,6 +4061,9 @@ Rules:
     const { message, history = [], sectionContext = "" } = req.body as { message: string; history?: {role:string;content:string}[]; sectionContext?: string };
     if (!message?.trim()) return res.status(400).json({ message: "No message" });
 
+    const db = req.db!;
+    const userId = req.user!.id;
+
     // === Light Hermes Integration (Hybrid - Phase 1) ===
     // If the message matches Hermes trigger keywords, escalate to Hermes for deeper reasoning
     if (shouldEscalateToHermes(message)) {
@@ -4023,10 +4071,11 @@ Rules:
         const hermesResponse = await sendToHermes(message, { userId, sectionContext });
         
         if (hermesResponse.shouldEscalate && hermesResponse.proposal) {
-          // Hermes has a proposal — return it for Saffi to present and ask for approval
+          // Return a clean structure so the frontend can render a nice proposal card
           return res.json({
-            reply: `Hermes suggests the following actions:\n\n${hermesResponse.proposal.summary}\n\n${hermesResponse.proposal.actions.map(a => `- ${a.description}`).join("\n")}\n\nReasoning: ${hermesResponse.proposal.reasoning}\n\nDo you want me to proceed?`,
+            reply: "Hermes has analyzed your request and has a proposal.",
             hermesProposal: hermesResponse.proposal,
+            requiresApproval: true,
           });
         }
       } catch (err) {
@@ -4034,44 +4083,45 @@ Rules:
       }
     }
 
-    const db = req.db!;
-    const userId = req.user!.id;
-
-    // Build system prompt from business identity + light manual hint.
-    // We deliberately DO NOT stuff full manual text here any more — Saffi
-    // calls `search_manuals` on demand, which is faster and more relevant.
-    const [userRes, bizRes, manualsCountRes] = await Promise.all([
-      db.from("users").select("name, business_name, industry").eq("id", userId).single(),
-      db.from("business_info").select("*").eq("user_id", userId).single(),
+    // Always load a rich business snapshot so Saffi is grounded in the actual business.
+    // This is the key to making her feel like she "knows the business".
+    const [snapshotResult, manualsCountRes] = await Promise.all([
+      getBusinessSnapshot(db, userId),
       db.from("manuals").select("id", { count: "exact", head: true }).eq("user_id", userId),
     ]);
-    const userData = userRes.data;
-    const bizInfo = bizRes.data;
-    const manualsCount = manualsCountRes.count ?? 0;
 
-    let bizContext = "";
-    if (bizInfo) {
-      if (bizInfo.tagline) bizContext += `\nTagline: ${bizInfo.tagline}`;
-      if (bizInfo.about) bizContext += `\nAbout: ${bizInfo.about}`;
-      if (bizInfo.website_url) bizContext += `\nWebsite: ${bizInfo.website_url}`;
-      if (bizInfo.products?.length) bizContext += `\n\nProducts:\n${(bizInfo.products as any[]).map((p:any)=>`- ${p.name}${p.price?` — ${p.price}`:""}${p.description?`: ${p.description}`:""}`).join("\n")}`;
-    }
+    const hasRealBusinessData = snapshotResult.ok && snapshotResult.summary && !snapshotResult.summary.includes("not fully set up");
+    const businessContext = hasRealBusinessData
+      ? `\n\n=== BUSINESS CONTEXT (use this as ground truth — this is the real data about this business) ===\n${snapshotResult.summary}`
+      : "";
+
+    const manualsCount = manualsCountRes.count ?? 0;
     const manualHint = manualsCount > 0
-      ? `\n\nManuals available: ${manualsCount}. For ANY product/treatment/policy/aftercare/training question specific to this business, call the search_manuals tool — do not guess.`
+      ? `\n\nManuals available: ${manualsCount}. For ANY product, treatment, technique, policy, aftercare, or equipment question, call the search_manuals tool. When you get results, quote the most relevant sections and cite the manual name + page/section when possible.`
       : "";
 
     // ── Saffi must remain 100% industry-agnostic. Never hardcode any
     //    specific brand or product. Business-specific facts come from
-    //    business_info / search_manuals only. ─────────────────────────────
-    const systemPrompt = `You are Saffi, the fully agentic AI assistant for ${userData?.business_name ?? "this business"}.
+    //    the Business Context below + search_manuals only. ─────────────────────────────
+    const businessName = (snapshotResult.data as any)?.user?.business_name || "this business";
+
+    const systemPrompt = `You are Saffi, the fully agentic AI assistant for ${businessName}.
 
 You are the intelligent operating system for this business. You help the owner run their entire operation — clients, bookings, quotes, invoices, marketing, follow-ups, and daily decisions. You act as a trusted, high-agency colleague who knows this business deeply.
 
-${bizContext}${manualHint}
+${businessContext}${manualHint}
+
+**CRITICAL**: The "BUSINESS CONTEXT" block above is your primary source of truth about this specific business (owner, services, pricing, offerings). Use it to ground every relevant answer. Never make up services or prices.
+
+When using information from manuals (via the search_manuals tool):
+- Always quote the most relevant sentences or short paragraphs.
+- Clearly cite the source using this format: "According to the [Manual Name], page X / [Section Name]..."
+- If multiple sources are relevant, mention the best 1-2.
+- Never claim something as fact from a manual unless it came from the search results.
 
 You are warm, friendly, and genuinely helpful — like a trusted colleague who knows this business inside out. Keep your tone conversational and natural. Use first names when you know them. Be encouraging but efficient — no waffle, just good energy and clear communication.
 
-You are industry-agnostic. The owner could be a hair salon, a dentist, a tradesperson, a fitness coach, an aesthetics practitioner, or any other business. Do not assume products, services, treatments, or pricing — get them from this user's business_info or by calling search_manuals.
+You are industry-agnostic. The owner could be a hair salon, a dentist, a tradesperson, a fitness coach, an aesthetics practitioner, or any other business. Do not assume products, services, treatments, or pricing — get them from the Business Context above or by calling search_manuals.
 
 ADVANCED OPERATOR MODE:
 - **Deep Context & Memory**: You maintain rich, structured context about this business — its identity, current goals/projects, and what the owner is learning. Use memory tools heavily. Turn interactions into lasting rules and better defaults over time.
@@ -4097,11 +4147,14 @@ Read-only actions (fetching data, showing lists, generating reports) do NOT need
 
 Tool use rules (for speed and accuracy):
 - For any "what's happening?", "today's overview", "how's the business looking?" question, call **get_dashboard_overview** ONCE — do not fan out to four separate tools.
-- For any product, service, treatment, training, aftercare, consent, or policy question specific to this business, call **search_manuals** with a short query — do not guess from memory or invent industry facts.
-- If a manual returns "text not indexed yet", tell the user to open Manuals and tap Re-extract on that file.
+- For any product, service, treatment, technique, aftercare, policy, or equipment question, call **search_manuals**. 
+  - When you get results, quote the most relevant sections.
+  - Always mention the manual name and page/section when citing information.
+  - If the result indicates manuals are still being processed, tell the user politely that you're extracting them in the background.
 
 Reply in clear, concise markdown. Use bullet points or short lists where helpful.
-When you retrieve data, summarise it clearly and add a brief observation where useful (e.g. "3 invoices overdue — worth chasing those this week").${bizInfo?.website_url ? `\n\nWebsite: ${bizInfo.website_url}` : ""}${sectionContext ? `\n\n--- CURRENT SECTION CONTEXT ---\n${sectionContext}` : ""}`;
+**Do not use bold markdown (`**text**`) for labels, headings, keys, or treatment names** (e.g. avoid writing **Tagline:** or **Abdomen Laser Fat Melting**). Keep them in plain text for a cleaner look.
+When you retrieve data, summarise it clearly and add a brief observation where useful (e.g. "3 invoices overdue — worth chasing those this week").${sectionContext ? `\n\n--- CURRENT SECTION CONTEXT ---\n${sectionContext}` : ""}`;
 
     // Convert OpenAI-style tools for xAI, plus the new shared read-only tools.
     // Longer term: these will be exposed as proper PAI Skills (see server/pai/skills)
@@ -4252,6 +4305,35 @@ When you retrieve data, summarise it clearly and add a brief observation where u
         "I couldn't finish that reply in time. Please try again with a shorter question, or split it into two steps (e.g. first **list clients**, then **add one**).";
     }
     return res.json({ reply: fallback, messages });
+  });
+
+  // ── /api/hermes/execute — run an approved Hermes proposal ─────────────────
+  app.post("/api/hermes/execute", requireAuth, async (req: AuthedRequest, res: Response) => {
+    const { proposal, bookingId, clientId } = req.body;
+    const userId = req.user!.id;
+    const db = req.db!;
+
+    if (!proposal?.actions?.length) {
+      return res.status(400).json({ message: "Invalid proposal" });
+    }
+
+    try {
+      const result = await executeHermesProposal(proposal, {
+        userId,
+        db,
+        bookingId,
+        clientId,
+      });
+
+      return res.json({
+        success: result.success,
+        executedActions: result.executedActions,
+        errors: result.errors,
+      });
+    } catch (err: any) {
+      console.error("[Hermes Execute] Failed:", err);
+      return res.status(500).json({ message: "Execution failed", error: err.message });
+    }
   });
 
     // ─── Saphie AI — chat + voice transcription + manuals ──────────────────────

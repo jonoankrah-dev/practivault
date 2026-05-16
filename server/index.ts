@@ -2,8 +2,26 @@ import "dotenv/config";
 import express, { Response, NextFunction } from 'express';
 import type { Request } from 'express';
 import { registerRoutes } from "./routes";
+import { startManualExtractionWorker } from "./workers/manualExtractor";
+import { supabaseAdmin } from "./supabase";
 import { serveStatic } from "./static";
 import { createServer } from "node:http";
+import { readFileSync, existsSync } from "node:fs";
+import { resolve } from "node:path";
+
+// Load xai-api-key.txt if present (for non-technical users who can't easily set env vars)
+try {
+  const keyFile = resolve(process.cwd(), "xai-api-key.txt");
+  if (existsSync(keyFile) && !process.env.XAI_API_KEY) {
+    const key = readFileSync(keyFile, "utf8").trim();
+    if (key) {
+      process.env.XAI_API_KEY = key;
+      console.log("[express] Loaded XAI_API_KEY from xai-api-key.txt (for local Hermes/Grok testing)");
+    }
+  }
+} catch (err) {
+  console.warn("[express] Failed to load xai-api-key.txt:", (err as Error).message);
+}
 
 const app = express();
 const httpServer = createServer(app);
@@ -79,6 +97,10 @@ app.use((req, res, next) => {
 
 (async () => {
   await registerRoutes(httpServer, app);
+
+  // Start automatic background manual extraction worker
+  // This handles the "small number of manuals = auto extract in background" feature
+  startManualExtractionWorker(supabaseAdmin);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

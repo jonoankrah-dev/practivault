@@ -130,10 +130,11 @@ export default function Dashboard() {
         <div className="lg:col-span-2 bg-card border border-card-border rounded-xl p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold">Today's Bookings</h2>
-            <Link href="/bookings">
-              <a className="text-xs text-primary hover:underline flex items-center gap-1">
-                View all <ArrowUpRight className="h-3 w-3" />
-              </a>
+            <Link
+              href="/bookings"
+              className="text-xs text-primary hover:underline flex items-center gap-1"
+            >
+              View all <ArrowUpRight className="h-3 w-3" />
             </Link>
           </div>
           {isLoading ? (
@@ -188,8 +189,8 @@ export default function Dashboard() {
                   <p className="text-xs text-muted-foreground mb-2">
                     High-score lead from {l.source} — follow up soon
                   </p>
-                  <Link href="/leads">
-                    <a className="text-xs text-primary hover:underline">Reply now →</a>
+                  <Link href="/leads" className="text-xs text-primary hover:underline">
+                    Reply now →
                   </Link>
                 </div>
               ))

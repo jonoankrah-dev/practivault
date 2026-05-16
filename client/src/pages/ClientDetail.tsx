@@ -42,10 +42,8 @@ export default function ClientDetail({
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div className="flex items-start gap-3">
         <Button variant="ghost" size="icon" className="shrink-0 mt-0.5" asChild>
-          <Link href={clientsListHref}>
-            <a aria-label={`Back to ${label}`}>
-              <ArrowLeft className="h-4 w-4" />
-            </a>
+          <Link href={clientsListHref} aria-label={`Back to ${label}`}>
+            <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
         <div className="flex-1 min-w-0">

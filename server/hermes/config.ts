@@ -8,7 +8,7 @@
 export const HERMES_CONFIG = {
   // === Core Settings ===
   enabled: true,                    // Master switch for Hermes
-  useMock: true,                    // Set to false when your real Grok Hermes Agent is ready
+  useMock: false,                   // Real Grok calls enabled (loads key from env or xai-api-key.txt)
 
   // === Mock Settings (used while useMock = true) ===
   mockConfidence: 0.8,              // Default confidence score for mock responses
