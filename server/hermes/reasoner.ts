@@ -1,22 +1,20 @@
 /**
- * Hermes Reasoner
+ * Hermes Reasoner - The intelligent core of Hermes
  * 
- * This is the core reasoning engine for Hermes.
- * 
- * Currently powered by an advanced mock.
- * Later this will call your real Grok-powered Hermes Agent.
+ * This is where the "thinking" happens.
+ * Currently uses an advanced mock. Later this will call Grok via your Hermes Agent.
  */
 
 import { HermesResponse, HermesProposal, HermesAction } from "./types";
 import { HERMES_CONFIG } from "./config";
-import { HERMES_TOOLS } from "./tools";
 
 export interface ReasonerOptions {
   useMock?: boolean;
 }
 
 /**
- * Main function that Saffi (or other systems) will call to get reasoning from Hermes.
+ * Main reasoning entry point.
+ * Saffi (or other systems) will call this when they need Hermes' brain.
  */
 export async function getHermesReasoning(
   userMessage: string,
@@ -26,23 +24,23 @@ export async function getHermesReasoning(
   const useMock = options.useMock ?? HERMES_CONFIG.useMock;
 
   if (HERMES_CONFIG.verboseLogging) {
-    console.log("[Hermes Reasoner] Processing:", userMessage);
+    console.log("[Hermes Reasoner] Received message:", userMessage);
   }
 
   if (useMock) {
     return generateAdvancedMockResponse(userMessage, context);
   }
 
-  // Real Grok call will go here
+  // TODO: Call real Hermes Agent (Grok-powered) here
   return {
     shouldEscalate: false,
-    directReply: "Real Hermes Agent not connected yet.",
+    directReply: "Real Hermes is not connected yet.",
   };
 }
 
 /**
- * Advanced mock response engine.
- * This tries to intelligently understand job updates and generate realistic proposals.
+ * Advanced mock that tries to intelligently understand natural language job updates.
+ * This will be replaced by real Grok reasoning later.
  */
 function generateAdvancedMockResponse(
   userMessage: string,
@@ -50,19 +48,21 @@ function generateAdvancedMockResponse(
 ): HermesResponse {
   const lower = userMessage.toLowerCase();
   const actions: HermesAction[] = [];
-  let confidence = 0.5;
-  let reasoning = "";
+  let confidence = 0.6;
+  let reasoning = "Based on the user's message, here is what I understood:";
 
-  // === Job Completion Detection ===
-  const jobCompletionSignals = ["finished", "completed", "done", "wrapped up", "all done"];
-  const isJobFinished = jobCompletionSignals.some((word) => lower.includes(word));
+  // === Job Completion ===
+  const jobCompleteSignals = ["finished", "completed", "done", "wrapped up", "all done", "job is done"];
+  const isJobFinished = jobCompleteSignals.some((signal) => lower.includes(signal));
 
-  // === Material Extraction ===
-  const materials = extractMaterialsWithQuantities(userMessage);
+  // === Materials Used ===
+  const materials = extractMaterials(userMessage);
 
-  // === Customer Feedback ===
-  const hasPositiveFeedback = ["happy", "satisfied", "good job", "pleased"].some((w) => lower.includes(w));
-  const hasNegativeFeedback = ["unhappy", "not happy", "bad", "problem", "issue"].some((w) => lower.includes(w));
+  // === Customer Sentiment ===
+  const positiveSignals = ["happy", "satisfied", "good job", "pleased", "thank you"];
+  const negativeSignals = ["unhappy", "not happy", "bad", "issue", "problem", "leak", "broken"];
+  const hasPositive = positiveSignals.some((s) => lower.includes(s));
+  const hasNegative = negativeSignals.some((s) => lower.includes(s));
 
   // === Build Actions ===
 
@@ -72,8 +72,8 @@ function generateAdvancedMockResponse(
       payload: { jobId: context?.jobId || "auto-detected" },
       description: "Mark the job as completed",
     });
-    confidence += 0.25;
-    reasoning += "User indicated the job is finished. ";
+    confidence += 0.2;
+    reasoning += " User stated the job is finished.";
   }
 
   if (materials.items.length > 0) {
@@ -82,44 +82,44 @@ function generateAdvancedMockResponse(
       payload: materials,
       description: `Remove ${materials.items.join(", ")} from inventory`,
     });
-    confidence += 0.2;
-    reasoning += "Specific materials were mentioned as used. ";
+    confidence += 0.15;
+    reasoning += " Specific materials were mentioned.";
   }
 
-  if (userMessage.length > 20) {
+  if (userMessage.trim().length > 15) {
     actions.push({
       type: "create_note",
       payload: { note: userMessage },
-      description: "Log the user's update as a job note",
+      description: "Log the update as a job note",
     });
     confidence += 0.1;
   }
 
-  if (hasPositiveFeedback) {
+  if (hasPositive) {
     actions.push({
       type: "create_note",
-      payload: { note: `Positive customer feedback: ${userMessage}` },
+      payload: { note: `Positive feedback: ${userMessage}` },
       description: "Record positive customer feedback",
-    });
-    confidence += 0.1;
-  }
-
-  if (hasNegativeFeedback) {
-    actions.push({
-      type: "create_note",
-      payload: { note: `Issue reported: ${userMessage}` },
-      description: "Flag potential issue from customer feedback",
     });
     confidence += 0.05;
   }
 
-  // === Decision ===
-  const shouldEscalate = actions.length > 0 && confidence >= 0.6;
+  if (hasNegative) {
+    actions.push({
+      type: "create_note",
+      payload: { note: `Issue reported: ${userMessage}` },
+      description: "Flag potential problem from customer feedback",
+    });
+    confidence += 0.05;
+  }
+
+  // === Final Decision ===
+  const shouldEscalate = actions.length > 0 && confidence >= 0.65;
 
   if (!shouldEscalate) {
     return {
       shouldEscalate: false,
-      directReply: "I understood your message, but I couldn't confidently identify clear actions to take.",
+      directReply: "I understood your message, but I couldn't confidently determine any clear actions to take.",
     };
   }
 
@@ -137,47 +137,32 @@ function generateAdvancedMockResponse(
 }
 
 /**
- * Improved material extraction with better quantity detection.
+ * Basic but improved material extraction.
  */
-function extractMaterialsWithQuantities(message: string) {
+function extractMaterials(message: string) {
   const items: string[] = [];
   const quantities: number[] = [];
 
   const lower = message.toLowerCase();
 
-  // Common field service parts
-  const partMap: { [key: string]: string } = {
-    valve: "valve",
-    valves: "valve",
-    pump: "pump",
-    pumps: "pump",
-    pipe: "pipe",
-    pipes: "pipe",
-    fitting: "fitting",
-    fittings: "fitting",
-    boiler: "boiler part",
-    radiator: "radiator",
-  };
+  const commonParts = ["valve", "valves", "pump", "pumps", "pipe", "pipes", "fitting", "fittings", "boiler", "radiator"];
 
-  Object.keys(partMap).forEach((word) => {
-    if (lower.includes(word)) {
-      const partName = partMap[word];
-      if (!items.includes(partName)) {
-        items.push(partName);
+  commonParts.forEach((part) => {
+    if (lower.includes(part)) {
+      const cleanPart = part.replace(/s$/, "");
+      if (!items.includes(cleanPart)) {
+        items.push(cleanPart);
       }
     }
   });
 
-  // Try to find numbers near the parts
-  items.forEach((item) => {
-    const regex = new RegExp(`(\\d+)\\s*${item}`, "i");
-    const match = message.match(regex);
-    if (match) {
-      quantities.push(parseInt(match[1]));
-    } else {
-      quantities.push(1);
-    }
-  });
+  // Very basic quantity detection
+  const numberMatch = message.match(/(\d+)\s*(valve|pump|pipe|fitting|boiler)/i);
+  if (numberMatch) {
+    quantities.push(parseInt(numberMatch[1]));
+  } else {
+    quantities.push(...Array(items.length).fill(1));
+  }
 
   return {
     items: items.length > 0 ? items : ["unknown"],
@@ -185,9 +170,7 @@ function extractMaterialsWithQuantities(message: string) {
   };
 }
 
-function generateSummary(actions: HermesAction[]): string {
-  if (actions.length === 0) return "No actions proposed.";
-
-  const types = actions.map((a) => a.type.replace("_", " "));
-  return `Proposed actions: ${types.join(", ")}`;
+function generateSummary(actions: any[]): string {
+  const types = actions.map((a) => a.type.replace(/_/g, " "));
+  return `I suggest the following: ${types.join(" + ")}`;
 }
