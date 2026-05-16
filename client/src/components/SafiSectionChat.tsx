@@ -14,9 +14,27 @@ import { Zap, Send, Trash2, Loader2, Bot, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import { SaffiVoiceButton } from "@/components/SaffiVoiceButton";
+import { HermesProposalCard } from "@/components/HermesProposalCard";
 
-type Role = "user" | "assistant";
-type Message = { id: string; role: Role; text: string };
+type Role = "user" | "assistant" | "hermesProposal";
+
+interface HermesProposal {
+  id: string;
+  extractedDetails: Record<string, any>;
+  actions: Array<{
+    id: string;
+    actionType: string;
+    payload: Record<string, any>;
+    confidence?: number;
+    reasoning?: string;
+  }>;
+  rawTranscript: string;
+  overallConfidence: number;
+  createdAt: string;
+  status: string;
+}
+
+type Message = { id: string; role: Role; text?: string; proposal?: HermesProposal };
 
 interface Props {
   /** Short section name shown in the badge, e.g. "Invoices" */
@@ -77,6 +95,17 @@ export default function SafiSectionChat({
       const assistantMsg: Message = { id: `a-${Date.now()}`, role: "assistant", text: reply };
       setMessages(p => [...p, assistantMsg]);
 
+      // Hermes proposal support — if the backend detected a treatment completion, it returns
+      // a structured proposal for the user to edit/approve instead of (or alongside) plain text.
+      if (data.hermesProposal) {
+        const propMsg: Message = {
+          id: `hp-${Date.now()}`,
+          role: "hermesProposal",
+          proposal: data.hermesProposal as HermesProposal,
+        };
+        setMessages(p => [...p, propMsg]);
+      }
+
       historyRef.current = [...historyRef.current, { role: "assistant", content: reply }];
     } catch (err: any) {
       toast({ title: "Saffi error", description: err.message, variant: "destructive" });
@@ -97,6 +126,34 @@ export default function SafiSectionChat({
   };
 
   const clearChat = () => { setMessages([]); historyRef.current = []; };
+
+  // Called when user clicks "Approve & Execute" (or after editing) on a Hermes proposal card
+  const handleApproveProposal = async (updatedProposal: HermesProposal) => {
+    try {
+      const res = await apiRequest("POST", "/api/hermes/execute", { proposal: updatedProposal });
+      const result = await res.json();
+
+      if (!result.ok) throw new Error(result.message || "Execution failed");
+
+      // Replace the proposal message with a success note in the chat
+      setMessages(prev =>
+        prev.map(m =>
+          m.role === "hermesProposal" && m.proposal?.id === updatedProposal.id
+            ? {
+                id: `hp-done-${Date.now()}`,
+                role: "assistant",
+                text: `✅ Hermes executed the proposal: ${result.result?.summary || "Actions applied successfully."}`,
+              }
+            : m
+        )
+      );
+
+      toast({ title: "Proposal executed", description: "The actions have been applied to your data." });
+    } catch (err: any) {
+      toast({ title: "Execution failed", description: err.message, variant: "destructive" });
+      throw err; // let the card show the error state
+    }
+  };
 
   return (
     <div
@@ -216,9 +273,19 @@ export default function SafiSectionChat({
                     "rounded-2xl px-4 py-3 text-sm leading-relaxed",
                     msg.role === "user"
                       ? "bg-[#E83A8E] text-white rounded-br-sm whitespace-pre-wrap"
+                      : msg.role === "hermesProposal"
+                      ? "p-0 bg-transparent border-0" // card handles its own chrome
                       : "bg-muted text-foreground rounded-bl-sm"
                   )}>
-                    {msg.role === "assistant" ? (
+                    {msg.role === "hermesProposal" && msg.proposal ? (
+                      <HermesProposalCard
+                        proposal={msg.proposal}
+                        onApprove={handleApproveProposal}
+                        onReject={() => {
+                          setMessages(prev => prev.filter(m => m.id !== msg.id));
+                        }}
+                      />
+                    ) : msg.role === "assistant" ? (
                       <div className="prose prose-sm max-w-none dark:prose-invert
                         prose-p:my-1 prose-ul:my-1 prose-li:my-0.5
                         prose-headings:text-sm prose-headings:font-semibold prose-headings:my-2
