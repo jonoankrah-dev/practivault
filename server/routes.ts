@@ -7,6 +7,12 @@ import {
   executeReadOnlyTool,
 } from "./lib/safiReadOnlyTools";
 import {
+  reasonAboutTreatment,
+  executeProposal,
+  type HermesProposal,
+  type HermesExecutionResult,
+} from "./hermes";
+import {
   classifyInbound,
   redactSystemPrompt,
   injectGuardDirective,
@@ -4030,6 +4036,18 @@ Rules:
     const bizInfo = bizRes.data;
     const manualsCount = manualsCountRes.count ?? 0;
 
+    // Hermes: if this message looks like a treatment completion note, propose
+    // structured actions (complete_job, deduct_inventory, create_note) for user approval.
+    // This runs in parallel with normal Saffi chat and can short-circuit to a proposal card.
+    const hermesProposal = await reasonAboutTreatment({
+      userMessage: message,
+      history,
+      businessName: userData?.business_name ?? bizInfo?.business_name,
+    });
+    if (hermesProposal && hermesProposal.overallConfidence >= 0.6) {
+      return res.json({ reply: "", hermesProposal, messages: history });
+    }
+
     let bizContext = "";
     if (bizInfo) {
       if (bizInfo.tagline) bizContext += `\nTagline: ${bizInfo.tagline}`;
@@ -4967,6 +4985,26 @@ IMPORTANT: Reply only with the message text to send. Do not explain what you are
       .eq("is_read", false);
     if (error) return res.status(500).json({ message: error.message });
     res.json({ count: count || 0 });
+  });
+
+  // ── /api/hermes/execute — run an approved (and optionally edited) HermesProposal ──
+  // Clean top-level route (never nested inside /api/safi/chat). This was the
+  // previous bug that caused 502s and broken closures.
+  app.post("/api/hermes/execute", requireAuth, async (req: AuthedRequest, res: Response) => {
+    const { proposal } = req.body as { proposal: HermesProposal };
+    if (!proposal?.id || !Array.isArray(proposal.actions)) {
+      return res.status(400).json({ message: "Invalid proposal" });
+    }
+
+    const db = req.db!;
+    const userId = req.user!.id;
+
+    try {
+      const result: HermesExecutionResult = await executeProposal(proposal, db, userId);
+      res.json({ ok: true, result });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "Hermes execution failed" });
+    }
   });
 
   return httpServer;
