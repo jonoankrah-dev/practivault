@@ -1,20 +1,22 @@
 /**
- * Hermes Trigger Keywords
+ * Hermes Trigger Keywords (Phase 1 - Hybrid Approach)
  * 
- * This is the starting list of keywords that will cause Saffi to escalate
- * a message to Hermes for deeper reasoning.
+ * These keywords help decide when a message should be escalated from Saffi to Hermes.
  * 
- * We can improve this list over time (or make it dynamic later).
+ * We organize them into categories for better maintainability.
+ * This is a starting point — we can improve this logic significantly later.
  */
 
-export const HERMES_TRIGGER_KEYWORDS = [
-  // Job completion related
+export const JOB_COMPLETION_KEYWORDS = [
   "finished",
   "completed",
   "done",
   "job done",
+  "all done",
+  "wrapped up",
+];
 
-  // Inventory / materials used
+export const INVENTORY_KEYWORDS = [
   "used",
   "valve",
   "valves",
@@ -23,16 +25,34 @@ export const HERMES_TRIGGER_KEYWORDS = [
   "inventory",
   "material",
   "materials",
-
-  // Customer feedback
-  "happy",
-  "unhappy",
-  "customer said",
-  "client said",
-
-  // General complex updates
-  "update job",
-  "mark as complete",
+  "part",
+  "parts",
   "deduct",
   "remove from stock",
+];
+
+export const CUSTOMER_FEEDBACK_KEYWORDS = [
+  "happy",
+  "unhappy",
+  "satisfied",
+  "unsatisfied",
+  "customer said",
+  "client said",
+  "customer is",
+  "client is",
+];
+
+export const GENERAL_UPDATE_KEYWORDS = [
+  "update job",
+  "mark as complete",
+  "change status",
+  "job update",
+];
+
+// Combined list used by the simple keyword check
+export const HERMES_TRIGGER_KEYWORDS = [
+  ...JOB_COMPLETION_KEYWORDS,
+  ...INVENTORY_KEYWORDS,
+  ...CUSTOMER_FEEDBACK_KEYWORDS,
+  ...GENERAL_UPDATE_KEYWORDS,
 ];

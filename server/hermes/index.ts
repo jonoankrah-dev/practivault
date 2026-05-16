@@ -17,6 +17,7 @@
 import { HermesResponse } from "./types";
 import { HERMES_TRIGGER_KEYWORDS } from "./keywords";
 import { getHermesReasoning } from "./reasoner";
+import { HERMES_CONFIG } from "./config";
 
 // ============================================
 // Configuration (we can move this to env later)
@@ -42,9 +43,15 @@ export function shouldEscalateToHermes(message: string): boolean {
 
   const lowerMessage = message.toLowerCase();
 
-  return HERMES_TRIGGER_KEYWORDS.some((keyword) =>
+  const matchesKeyword = HERMES_TRIGGER_KEYWORDS.some((keyword) =>
     lowerMessage.includes(keyword.toLowerCase())
   );
+
+  if (HERMES_CONFIG.verboseLogging && matchesKeyword) {
+    console.log("[Hermes] Message matched trigger keywords");
+  }
+
+  return matchesKeyword;
 }
 
 // ============================================
@@ -65,7 +72,9 @@ export async function sendToHermes(
   userMessage: string,
   context?: Record<string, any>
 ): Promise<HermesResponse> {
-  console.log("[Hermes] Processing message:", userMessage);
+  if (HERMES_CONFIG.verboseLogging) {
+    console.log("[Hermes] Processing message:", userMessage);
+  }
 
   return await getHermesReasoning(userMessage, context, {
     useMock: HERMES_CONFIG.useMock,

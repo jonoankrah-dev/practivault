@@ -1,128 +1,144 @@
 /**
  * Hermes Reasoner
  * 
- * This file is responsible for getting a reasoned response from Hermes.
- * 
- * In the future, this will make the actual call to your Grok-powered Hermes Agent.
- * For now, it uses a mock implementation.
+ * This file handles getting a reasoned response from Hermes.
+ * Currently uses a smart mock. Later it will call your real Grok-powered Hermes Agent.
  */
 
 import { HermesResponse, HermesProposal } from "./types";
+import { HERMES_CONFIG } from "./config";
+import { HERMES_TOOLS } from "./tools";
 
 export interface ReasonerOptions {
   useMock?: boolean;
 }
 
 /**
- * This is the core function that will eventually call your Hermes Agent (Grok).
- * 
- * Right now it just returns a mock response.
+ * Main function that will eventually call your Hermes Agent (Grok).
  */
 export async function getHermesReasoning(
   userMessage: string,
   context?: Record<string, any>,
   options: ReasonerOptions = {}
 ): Promise<HermesResponse> {
-  const useMock = options.useMock ?? true;
+  const useMock = options.useMock ?? HERMES_CONFIG.useMock;
 
-  if (useMock) {
-    return getMockResponse(userMessage);
+  if (HERMES_CONFIG.verboseLogging) {
+    console.log("[Hermes Reasoner] Processing message:", userMessage);
   }
 
-  // TODO: Replace with real call to Hermes Agent
-  // Example future implementation:
-  // const response = await fetch("http://localhost:8000/hermes/reason", {
-  //   method: "POST",
-  //   headers: { "Content-Type": "application/json" },
-  //   body: JSON.stringify({ message: userMessage, context }),
-  // });
-  // return await response.json();
+  if (useMock) {
+    return getImprovedMockResponse(userMessage);
+  }
 
+  // Future real implementation will go here
   return {
     shouldEscalate: false,
-    directReply: "Hermes (real) is not connected yet.",
+    directReply: "Real Hermes Agent is not connected yet.",
   };
 }
 
 /**
- * Temporary mock implementation for development and testing.
- * This simulates what a real Hermes response might look like.
+ * Improved mock response with better logic.
  */
-function getMockResponse(userMessage: string): HermesResponse {
+function getImprovedMockResponse(userMessage: string): HermesResponse {
   const lower = userMessage.toLowerCase();
 
-  // Job completion scenarios
-  if (lower.includes("finished") || lower.includes("completed") || lower.includes("done")) {
-    const proposal: HermesProposal = {
-      summary: "Mark job as complete and update inventory based on materials mentioned.",
+  // Job completion + materials used
+  if (
+    (lower.includes("finished") || lower.includes("completed") || lower.includes("done")) &&
+    (lower.includes("used") || lower.includes("valve") || lower.includes("pump"))
+  ) {
+    const proposal = {
+      summary: "Mark job as complete and deduct used materials from inventory.",
       actions: [
         {
           type: "complete_job",
-          payload: { jobId: "auto-detected-from-context" },
-          description: "Mark the referenced job as completed",
+          payload: { jobId: "auto-detected" },
+          description: "Mark the job as completed",
         },
         {
           type: "deduct_inventory",
-          payload: extractInventoryFromMessage(userMessage),
+          payload: extractMaterials(userMessage),
           description: "Remove used parts from stock",
         },
         {
           type: "create_note",
           payload: { note: userMessage },
-          description: "Log the user's update",
+          description: "Log the technician's update",
         },
       ],
-      reasoning: "User indicated the job is finished and listed specific materials used.",
-      confidence: 0.8,
+      reasoning: "User clearly stated the job is finished and listed specific materials used.",
+      confidence: HERMES_CONFIG.mockConfidence,
     };
 
     return { shouldEscalate: true, proposal };
   }
 
-  // Inventory-related messages
+  // Just mentions finishing a job
+  if (lower.includes("finished") || lower.includes("completed")) {
+    const proposal = {
+      summary: "Mark the referenced job as complete.",
+      actions: [
+        {
+          type: "complete_job",
+          payload: { jobId: "auto-detected" },
+          description: "Mark job as completed",
+        },
+        {
+          type: "create_note",
+          payload: { note: userMessage },
+          description: "Add user's note to the job",
+        },
+      ],
+      reasoning: "User indicated the job is finished.",
+      confidence: 0.75,
+    };
+
+    return { shouldEscalate: true, proposal };
+  }
+
+  // Inventory related only
   if (lower.includes("used") || lower.includes("stock") || lower.includes("inventory")) {
-    const proposal: HermesProposal = {
-      summary: "Update inventory based on materials the user mentioned.",
+    const proposal = {
+      summary: "Update inventory based on materials mentioned.",
       actions: [
         {
           type: "deduct_inventory",
-          payload: extractInventoryFromMessage(userMessage),
+          payload: extractMaterials(userMessage),
           description: "Adjust stock levels",
         },
       ],
       reasoning: "Message mentions materials being used.",
-      confidence: 0.7,
+      confidence: 0.65,
     };
 
     return { shouldEscalate: true, proposal };
   }
 
-  // Default - no clear action
   return {
     shouldEscalate: false,
-    directReply: "I received your message but couldn't identify any clear actions to take.",
+    directReply: "Message received, but no clear actions were identified.",
   };
 }
 
 /**
- * Very basic helper to extract inventory items from a message.
- * This is temporary and will be replaced by proper NLP from Hermes/Grok.
+ * Very basic material extraction (will be replaced by real NLP from Grok later).
  */
-function extractInventoryFromMessage(message: string) {
+function extractMaterials(message: string) {
   const items: string[] = [];
   const quantities: number[] = [];
 
   const lower = message.toLowerCase();
 
-  // Very naive extraction for testing
   if (lower.includes("valve")) items.push("valve");
   if (lower.includes("pump")) items.push("pump");
 
-  // Default quantities if not specified
-  quantities.push(1, 1);
+  // Default to 1 if no quantity mentioned
+  quantities.push(...Array(items.length).fill(1));
 
   return {
-    items: items.length > 0 ? items : ["unknown-item"],
-    quantities: quantities.slice(0, items.length),
+    items: items.length > 0 ? items : ["unknown"],
+    quantities,
   };
 }
