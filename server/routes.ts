@@ -1,4 +1,5 @@
 import { registerPublicConfigRoute } from "./routes/publicConfig";
+import { shouldEscalateToHermes, sendToHermes } from "./hermes";
 import { recordActivityEvent, queueAgentAction } from "./lib/safiMemory";
 import { registerSafiMemoryRoutes } from "./routes/safiMemory";
 import { registerSaffiRealtime, saffiRealtimeTokenHandler } from "./realtime/saffiRealtime";
@@ -4014,6 +4015,24 @@ Rules:
   app.post("/api/safi/chat", requireAuth, async (req: AuthedRequest, res: Response) => {
     const { message, history = [], sectionContext = "" } = req.body as { message: string; history?: {role:string;content:string}[]; sectionContext?: string };
     if (!message?.trim()) return res.status(400).json({ message: "No message" });
+
+    // === Light Hermes Integration (Hybrid - Phase 1) ===
+    // If the message matches Hermes trigger keywords, escalate to Hermes for deeper reasoning
+    if (shouldEscalateToHermes(message)) {
+      try {
+        const hermesResponse = await sendToHermes(message, { userId, sectionContext });
+        
+        if (hermesResponse.shouldEscalate && hermesResponse.proposal) {
+          // Hermes has a proposal — return it for Saffi to present and ask for approval
+          return res.json({
+            reply: `Hermes suggests the following actions:\n\n${hermesResponse.proposal.summary}\n\n${hermesResponse.proposal.actions.map(a => `- ${a.description}`).join("\n")}\n\nReasoning: ${hermesResponse.proposal.reasoning}\n\nDo you want me to proceed?`,
+            hermesProposal: hermesResponse.proposal,
+          });
+        }
+      } catch (err) {
+        console.error("[Hermes] Error during escalation:", err);
+      }
+    }
 
     const db = req.db!;
     const userId = req.user!.id;
