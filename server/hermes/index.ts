@@ -45,6 +45,11 @@ export function shouldEscalateToHermes(message: string): boolean {
 /**
  * Main entry point.
  * Saffi calls this when it wants Hermes to deeply reason about a message.
+ *
+ * Context can include:
+ *   - userId: string
+ *   - db: SupabaseClient (recommended) → enables Hermes to search the user's uploaded manuals via RAG
+ *   - sectionContext: string
  */
 export async function sendToHermes(
   userMessage: string,

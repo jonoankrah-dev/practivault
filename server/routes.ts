@@ -4068,7 +4068,7 @@ Rules:
     // If the message matches Hermes trigger keywords, escalate to Hermes for deeper reasoning
     if (shouldEscalateToHermes(message)) {
       try {
-        const hermesResponse = await sendToHermes(message, { userId, sectionContext });
+        const hermesResponse = await sendToHermes(message, { userId, db: req.db, sectionContext });
         
         if (hermesResponse.shouldEscalate && hermesResponse.proposal) {
           // Return a clean structure so the frontend can render a nice proposal card

@@ -12,6 +12,7 @@ import { HERMES_TOOLS } from "../tools";
 import { HERMES_SYSTEM_PROMPT } from "../prompts";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 // Auto-load XAI_API_KEY from xai-api-key.txt if not already in env
 // (allows `npx tsx server/hermes/test/test-hermes.ts` to work standalone)
@@ -52,12 +53,44 @@ export async function getHermesReasoning(
     return generateAestheticsMockResponse(userMessage, context);
   }
 
-  // === Real Grok-powered Hermes (Improvement #4) ===
+  // === Real Grok-powered Hermes ===
   try {
     return await callRealGrokHermes(userMessage, context);
   } catch (error) {
     console.error("[Hermes] Real Grok call failed, falling back to mock:", error);
     return generateAestheticsMockResponse(userMessage, context);
+  }
+}
+
+/**
+ * Fetches relevant manual chunks via semantic search and formats them for injection into Hermes.
+ * This is the key to making Hermes actually "know" the user's uploaded EndoPulse materials.
+ */
+async function getRelevantManualContext(
+  db: SupabaseClient,
+  userId: string,
+  query: string
+): Promise<string> {
+  try {
+    const { searchManualsSemantic } = await import("../../lib/semanticManualSearch");
+    const result = await searchManualsSemantic(db, userId, query, 5);
+
+    if (!result.matches || result.matches.length === 0) {
+      return "";
+    }
+
+    const excerpts = result.matches
+      .slice(0, 4)
+      .map((m, i) => {
+        const source = m.manual_name ? ` [${m.manual_name}${m.page_number ? `, p.${m.page_number}` : ""}]` : "";
+        return `${i + 1}. ${m.content.trim().slice(0, 650)}${source}`;
+      })
+      .join("\n\n");
+
+    return `\n\n## Relevant Manual Excerpts (from user's uploaded documents)\nUse this information to inform your reasoning. Cite the source when relevant.\n\n${excerpts}\n`;
+  } catch (err) {
+    console.warn("[Hermes] Failed to fetch manual context for RAG:", err);
+    return "";
   }
 }
 
@@ -73,17 +106,35 @@ async function callRealGrokHermes(
     throw new Error("XAI_API_KEY not configured. Place your key in xai-api-key.txt in the project root (or set the XAI_API_KEY environment variable).");
   }
 
+  const db: SupabaseClient | undefined = context?.db;
+  const userId: string | undefined = context?.userId;
+
+  // === Pass 2: Inject relevant manual content via RAG when available ===
+  // This is the key integration — Hermes now reasons with the user's actual uploaded manuals
+  // (especially powerful when they upload the official EndoPulse tutor manual / course).
+  let enhancedSystemPrompt = HERMES_SYSTEM_PROMPT;
+
+  if (db && userId) {
+    const manualContext = await getRelevantManualContext(db, userId, userMessage);
+    if (manualContext) {
+      enhancedSystemPrompt = HERMES_SYSTEM_PROMPT + manualContext;
+      if (HERMES_CONFIG.verboseLogging) {
+        console.log("[Hermes] Injected relevant manual excerpts from user's RAG for this reasoning call.");
+      }
+    }
+  }
+
   const messages = [
-    { role: "system", content: HERMES_SYSTEM_PROMPT },
+    { role: "system", content: enhancedSystemPrompt },
     { role: "user", content: userMessage },
   ];
 
-  // Add a few-shot example for better structured output
+  // Add a high-quality few-shot example using the improved EndoPulse-specific tool schemas
   const fewShotMessages = [
-    { role: "system", content: HERMES_SYSTEM_PROMPT },
+    { role: "system", content: enhancedSystemPrompt },
     { 
       role: "user", 
-      content: "Just finished lower face on Mrs Thompson, endoPulse 1470nm, 950J at 8W, 3 passes, 6ml lidocaine, compression applied, client happy" 
+      content: "Just finished lower face and jawline on Mrs Thompson, endoPulse 1470nm, total 950J at 8W, 3 passes, 6ml 1% lidocaine, compression garment applied, client tolerated well and was pleased" 
     },
     {
       role: "assistant",
@@ -94,7 +145,15 @@ async function callRealGrokHermes(
           type: "function",
           function: {
             name: "complete_treatment",
-            arguments: JSON.stringify({ areasTreated: ["lower face"], clientName: "Mrs Thompson", energy: "950J", wavelength: "1470nm" })
+            arguments: JSON.stringify({ 
+              areasTreated: ["lower face", "jawline"], 
+              clientName: "Mrs Thompson", 
+              wavelength: "1470nm", 
+              energyJoules: 950, 
+              powerWatts: 8, 
+              numPasses: 3,
+              clinicalEndpointReached: true 
+            })
           }
         },
         {
@@ -102,7 +161,42 @@ async function callRealGrokHermes(
           type: "function",
           function: {
             name: "deduct_consumables",
-            arguments: JSON.stringify({ items: ["lidocaine"], quantities: [6] })
+            arguments: JSON.stringify({ 
+              items: ["lidocaine 1%"], 
+              quantities: [6] 
+            })
+          }
+        },
+        {
+          id: "call_3",
+          type: "function",
+          function: {
+            name: "record_treatment_note",
+            arguments: JSON.stringify({ 
+              clientName: "Mrs Thompson",
+              areasTreated: ["lower face", "jawline"],
+              wavelength: "1470nm",
+              energyJoules: 950,
+              powerWatts: 8,
+              numPasses: 3,
+              lidocaineVolumeMl: 6,
+              techniqueNotes: "Fan vectors used, clinical endpoint reached (good erythema and tissue softening)",
+              compression: "Applied, 24h recommended",
+              additionalNotes: "Client tolerated well and was pleased with tightening result"
+            })
+          }
+        },
+        {
+          id: "call_4",
+          type: "function",
+          function: {
+            name: "log_client_feedback",
+            arguments: JSON.stringify({ 
+              clientName: "Mrs Thompson", 
+              sentiment: "positive", 
+              message: "client tolerated well and was pleased",
+              requiresReview: false 
+            })
           }
         }
       ]
@@ -173,17 +267,21 @@ async function callRealGrokHermes(
 function generateDescriptionForAction(actionType: string, args: any): string {
   switch (actionType) {
     case "complete_treatment":
-      return `Complete EndoPulse treatment${args.areasTreated ? ` on ${args.areasTreated.join(", ")}` : ""}`;
+      const areas = args.areasTreated?.join(", ") || "";
+      const wl = args.wavelength ? ` (${args.wavelength})` : "";
+      return `Complete EndoPulse treatment${areas ? ` on ${areas}` : ""}${wl}`;
     case "deduct_consumables":
       return `Deduct consumables: ${args.items?.join(", ") || "items"}`;
     case "record_treatment_note":
-      return "Record detailed clinical treatment note";
+      return "Record detailed clinical EndoPulse treatment note";
     case "log_client_feedback":
       return `${args.sentiment || "Client"} feedback logged`;
     case "schedule_follow_up":
       return `Schedule follow-up in ${args.weeksFromNow || 4} weeks`;
     case "create_task":
       return `Create task: ${args.title || "Internal task"}`;
+    case "record_safety_observation":
+      return `Safety observation recorded${args.severity ? ` (${args.severity})` : ""}`;
     default:
       return `Execute ${actionType}`;
   }
