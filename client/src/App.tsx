@@ -112,6 +112,11 @@ function Protected({ children }: { children: React.ReactNode }) {
 }
 
 function AppRouter() {
+  // If accessed via chat.endopulse.co.uk, serve Millie chat at root
+  if (typeof window !== 'undefined' && window.location.hostname === 'chat.endopulse.co.uk') {
+    return <PublicMillie />;
+  }
+
   return (
     <Switch>
       <Route path="/login" component={Login} />

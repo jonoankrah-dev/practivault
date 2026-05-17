@@ -4424,17 +4424,27 @@ app.post("/api/public/millie/chat", async (req, res) => {
 
     // TODO (next): Add intent detection here to auto-create leads + notify
 
-    // === Lead Creation + Notification (Fast MVP) ===
-    const shouldCreateLead =
-      (contact && (contact.name || contact.email || contact.phone)) ||
-      /\b(buy|price|how much|machine|training|interested|purchase|cost)\b/i.test(message);
+    // === Fetch conversation history for context ===
+    const { data: recentMessages } = await supabaseAdmin
+      .from("millie_public_chats")
+      .select("role, content")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: true })
+      .limit(8);
+
+    const conversationText = (recentMessages || []).map(m => `${m.role}: ${m.content}`).join("\n");
+
+    // === Smarter but soft lead detection ===
+    const hasContactInfo = contact && (contact.name || contact.email || contact.phone);
+    const strongInterest = /\b(how much|price|buy|purchase|machine|training|ready|next step|how do i get|sign me up|interested in the)\b/i.test(conversationText);
+    const shouldCreateLead = hasContactInfo || strongInterest;
 
     if (shouldCreateLead) {
       const leadName = contact?.name || "Website Visitor";
       const notes = [
-        `Source: Public Millie chat (session ${sessionId})`,
+        `Source: Public Millie chat`,
         contact?.interest ? `Interest: ${contact.interest}` : "",
-        `Last message: ${message}`,
+        `Conversation:\n${conversationText.slice(-800)}`,
       ].filter(Boolean).join("\n");
 
       try {
@@ -4446,38 +4456,32 @@ app.post("/api/public/millie/chat", async (req, res) => {
           notes,
         }).select().single();
 
-        // Send email notification
+        // Email notification
         const resendKey = process.env.RESEND_API_KEY;
         if (resendKey && newLead) {
           const resend = new Resend(resendKey);
           await resend.emails.send({
-            from: "EndoPulse <no-reply@yourdomain.com>", // TODO: replace with your actual verified domain
-            to: "jonoankrah@gmail.com", // TODO: make dynamic from business_info later
-            subject: `New Millie Lead: ${leadName}`,
-            text: `A new lead came in from the public Millie chat.\n\nName: ${leadName}\nPhone: ${contact?.phone || "N/A"}\nEmail: ${contact?.email || "N/A"}\nInterest: ${contact?.interest || "Not specified"}\n\nLast message: ${message}\n\nSession: ${sessionId}`,
+            from: "Millie <millie@endopulse.co.uk>",
+            to: "jonoankrah@gmail.com",
+            subject: `New lead from Millie: ${leadName}`,
+            text: `New lead from public Millie chat.\n\nName: ${leadName}\nPhone: ${contact?.phone || "N/A"}\nEmail: ${contact?.email || "N/A"}\nInterest: ${contact?.interest || "Not specified"}\n\nRecent conversation:\n${conversationText.slice(-900)}`,
           });
         }
 
-        // In-app notification via activity_events (so it shows in Usage / activity feeds)
-        try {
-          await supabaseAdmin.from("activity_events").insert({
-            user_id: ownerUserId,
+        // In-app notification
+        await supabaseAdmin.from("activity_events").insert({
+          user_id: ownerUserId,
+          source: "millie_public",
+          type: "new_lead",
+          payload: {
+            lead_id: newLead?.id,
+            name: leadName,
             source: "millie_public",
-            type: "new_lead",
-            payload: {
-              lead_id: newLead?.id,
-              name: leadName,
-              source: "millie_public",
-              session_id: sessionId,
-              contact: contact || {},
-              last_message: message,
-            },
-          });
-        } catch (notifErr) {
-          console.error("[Public Millie] Activity event error:", notifErr);
-        }
+            session_id: sessionId,
+          },
+        });
       } catch (leadErr) {
-        console.error("[Public Millie] Lead creation error:", leadErr);
+        console.error("[Public Millie] Lead error:", leadErr);
       }
     }
 
