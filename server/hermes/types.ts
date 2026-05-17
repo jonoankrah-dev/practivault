@@ -1,72 +1,40 @@
 /**
- * Hermes — Agentic Brain for Saffi
- * Types for proposals, messages, and execution results.
- *
- * Hermes turns natural language (especially endoPulse treatment notes) into
- * structured, editable, user-approved actions.
+ * Hermes Agent Types
+ * 
+ * This file defines the data structures Hermes will use when communicating
+ * with Saffi and PractiVault.
  */
 
-export type HermesActionType =
-  | "complete_job"
-  | "deduct_inventory"
-  | "create_note"
-  | "update_booking_status"
-  | "create_followup_task"
-  | "send_whatsapp"
-  | "log_treatment";
-
+/**
+ * Represents a single action Hermes wants to perform.
+ * New aesthetics-focused actions:
+ *   - complete_treatment
+ *   - deduct_consumables
+ *   - record_treatment_note
+ *   - log_client_feedback
+ */
 export interface HermesAction {
-  id: string;                    // client-side stable id for editing
-  actionType: HermesActionType;
-  payload: Record<string, unknown>;
-  confidence?: number;           // 0-1
-  reasoning?: string;            // why Hermes suggested this
+  type: string;
+  payload: Record<string, any>;
+  description: string;
 }
 
-export interface ExtractedTreatmentDetails {
-  clientName?: string;
-  clientPhone?: string;
-  treatment?: string;            // e.g. "endoPulse 980nm + 1470nm"
-  area?: string;                 // "neck", "face", "abdomen"
-  wavelengths?: string[];        // ["980", "1470"]
-  passes?: number;
-  energy?: string;               // "15J", "good contraction"
-  materialsUsed?: Array<{ name: string; quantity: number; unit?: string }>;
-  clientFeedback?: string;
-  positiveFeedback?: boolean;
-  durationMinutes?: number;
-  date?: string;                 // ISO
-}
-
+/**
+ * A proposal from Hermes that needs user approval.
+ */
 export interface HermesProposal {
-  id: string;
-  extractedDetails: ExtractedTreatmentDetails;
-  actions: HermesAction[];
-  rawTranscript: string;
-  overallConfidence: number;
-  createdAt: string;
-  status: "pending_review" | "approved" | "edited" | "executed" | "rejected";
+  summary: string;                 // Short summary of what Hermes wants to do
+  actions: HermesAction[];         // List of actions to perform if approved
+  reasoning?: string;              // Optional explanation of why Hermes suggested this
+  confidence?: number;             // 0–1 score of how confident Hermes is
+  extractedDetails?: any;          // Rich details from the aesthetics mock (for future UI)
 }
 
-export type ChatMessageRole = "user" | "assistant" | "tool" | "hermesProposal";
-
-export interface ChatMessage {
-  id: string;
-  role: ChatMessageRole;
-  content?: string;              // for text messages
-  proposal?: HermesProposal;     // when role === "hermesProposal"
-  toolName?: string;
-  toolResult?: string;
-}
-
-// Result of executing an approved proposal
-export interface HermesExecutionResult {
-  success: boolean;
-  executedActions: Array<{
-    actionType: HermesActionType;
-    success: boolean;
-    result?: string;
-    error?: string;
-  }>;
-  summary: string;
+/**
+ * The response Hermes sends back after processing a message.
+ */
+export interface HermesResponse {
+  shouldEscalate: boolean;         // Whether this needs user approval
+  proposal?: HermesProposal;       // The actual proposal (if shouldEscalate is true)
+  directReply?: string;            // A simple reply if no action is needed
 }

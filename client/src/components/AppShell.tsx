@@ -91,44 +91,44 @@ export default function AppShell({ children }: { children: ReactNode }) {
             const badge = item.badgeKey ? badgeValues[item.badgeKey] : undefined;
 
             return (
-              <Link key={`${item.href}-${item.label}`} href={item.href}>
-                <a
-                  data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
-                  className={cn(
-                    "group flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-all",
-                    active ? "font-semibold" : "opacity-70 hover:opacity-100",
-                  )}
-                  style={
-                    active
-                      ? { backgroundColor: config.primaryHex, color: "#fff" }
-                      : { color: config.sidebarFg }
+              <Link 
+                key={`${item.href}-${item.label}`} 
+                href={item.href}
+                data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+                className={cn(
+                  "group flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-all",
+                  active ? "font-semibold" : "opacity-70 hover:opacity-100",
+                )}
+                style={
+                  active
+                    ? { backgroundColor: config.primaryHex, color: "#fff" }
+                    : { color: config.sidebarFg }
+                }
+                onMouseEnter={(e) => {
+                  if (!active) {
+                    (e.currentTarget as HTMLElement).style.backgroundColor = `${config.primaryHex}22`;
                   }
-                  onMouseEnter={(e) => {
-                    if (!active) {
-                      (e.currentTarget as HTMLElement).style.backgroundColor = `${config.primaryHex}22`;
+                }}
+                onMouseLeave={(e) => {
+                  if (!active) {
+                    (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+                  }
+                }}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="flex-1">{item.label}</span>
+                {badge !== undefined && (
+                  <span
+                    className="text-[11px] px-1.5 py-0.5 rounded-md font-medium"
+                    style={
+                      active
+                        ? { backgroundColor: "rgba(255,255,255,0.2)", color: "#fff" }
+                        : { backgroundColor: `${config.primaryHex}22`, color: config.primaryHex }
                     }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!active) {
-                      (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                    }
-                  }}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span className="flex-1">{item.label}</span>
-                  {badge !== undefined && (
-                    <span
-                      className="text-[11px] px-1.5 py-0.5 rounded-md font-medium"
-                      style={
-                        active
-                          ? { backgroundColor: "rgba(255,255,255,0.2)", color: "#fff" }
-                          : { backgroundColor: `${config.primaryHex}22`, color: config.primaryHex }
-                      }
-                    >
-                      {badge}
-                    </span>
-                  )}
-                </a>
+                  >
+                    {badge}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -136,14 +136,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
         {/* Footer */}
         <div className="border-t p-3" style={{ borderColor: "rgba(255,255,255,0.1)" }}>
-          <Link href="/pricing">
-            <a
-              className="flex items-center gap-2 px-3 py-2 rounded-md text-xs transition-colors mb-1 opacity-50 hover:opacity-80"
-              style={{ color: config.sidebarFg }}
-            >
-              <CreditCard className="h-3.5 w-3.5" />
-              <span>Plans &amp; Pricing</span>
-            </a>
+          <Link 
+            href="/pricing"
+            className="flex items-center gap-2 px-3 py-2 rounded-md text-xs transition-colors mb-1 opacity-50 hover:opacity-80"
+            style={{ color: config.sidebarFg }}
+          >
+            <CreditCard className="h-3.5 w-3.5" />
+            <span>Plans &amp; Pricing</span>
           </Link>
           <div className="flex items-center gap-3 px-2 py-2">
             <div
