@@ -1,4 +1,5 @@
 import { registerPublicConfigRoute } from "./routes/publicConfig";
+import { MILLIE_SYSTEM_PROMPT } from "./lib/milliePrompt";
 import { shouldEscalateToHermes, sendToHermes, executeHermesProposal } from "./hermes";
 import { recordActivityEvent, queueAgentAction } from "./lib/safiMemory";
 import { registerSafiMemoryRoutes } from "./routes/safiMemory";
@@ -4336,7 +4337,158 @@ When you retrieve data, summarise it clearly and add a brief observation where u
     }
   });
 
-    // ─── Saphie AI — chat + voice transcription + manuals ──────────────────────
+    // ─── Public Millie Sales Chat (chat.endopulse.co.uk) ──────────────────────
+// Fast MVP - unauthenticated endpoint for potential customers
+app.post("/api/public/millie/chat", async (req, res) => {
+  const { sessionId, message, contact } = req.body;
+
+  if (!sessionId || !message?.trim()) {
+    return res.status(400).json({ message: "sessionId and message are required" });
+  }
+
+  const ownerUserId = "d76f928a-3d62-4c7c-918b-e66e5760d816"; // endoPulse owner (Millie)
+
+  try {
+    // Save user message
+    await supabaseAdmin.from("millie_public_chats").insert({
+      session_id: sessionId,
+      user_id: ownerUserId,
+      role: "user",
+      content: message.trim(),
+      contact_name: contact?.name || null,
+      contact_phone: contact?.phone || null,
+      contact_email: contact?.email || null,
+      interest: contact?.interest || null,
+    });
+
+    // Fetch minimal context for Millie (business info + recent manuals count)
+    const [bizRes, manualsRes] = await Promise.all([
+      supabaseAdmin.from("business_info").select("tagline, about, products").eq("user_id", ownerUserId).maybeSingle(),
+      supabaseAdmin.from("manuals").select("id").eq("user_id", ownerUserId).not("extracted_text", "is", null),
+    ]);
+
+    const bizInfo = bizRes.data;
+    const hasManuals = (manualsRes.data?.length || 0) > 0;
+
+    let contextBlock = "";
+    if (bizInfo) {
+      if (bizInfo.tagline) contextBlock += `\nTagline: ${bizInfo.tagline}`;
+      if (bizInfo.about) contextBlock += `\nAbout: ${bizInfo.about}`;
+      if (bizInfo.products && (bizInfo.products as any[]).length > 0) {
+        const productLines = (bizInfo.products as any[]).map((p: any) =>
+          `- ${p.name}${p.price ? ` (${p.price})` : ""}: ${p.description || ""}`
+        ).join("\n");
+        contextBlock += `\n\nProducts & Services:\n${productLines}`;
+      }
+    }
+    if (hasManuals) {
+      contextBlock += `\n\nThis business has uploaded training manuals and protocols that I can reference.`;
+    }
+
+    const fullSystemPrompt = MILLIE_SYSTEM_PROMPT + (contextBlock ? `\n\nBusiness Context:${contextBlock}` : "");
+
+    // Call Grok with Millie's prompt
+    const grokRes = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.XAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "grok-3-mini",
+        messages: [
+          { role: "system", content: fullSystemPrompt },
+          { role: "user", content: message.trim() },
+        ],
+        max_tokens: 600,
+        temperature: 0.7,
+      }),
+    });
+
+    if (!grokRes.ok) {
+      const errText = await grokRes.text();
+      console.error("[Public Millie] Grok error:", errText);
+      throw new Error("LLM error");
+    }
+
+    const grokData = await grokRes.json() as any;
+    const reply = grokData.choices?.[0]?.message?.content || "Sorry, I had trouble responding. Please try again.";
+
+    // Save assistant reply
+    await supabaseAdmin.from("millie_public_chats").insert({
+      session_id: sessionId,
+      user_id: ownerUserId,
+      role: "assistant",
+      content: reply,
+    });
+
+    // TODO (next): Add intent detection here to auto-create leads + notify
+
+    // === Lead Creation + Notification (Fast MVP) ===
+    const shouldCreateLead =
+      (contact && (contact.name || contact.email || contact.phone)) ||
+      /\b(buy|price|how much|machine|training|interested|purchase|cost)\b/i.test(message);
+
+    if (shouldCreateLead) {
+      const leadName = contact?.name || "Website Visitor";
+      const notes = [
+        `Source: Public Millie chat (session ${sessionId})`,
+        contact?.interest ? `Interest: ${contact.interest}` : "",
+        `Last message: ${message}`,
+      ].filter(Boolean).join("\n");
+
+      try {
+        const { data: newLead } = await supabaseAdmin.from("leads").insert({
+          user_id: ownerUserId,
+          name: leadName,
+          source: "millie_public",
+          status: "new",
+          notes,
+        }).select().single();
+
+        // Send email notification
+        const resendKey = process.env.RESEND_API_KEY;
+        if (resendKey && newLead) {
+          const resend = new Resend(resendKey);
+          await resend.emails.send({
+            from: "EndoPulse <no-reply@yourdomain.com>", // TODO: replace with your actual verified domain
+            to: "jonoankrah@gmail.com", // TODO: make dynamic from business_info later
+            subject: `New Millie Lead: ${leadName}`,
+            text: `A new lead came in from the public Millie chat.\n\nName: ${leadName}\nPhone: ${contact?.phone || "N/A"}\nEmail: ${contact?.email || "N/A"}\nInterest: ${contact?.interest || "Not specified"}\n\nLast message: ${message}\n\nSession: ${sessionId}`,
+          });
+        }
+
+        // In-app notification via activity_events (so it shows in Usage / activity feeds)
+        try {
+          await supabaseAdmin.from("activity_events").insert({
+            user_id: ownerUserId,
+            source: "millie_public",
+            type: "new_lead",
+            payload: {
+              lead_id: newLead?.id,
+              name: leadName,
+              source: "millie_public",
+              session_id: sessionId,
+              contact: contact || {},
+              last_message: message,
+            },
+          });
+        } catch (notifErr) {
+          console.error("[Public Millie] Activity event error:", notifErr);
+        }
+      } catch (leadErr) {
+        console.error("[Public Millie] Lead creation error:", leadErr);
+      }
+    }
+
+    res.json({ reply, sessionId });
+  } catch (err: any) {
+    console.error("[Public Millie] Error:", err);
+    res.status(500).json({ message: "Something went wrong. Please try again." });
+  }
+});
+
+// ─── Saphie AI — chat + voice transcription + manuals ──────────────────────
 
   const ADMIN_USER_ID = "d76f928a-3d62-4c7c-918b-e66e5760d816";
 

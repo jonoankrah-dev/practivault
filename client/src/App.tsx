@@ -28,6 +28,7 @@ import Photos from "@/pages/Photos";
 import Invoices from "@/pages/Invoices";
 import Team from "@/pages/Team";
 import ClientPortal from "@/pages/ClientPortal";
+import PublicMillie from "@/pages/PublicMillie";
 import Videos from "@/pages/Videos";
 import Packages from "@/pages/Packages";
 import Pricing from "@/pages/Pricing";
@@ -121,6 +122,7 @@ function AppRouter() {
         {(params) => <ClientPortal token={params.token} />}
       </Route>
       <Route path="/pricing" component={Pricing} />
+      <Route path="/millie" component={PublicMillie} />
 
       <Route path="/">
         <Protected>
