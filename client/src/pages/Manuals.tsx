@@ -64,6 +64,8 @@ interface Manual {
   file_url: string;
   file_name: string;
   created_at: string;
+  extraction_status?: "pending" | "processing" | "completed" | "failed";
+  extraction_error?: string | null;
 }
 
 export default function Manuals() {

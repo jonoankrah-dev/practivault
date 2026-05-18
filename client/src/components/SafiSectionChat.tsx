@@ -279,9 +279,9 @@ export default function SafiSectionChat({
                       </div>
                     ) : msg.text}
                   </div>
-                  {msg.role === "assistant" && msg.text.trim() && (
+                  {msg.role === "assistant" && (msg.text || "").trim() && (
                     <div className="self-start">
-                      <SaffiVoiceButton text={msg.text} testId={`button-voice-${msg.id}`} />
+                      <SaffiVoiceButton text={msg.text || ""} testId={`button-voice-${msg.id}`} />
                     </div>
                   )}
                 </div>
