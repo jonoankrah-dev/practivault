@@ -8,13 +8,18 @@
  * Required environment variables:
  *   DISCORD_BOT_TOKEN      — Discord application bot token
  *   DEV_AGENT_CHANNEL_ID   — Snowflake ID of the guild text channel (or thread) to monitor
- *   DEV_AGENT_API_BASE     — Origin of the PractiVault API, e.g. https://your-app.up.railway.app
- *                            or http://localhost:3001 (no trailing slash)
- *   DEV_AGENT_BEARER_TOKEN — Valid Supabase access JWT for a user who may call authenticated
- *                            API routes (same as the browser sends as Authorization: Bearer …).
+ *   DEV_AGENT_API_BASE     — Origin of the PractiVault API (no trailing slash), e.g. http://localhost:3001
  *
- * Discord Developer Portal: enable **Message Content Intent** for the bot so it can read
- * message text in the dev-agent channel.
+ * Authentication (pick ONE approach for the API):
+ *
+ *   A) Stable (recommended for Discord): set the same values in `.env` for the bot AND the server:
+ *      DEV_AGENT_INTERNAL_SECRET — long random string (24+ characters); treat like a password
+ *      On the server only, also set:
+ *      DEV_AGENT_BOT_USER_ID — your Supabase `auth.users` id (UUID) for the account Grokson should act as
+ *
+ *   B) Browser session: DEV_AGENT_BEARER_TOKEN — Supabase access JWT (expires ~1h; copy from Network tab)
+ *
+ * Discord Developer Portal: enable **Message Content Intent** for the bot.
  *
  * Run from repository root:
  *   npx tsx discord-bot/grokson.ts
@@ -57,14 +62,38 @@ function splitChunks(text: string): string[] {
   return parts;
 }
 
+function validateDevAgentAuth(): void {
+  const internal = process.env.DEV_AGENT_INTERNAL_SECRET?.trim();
+  const bearer = process.env.DEV_AGENT_BEARER_TOKEN?.trim();
+  if (!internal && !bearer) {
+    console.error(
+      "Set either DEV_AGENT_INTERNAL_SECRET (recommended; also set DEV_AGENT_BOT_USER_ID on the server) or DEV_AGENT_BEARER_TOKEN.",
+    );
+    process.exit(1);
+  }
+  if (internal && internal.length < 24) {
+    console.error("DEV_AGENT_INTERNAL_SECRET must be at least 24 characters.");
+    process.exit(1);
+  }
+}
+
 async function callDeveloperAgent(userContent: string): Promise<string> {
-  const token = requireEnv("DEV_AGENT_BEARER_TOKEN");
+  const internal = process.env.DEV_AGENT_INTERNAL_SECRET?.trim();
+  const bearer = process.env.DEV_AGENT_BEARER_TOKEN?.trim();
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (internal) {
+    headers["X-Dev-Agent-Secret"] = internal;
+  }
+  if (bearer) {
+    headers.Authorization = `Bearer ${bearer}`;
+  }
+
   const res = await fetch(apiUrl(), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers,
     body: JSON.stringify({
       messages: [{ role: "user", content: userContent }],
     }),
@@ -90,6 +119,8 @@ async function callDeveloperAgent(userContent: string): Promise<string> {
   return reply;
 }
 
+validateDevAgentAuth();
+
 const discordToken = requireEnv("DISCORD_BOT_TOKEN");
 const allowedChannelId = requireEnv("DEV_AGENT_CHANNEL_ID");
 
@@ -104,15 +135,18 @@ const client = new Client({
 client.once(Events.ClientReady, (c) => {
   console.log(`Grokson online as ${c.user.tag}`);
   console.log(`Relaying #${allowedChannelId} → ${apiUrl()}`);
+  if (process.env.DEV_AGENT_INTERNAL_SECRET?.trim()) {
+    console.log("Auth: X-Dev-Agent-Secret (internal) — no short-lived JWT needed.");
+  } else {
+    console.log("Auth: Authorization Bearer (JWT expires; refresh DEV_AGENT_BEARER_TOKEN when 401).");
+  }
 });
 
 client.on(Events.MessageCreate, async (message) => {
   if (!client.user) return;
-  // Ignore bots (including ourselves if ever echoed).
   if (message.author.bot) return;
   if (message.author.id === client.user.id) return;
 
-  // Only the configured dev-agent channel (guild text, announcement, or thread).
   if (message.channelId !== allowedChannelId) return;
 
   const text = message.content.trim();
