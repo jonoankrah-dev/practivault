@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, Square } from 'lucide-react';
+import { getAuthToken } from '@/lib/queryClient';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -39,9 +40,13 @@ export default function DeveloperAgentChat({ onClose }: { onClose?: () => void }
     setLoading(true);
 
     try {
+      const token = getAuthToken();
       const res = await fetch('/api/developer-agent/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           messages: [
             ...messages.map(m => ({ role: m.role, content: m.content })),

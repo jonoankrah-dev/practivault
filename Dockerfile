@@ -14,11 +14,17 @@ WORKDIR /app
 # Copy package files first for better caching
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install ALL dependencies (including dev) so we can run the build
+RUN npm ci
 
-# Copy the rest of the application
+# Application source (needed for build)
 COPY . .
+
+# Build the application (creates dist/index.cjs + client assets)
+RUN npm run build
+
+# Remove devDependencies to keep the final image small
+RUN npm prune --production
 
 # Railway will set PORT automatically
 EXPOSE 3001

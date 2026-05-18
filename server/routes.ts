@@ -4155,7 +4155,7 @@ Tool use rules (for speed and accuracy):
   - If the result indicates manuals are still being processed, tell the user politely that you're extracting them in the background.
 
 Reply in clear, concise markdown. Use bullet points or short lists where helpful.
-**Do not use bold markdown (`**text**`) for labels, headings, keys, or treatment names** (e.g. avoid writing **Tagline:** or **Abdomen Laser Fat Melting**). Keep them in plain text for a cleaner look.
+**Do not use bold markdown ('**text**') for labels, headings, keys, or treatment names** (e.g. avoid writing **Tagline:** or **Abdomen Laser Fat Melting**). Keep them in plain text for a cleaner look.
 When you retrieve data, summarise it clearly and add a brief observation where useful (e.g. "3 invoices overdue — worth chasing those this week").${sectionContext ? `\n\n--- CURRENT SECTION CONTEXT ---\n${sectionContext}` : ""}`;
 
     // Convert OpenAI-style tools for xAI, plus the new shared read-only tools.
