@@ -9,10 +9,23 @@ import { nanoid } from "nanoid";
 const viteLogger = createLogger();
 
 export async function setupVite(server: Server, app: Express) {
+  // Same default as server/index.ts — the browser must use this port for HMR WebSockets.
+  const publicPort = parseInt(process.env.PORT || "3001", 10);
+  const baseServer = viteConfig.server ?? {};
+
+  // Middleware mode: attach HMR to our Express HTTP server. Without explicit host/port,
+  // the injected client may try the wrong port (e.g. 5173) and WebSocket upgrades fail.
   const serverOptions = {
-    middlewareMode: true,
-    hmr: { server, path: "/vite-hmr" },
+    ...baseServer,
+    middlewareMode: true as const,
     allowedHosts: true as const,
+    hmr: {
+      server,
+      path: "/vite-hmr",
+      host: "localhost",
+      port: publicPort,
+      clientPort: publicPort,
+    },
   };
 
   const vite = await createViteServer({
