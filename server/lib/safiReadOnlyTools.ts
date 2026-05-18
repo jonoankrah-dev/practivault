@@ -191,6 +191,159 @@ export async function searchManuals(
     summary: semanticResult.summary || `I searched your manuals but couldn't find relevant information for "${query}".`,
   };
 }
+  const q = (query ?? "").trim();
+  if (!q) {
+    return { ok: false, summary: "Please give me a search term.", error: "empty_query" };
+  }
+  const cap = Math.max(1, Math.min(limit, 10));
+  // Tokenise the query (≤4 terms, alphanum only) so we can OR-match across columns.
+  const terms = q
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length >= 2)
+    .slice(0, 4);
+  const escapedQ = q.replace(/[%_]/g, (m) => `\\${m}`);
+
+  try {
+    // Pull a wide candidate set; project only what we need so we don't drag
+    // megabytes of extracted_text across the wire when not necessary.
+    type ManualRow = {
+      id: string;
+      name: string | null;
+      description: string | null;
+      category: string | null;
+      file_name: string | null;
+      file_url: string | null;
+      extracted_text: string | null;
+      created_at: string | null;
+    };
+    const { data, error }: PostgrestResponse<ManualRow> = await withTimeout(
+      db
+        .from("manuals")
+        .select("id, name, description, category, file_name, file_url, extracted_text, created_at")
+        .eq("user_id", userId)
+        .or([
+          `name.ilike.%${escapedQ}%`,
+          `description.ilike.%${escapedQ}%`,
+          `category.ilike.%${escapedQ}%`,
+          `extracted_text.ilike.%${escapedQ}%`,
+        ].join(","))
+        .limit(50),
+    );
+
+    if (error) {
+      console.error("[search_manuals] Database error:", error);
+      return { ok: false, summary: "I ran into a technical issue while searching your manuals. Please try again in a moment." };
+    }
+    const candidates = data ?? [];
+
+    if (candidates.length === 0) {
+      // Subtle message for unprocessed manuals (background extraction is running)
+      const { data: missingData }: PostgrestResponse<
+        Pick<ManualRow, "id" | "name" | "file_name">
+      > = await withTimeout(
+        db
+          .from("manuals")
+          .select("id, name, file_name")
+          .eq("user_id", userId)
+          .or("extracted_text.is.null,extraction_status.eq.pending,extraction_status.eq.processing")
+          .limit(5),
+      );
+      const missing = missingData ?? [];
+
+      if (missing.length > 0) {
+        return {
+          ok: true,
+          summary: `I couldn't find anything about "${q}" yet because ${missing.length} relevant manual${missing.length === 1 ? " is" : "s are"} still being processed in the background. I should have the information ready in a minute or two.`,
+          data: { matches: [], missingExtraction: missing },
+        };
+      }
+
+      return {
+        ok: true,
+        summary: `I searched your manuals but couldn't find anything relevant to "${q}".`,
+        data: { matches: [], missingExtraction: [] },
+      };
+    }
+
+    // Score: name hit > category > description > extracted_text term-frequency.
+    const ql = q.toLowerCase();
+    type ScoredManual = {
+      m: ManualRow;
+      score: number;
+      snippet: string | null;
+      indexed: boolean;
+    };
+    const scored: ScoredManual[] = candidates.map((m: ManualRow) => {
+      let score = 0;
+      const name = (m.name ?? "").toLowerCase();
+      const desc = (m.description ?? "").toLowerCase();
+      const cat = (m.category ?? "").toLowerCase();
+      const text = (m.extracted_text ?? "").toLowerCase();
+      if (name.includes(ql)) score += 80;
+      if (cat.includes(ql)) score += 40;
+      if (desc.includes(ql)) score += 30;
+      for (const t of terms) {
+        if (name.includes(t)) score += 12;
+        if (cat.includes(t)) score += 6;
+        if (desc.includes(t)) score += 4;
+        if (text) {
+          const occ = text.split(t).length - 1;
+          score += Math.min(occ, 8) * 2;
+        }
+      }
+      // Build a snippet around the first hit in extracted_text, if any.
+      let snippet: string | null = null;
+      if (text) {
+        let hitIdx = text.indexOf(ql);
+        if (hitIdx < 0) {
+          for (const t of terms) {
+            const i = text.indexOf(t);
+            if (i >= 0) { hitIdx = i; break; }
+          }
+        }
+        if (hitIdx >= 0) {
+          const start = Math.max(0, hitIdx - 80);
+          const end = Math.min(text.length, hitIdx + 200);
+          snippet = (start > 0 ? "…" : "") + (m.extracted_text as string).slice(start, end).trim() + (end < text.length ? "…" : "");
+        }
+      }
+      const indexed = !!m.extracted_text && (m.extracted_text as string).length > 0;
+      return { m, score, snippet, indexed };
+    });
+
+    scored.sort((a: ScoredManual, b: ScoredManual) => b.score - a.score);
+    const top = scored.slice(0, cap);
+
+    const lines: string[] = [];
+    lines.push(`I found the following manuals that may contain information about "${q}":`);
+    for (const { m, snippet, indexed } of top) {
+      const cat = m.category ? ` · ${m.category}` : "";
+      const status = indexed ? "" : " (still processing)";
+      lines.push(`• ${m.name}${cat}${m.description ? ` — ${m.description}` : ""}${status}`);
+      if (snippet) lines.push(`  "${snippet}"`);
+    }
+    const unindexed = top.filter((s: ScoredManual) => !s.indexed).length;
+    if (unindexed > 0) {
+      lines.push(`\n(Note: ${unindexed} of the above ${unindexed === 1 ? "manual is" : "manuals are"} still being processed in the background.)`);
+    }
+
+    return {
+      ok: true,
+      summary: lines.join("\n"),
+      data: {
+        matches: top.map(({ m, score, snippet, indexed }: ScoredManual) => ({
+          id: m.id, name: m.name, category: m.category,
+          description: m.description, file_url: m.file_url,
+          score, snippet, indexed,
+        })),
+      },
+    };
+  } catch (e: any) {
+    return { ok: false, summary: "Manual search failed.", error: e?.message ?? String(e) };
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // get_business_snapshot — short, model-friendly business identity.
@@ -300,3 +453,4 @@ export async function executeReadOnlyTool(
     default:
       return { ok: false, summary: "Unknown read-only tool.", error: "unknown_tool" };
   }
+}
