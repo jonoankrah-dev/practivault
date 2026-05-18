@@ -20,7 +20,7 @@ let createWorker: any;
 
 interface ExtractResult {
   text: string | null;
-  method: "text" | "pdfjs" | "hybrid";
+  method: "text" | "pdfjs" | "hybrid" | "ocr";
   success: boolean;
   error?: string;
   pageCount?: number;
@@ -171,10 +171,12 @@ async function extractWithOcr(buffer: Buffer, timeoutMs: number): Promise<string
   try {
     // Dynamic import so `npm run dev` doesn't crash if the optional OCR packages are not installed locally
     if (!pdf2picFromBuffer) {
+      // @ts-expect-error - optional dep, not installed in all build environments
       const pdf2picMod = await import("pdf2pic");
       pdf2picFromBuffer = pdf2picMod.fromBuffer;
     }
     if (!createWorker) {
+      // @ts-expect-error - optional dep, not installed in all build environments
       const tesseractMod = await import("tesseract.js");
       createWorker = tesseractMod.createWorker;
     }

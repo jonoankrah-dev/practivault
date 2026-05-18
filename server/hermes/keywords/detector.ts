@@ -3,8 +3,15 @@
  * Used by the mock reasoner when no XAI key or for instant proposals.
  */
 
-import { TREATMENT_KEYWORDS } from "../prompts";
-import type { ExtractedTreatmentDetails, HermesAction } from "../types";
+import type { HermesAction } from "../types";
+
+// Local fallback keywords (the old TREATMENT_KEYWORDS was removed during refactor)
+const TREATMENT_KEYWORDS = [
+  "endopulse", "endo pulse", "980", "1470", "radial fiber", "fibre",
+  "tumescent", "treatment note", "complete treatment", "deduct", "consumable"
+];
+
+type ExtractedTreatmentDetails = any; // temporary until we stabilize the type
 
 export function containsTreatmentLanguage(text: string): boolean {
   const lower = text.toLowerCase();
@@ -50,36 +57,31 @@ export function proposeActionsFromDetails(details: ExtractedTreatmentDetails, ra
 
   if (details.clientName || details.area) {
     actions.push({
-      id: "act-" + Math.random().toString(36).slice(2, 9),
-      actionType: "complete_job",
+      type: "complete_treatment",
       payload: {
         clientName: details.clientName,
         area: details.area,
         treatment: details.wavelengths ? `endoPulse ${details.wavelengths.join("+")}nm` : "endoPulse treatment",
         completedAt: now,
       },
-      confidence: 0.78,
-      reasoning: "User described finishing a treatment — marking job complete is the standard next step.",
+      description: "Mark the treatment as completed based on user description.",
     });
   }
 
   if (details.materialsUsed?.length) {
     actions.push({
-      id: "act-" + Math.random().toString(36).slice(2, 9),
-      actionType: "deduct_inventory",
+      type: "deduct_consumables",
       payload: {
         items: details.materialsUsed,
         reason: `Used during ${details.area || "endoPulse"} treatment for ${details.clientName || "client"}`,
       },
-      confidence: 0.82,
-      reasoning: "Specific consumables mentioned — deduct from stock to keep inventory accurate.",
+      description: "Deduct consumables from inventory based on treatment details.",
     });
   }
 
   // Always create a rich note as the source of truth
   actions.push({
-    id: "act-" + Math.random().toString(36).slice(2, 9),
-    actionType: "create_note",
+    type: "record_treatment_note",
     payload: {
       title: `endoPulse treatment — ${details.area || "unspecified area"}`,
       body: raw,
@@ -88,8 +90,7 @@ export function proposeActionsFromDetails(details: ExtractedTreatmentDetails, ra
       tags: ["treatment", "endoPulse", "laser"],
       createdAt: now,
     },
-    confidence: 0.95,
-    reasoning: "Detailed clinical note is required for every treatment for compliance and future reference.",
+    description: "Create a detailed treatment note for compliance and records.",
   });
 
   return actions;
