@@ -15,24 +15,9 @@ import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import { SaffiVoiceButton } from "@/components/SaffiVoiceButton";
 import { HermesProposalCard } from "@/components/HermesProposalCard";
+import type { HermesProposal } from "../../../server/hermes/types";
 
 type Role = "user" | "assistant" | "hermesProposal";
-
-interface HermesProposal {
-  id: string;
-  extractedDetails: Record<string, any>;
-  actions: Array<{
-    id: string;
-    actionType: string;
-    payload: Record<string, any>;
-    confidence?: number;
-    reasoning?: string;
-  }>;
-  rawTranscript: string;
-  overallConfidence: number;
-  createdAt: string;
-  status: string;
-}
 
 type Message = { id: string; role: Role; text?: string; proposal?: HermesProposal };
 

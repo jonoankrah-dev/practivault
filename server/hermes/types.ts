@@ -17,6 +17,12 @@ export interface HermesAction {
   type: string;
   payload: Record<string, any>;
   description: string;
+
+  // Optional fields for richer UI (HermesProposalCard, legacy usage)
+  id?: string;
+  actionType?: string;   // alias for type in some UIs
+  confidence?: number;
+  reasoning?: string;
 }
 
 /**
@@ -28,6 +34,13 @@ export interface HermesProposal {
   reasoning?: string;              // Optional explanation of why Hermes suggested this
   confidence?: number;             // 0–1 score of how confident Hermes is
   extractedDetails?: any;          // Rich details from the aesthetics mock (for future UI)
+
+  // Optional fields expected by HermesProposalCard and Saffi UI
+  id?: string;
+  rawTranscript?: string;
+  overallConfidence?: number;
+  createdAt?: string;
+  status?: "pending" | "edited" | "approved" | "rejected";
 }
 
 /**

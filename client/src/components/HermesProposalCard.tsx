@@ -20,7 +20,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Zap, Edit2, Check, X, Plus, Trash2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { HermesProposal, HermesAction, HermesActionType } from "../../../server/hermes/types";
+import type { HermesProposal, HermesAction } from "../../../server/hermes/types";
+
+// Local action type list for the editor dropdown (matches current Hermes tools)
+type HermesActionType = 
+  | "complete_treatment"
+  | "deduct_consumables"
+  | "record_treatment_note"
+  | "log_client_feedback"
+  | "record_safety_observation"
+  | "schedule_follow_up"
+  | "create_task"
+  | "create_note";
 
 interface HermesProposalCardProps {
   proposal: HermesProposal;
@@ -29,12 +40,14 @@ interface HermesProposalCardProps {
 }
 
 const ACTION_TYPES: HermesActionType[] = [
-  "complete_job",
-  "deduct_inventory",
+  "complete_treatment",
+  "deduct_consumables",
+  "record_treatment_note",
+  "log_client_feedback",
+  "record_safety_observation",
+  "schedule_follow_up",
+  "create_task",
   "create_note",
-  "update_booking_status",
-  "create_followup_task",
-  "log_treatment",
 ];
 
 export function HermesProposalCard({ proposal, onApprove, onReject }: HermesProposalCardProps) {
@@ -48,13 +61,13 @@ export function HermesProposalCard({ proposal, onApprove, onReject }: HermesProp
   const updateAction = (index: number, updates: Partial<HermesAction>) => {
     setLocalProposal(prev => {
       const newActions = [...prev.actions];
-      newActions[index] = { ...newActions[index], ...updates };
-      return { ...prev, actions: newActions, status: "edited" };
+      newActions[index] = { ...newActions[index], ...updates } as HermesAction;
+      return { ...prev, actions: newActions };
     });
   };
 
   const changeActionType = (index: number, newType: HermesActionType) => {
-    updateAction(index, { actionType: newType });
+    updateAction(index, { type: newType } as any);
   };
 
   const updatePayload = (index: number, newPayloadText: string) => {
@@ -68,16 +81,13 @@ export function HermesProposalCard({ proposal, onApprove, onReject }: HermesProp
 
   const addAction = () => {
     const newAction: HermesAction = {
-      id: "act-new-" + Date.now().toString(36),
-      actionType: "create_note",
+      type: "create_note",
       payload: { title: "New action", body: "" },
-      confidence: 0.6,
-      reasoning: "Manually added by user",
+      description: "Manually added by user",
     };
     setLocalProposal(prev => ({
       ...prev,
       actions: [...prev.actions, newAction],
-      status: "edited",
     }));
   };
 
@@ -85,7 +95,6 @@ export function HermesProposalCard({ proposal, onApprove, onReject }: HermesProp
     setLocalProposal(prev => ({
       ...prev,
       actions: prev.actions.filter((_, i) => i !== index),
-      status: "edited",
     }));
   };
 
@@ -133,7 +142,7 @@ export function HermesProposalCard({ proposal, onApprove, onReject }: HermesProp
             <Zap className="h-5 w-5 text-amber-600" />
             <CardTitle className="text-amber-900 text-base">Hermes Proposal — Ready for your review</CardTitle>
             <Badge variant="outline" className="text-amber-700 border-amber-300">
-              {Math.round(localProposal.overallConfidence * 100)}% confident
+              {Math.round((localProposal.confidence ?? (localProposal as any).overallConfidence ?? 0.75) * 100)}% confident
             </Badge>
           </div>
           {!isEditing && (
@@ -148,7 +157,11 @@ export function HermesProposalCard({ proposal, onApprove, onReject }: HermesProp
           )}
         </div>
         <div className="text-xs text-amber-700 mt-1">
-          Extracted from: <span className="font-mono">"{localProposal.rawTranscript.slice(0, 120)}{localProposal.rawTranscript.length > 120 ? "…" : ""}"</span>
+          { (localProposal as any).rawTranscript ? (
+            <>Extracted from: <span className="font-mono">"{(localProposal as any).rawTranscript.slice(0, 120)}{(localProposal as any).rawTranscript.length > 120 ? "…" : ""}"</span></>
+          ) : localProposal.reasoning ? (
+            <>Reasoning: <span className="font-mono">{localProposal.reasoning.slice(0, 120)}{localProposal.reasoning.length > 120 ? "…" : ""}</span></>
+          ) : null}
         </div>
       </CardHeader>
 
@@ -163,7 +176,7 @@ export function HermesProposalCard({ proposal, onApprove, onReject }: HermesProp
             {details.materialsUsed && details.materialsUsed.length > 0 && (
               <div className="col-span-2">
                 <span className="text-amber-600">Materials:</span>{" "}
-                {details.materialsUsed.map(m => `${m.quantity}× ${m.name}`).join(", ")}
+                {details.materialsUsed.map((m: any) => `${m.quantity}× ${m.name}`).join(", ")}
               </div>
             )}
             {details.clientFeedback && <div className="col-span-2"><span className="text-amber-600">Feedback:</span> {details.clientFeedback}</div>}
@@ -183,11 +196,11 @@ export function HermesProposalCard({ proposal, onApprove, onReject }: HermesProp
 
           <div className="space-y-3">
             {localProposal.actions.map((action, idx) => (
-              <div key={action.id} className="rounded-lg border border-amber-200 bg-white p-3">
+              <div key={idx} className="rounded-lg border border-amber-200 bg-white p-3">
                 <div className="flex items-center justify-between mb-2">
                   {isEditing ? (
                     <Select
-                      value={action.actionType}
+                      value={(action as any).type || action.type}
                       onValueChange={(v) => changeActionType(idx, v as HermesActionType)}
                     >
                       <SelectTrigger className="h-8 w-[200px] text-sm">
@@ -201,7 +214,7 @@ export function HermesProposalCard({ proposal, onApprove, onReject }: HermesProp
                     </Select>
                   ) : (
                     <Badge className="bg-amber-100 text-amber-800 border-amber-300 font-mono text-[11px]">
-                      {action.actionType}
+                      {(action as any).type || action.type}
                     </Badge>
                   )}
 
