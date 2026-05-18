@@ -463,46 +463,5 @@ export default function Manuals() {
       </div>
     </div>
 
-//    {/* Error Details Dialog for failed extractions */}
-//    <Dialog open={!!errorDialog} onOpenChange={() => setErrorDialog(null)}>
-//      <DialogContent className="sm:max-w-[450px]">
-//        <DialogHeader>
-//          <DialogTitle>Extraction Failed</DialogTitle>
-//          <DialogDescription>
-//            {errorDialog?.name}
-//          </DialogDescription>
-//        </DialogHeader>
-//
-//        <div className="space-y-4 py-2">
-//          <div className="rounded-md bg-red-50 p-3 text-sm text-red-800">
-//            {errorDialog?.error}
-//          </div>
-//
-//          <p className="text-xs text-muted-foreground">
-//            You can try re-extracting the file. If the problem persists, the document may be scanned/image-based or too complex for automatic processing.
-//          </p>
-//        </div>
-//
-//        <div className="flex justify-end gap-2">
-//          <Button
-//            variant="outline"
-//            onClick={() => setErrorDialog(null)}
-//          >
-//            Close
-//          </Button>
-//          <Button
-//            onClick={() => {
-//              if (errorDialog) {
-//                handleRetry(errorDialog.id);
-//                setErrorDialog(null);
-//              }
-//            }}
-//            disabled={!!retryingId}
-//          >
-//            Retry Extraction
-//          </Button>
-//        </div>
-//      </DialogContent>
-//    </Dialog>
   );
 }

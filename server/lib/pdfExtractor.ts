@@ -11,8 +11,12 @@
 
 import { PDFParse } from "pdf-parse";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
-import { fromBuffer as pdf2picFromBuffer } from "pdf2pic";
-import { createWorker } from "tesseract.js";
+
+// Lazy imports for optional OCR dependencies (pdf2pic + tesseract)
+// These are only needed for scanned/image-based PDFs and are installed in production via Dockerfile.
+// Making them dynamic prevents "npm run dev" from failing when they are not installed locally.
+let pdf2picFromBuffer: any;
+let createWorker: any;
 
 interface ExtractResult {
   text: string | null;
@@ -165,6 +169,16 @@ async function extractWithOcr(buffer: Buffer, timeoutMs: number): Promise<string
   const start = Date.now();
 
   try {
+    // Dynamic import so `npm run dev` doesn't crash if the optional OCR packages are not installed locally
+    if (!pdf2picFromBuffer) {
+      const pdf2picMod = await import("pdf2pic");
+      pdf2picFromBuffer = pdf2picMod.fromBuffer;
+    }
+    if (!createWorker) {
+      const tesseractMod = await import("tesseract.js");
+      createWorker = tesseractMod.createWorker;
+    }
+
     // Limit to first 10 pages for performance and to avoid very long processing times
     const convert = pdf2picFromBuffer(buffer, {
       density: 150,           // Lower density = faster + smaller images

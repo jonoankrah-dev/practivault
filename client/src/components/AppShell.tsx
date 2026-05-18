@@ -1,12 +1,13 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { LogOut, CreditCard } from "lucide-react";
+import { LogOut, CreditCard, Bot, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIndustry } from "@/contexts/IndustryContext";
 import { Logo } from "@/components/Logo";
 import ShellFooter from "@/components/ShellFooter";
 import { cn } from "@/lib/utils";
+import DeveloperAgentChat from "@/components/DeveloperAgentChat";
 
 function useSidebarCounts() {
   const { data: leads } = useQuery<any[]>({ queryKey: ["/api/leads"], staleTime: 60_000 });
@@ -44,6 +45,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const { user, signOut } = useAuth();
   const { config, businessName, hidePoweredBy } = useIndustry();
   const { newLeads, pipelineValue, pendingConsent, afdToday, missedCallsToday, unreadWhatsApp } = useSidebarCounts();
+  const [agentOpen, setAgentOpen] = useState(false);
 
   const badgeValues: Record<string, string | number | undefined> = {
     newLeads: newLeads > 0 ? newLeads : undefined,
@@ -177,6 +179,49 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <main className="flex-1 min-w-0 overflow-auto">{children}</main>
         <ShellFooter />
       </div>
+
+      {/* Floating Developer Agent Button */}
+      <button
+        onClick={() => setAgentOpen(!agentOpen)}
+        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all hover:scale-105"
+        style={{ backgroundColor: config.primaryHex, color: "#fff" }}
+        title="Developer Agent (Hermes + AI)"
+      >
+        <Bot className="h-6 w-6" />
+      </button>
+
+      {/* Developer Agent Sidebar */}
+      {agentOpen && (
+        <div className="fixed bottom-0 right-0 top-0 z-[60] flex w-96 flex-col border-l bg-white shadow-2xl" style={{ borderColor: "rgba(0,0,0,0.1)" }}>
+          <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: "rgba(0,0,0,0.1)" }}>
+            <div className="flex items-center gap-2 font-semibold">
+              <Bot className="h-5 w-5" style={{ color: config.primaryHex }} />
+              Developer Agent
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  // TODO: Send stop signal to backend
+                  setAgentOpen(false);
+                }}
+                className="rounded px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+              >
+                Stop
+              </button>
+              <button
+                onClick={() => setAgentOpen(false)}
+                className="rounded p-1 hover:bg-gray-100"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-hidden">
+            <DeveloperAgentChat onClose={() => setAgentOpen(false)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

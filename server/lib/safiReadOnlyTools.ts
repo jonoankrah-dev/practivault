@@ -172,25 +172,6 @@ export async function searchManuals(
   query: string,
   limit = 5,
 ): Promise<ToolResult> {
-  // Use the new semantic (vector) search as the primary method
-  const { searchManualsSemantic } = await import("./semanticManualSearch");
-  const semanticResult = await searchManualsSemantic(db, userId, query, limit);
-
-  if (semanticResult.matches.length > 0) {
-    return {
-      ok: true,
-      summary: semanticResult.summary,
-      data: { matches: semanticResult.matches },
-    };
-  }
-
-  // Fallback to old keyword search if semantic returns nothing (e.g. no embeddings yet)
-  // ... (existing keyword logic can stay here for backward compatibility if needed)
-  return {
-    ok: true,
-    summary: semanticResult.summary || `I searched your manuals but couldn't find relevant information for "${query}".`,
-  };
-}
   const q = (query ?? "").trim();
   if (!q) {
     return { ok: false, summary: "Please give me a search term.", error: "empty_query" };
@@ -233,13 +214,13 @@ export async function searchManuals(
     );
 
     if (error) {
-      console.error("[search_manuals] Database error:", error);
-      return { ok: false, summary: "I ran into a technical issue while searching your manuals. Please try again in a moment." };
+      return { ok: false, summary: "Manual search failed.", error: error.message };
     }
     const candidates = data ?? [];
 
     if (candidates.length === 0) {
-      // Subtle message for unprocessed manuals (background extraction is running)
+      // Tell Saffi clearly so she doesn't guess. Also surface manuals that have
+      // no extracted_text yet so Jono knows to re-index them.
       const { data: missingData }: PostgrestResponse<
         Pick<ManualRow, "id" | "name" | "file_name">
       > = await withTimeout(
@@ -247,23 +228,17 @@ export async function searchManuals(
           .from("manuals")
           .select("id, name, file_name")
           .eq("user_id", userId)
-          .or("extracted_text.is.null,extraction_status.eq.pending,extraction_status.eq.processing")
+          .is("extracted_text", null)
           .limit(5),
       );
       const missing = missingData ?? [];
-
-      if (missing.length > 0) {
-        return {
-          ok: true,
-          summary: `I couldn't find anything about "${q}" yet because ${missing.length} relevant manual${missing.length === 1 ? " is" : "s are"} still being processed in the background. I should have the information ready in a minute or two.`,
-          data: { matches: [], missingExtraction: missing },
-        };
-      }
-
+      const tail = missing.length
+        ? `\n${missing.length} manual${missing.length === 1 ? " is" : "s are"} uploaded but text has not been extracted yet — open Manuals and use Re-extract to make ${missing.length === 1 ? "it" : "them"} searchable.`
+        : "";
       return {
         ok: true,
-        summary: `I searched your manuals but couldn't find anything relevant to "${q}".`,
-        data: { matches: [], missingExtraction: [] },
+        summary: `No manuals matched "${q}".${tail}`,
+        data: { matches: [], missingExtraction: missing },
       };
     }
 
@@ -317,16 +292,15 @@ export async function searchManuals(
     const top = scored.slice(0, cap);
 
     const lines: string[] = [];
-    lines.push(`I found the following manuals that may contain information about "${q}":`);
+    lines.push(`Top ${top.length} match${top.length === 1 ? "" : "es"} for "${q}":`);
     for (const { m, snippet, indexed } of top) {
       const cat = m.category ? ` · ${m.category}` : "";
-      const status = indexed ? "" : " (still processing)";
-      lines.push(`• ${m.name}${cat}${m.description ? ` — ${m.description}` : ""}${status}`);
+      lines.push(`• ${m.name}${cat}${m.description ? ` — ${m.description}` : ""}${indexed ? "" : "  (text not indexed yet)"}`);
       if (snippet) lines.push(`  "${snippet}"`);
     }
     const unindexed = top.filter((s: ScoredManual) => !s.indexed).length;
     if (unindexed > 0) {
-      lines.push(`\n(Note: ${unindexed} of the above ${unindexed === 1 ? "manual is" : "manuals are"} still being processed in the background.)`);
+      lines.push(`Note: ${unindexed} of these manual${unindexed === 1 ? " was" : "s were"} matched on title/category only — open Manuals and use Re-extract to read the contents.`);
     }
 
     return {
@@ -353,50 +327,59 @@ export async function getBusinessSnapshot(
   userId: string,
 ): Promise<ToolResult> {
   try {
-    const [userRes, bizRes, treatmentsRes] = await withTimeout(Promise.all([
+    const [userRes, bizRes] = await withTimeout(Promise.all([
       db.from("users").select("name, business_name, industry").eq("id", userId).maybeSingle(),
       db.from("business_info").select("tagline, about, website_url, products").eq("user_id", userId).maybeSingle(),
-      db.from("treatments")
-        .select("name, price, duration_mins, is_active")
-        .eq("user_id", userId)
-        .or("is_active.is.null,is_active.eq.true")
-        .order("name")
-        .limit(12),
     ]));
-
     const u = userRes.data as any;
     const b = bizRes.data as any;
-    const treatments = (treatmentsRes.data as any[]) || [];
-
     const lines: string[] = [];
     if (u?.name) lines.push(`Owner: ${u.name}`);
     if (u?.business_name) lines.push(`Business: ${u.business_name}`);
     if (u?.industry) lines.push(`Industry: ${u.industry}`);
     if (b?.tagline) lines.push(`Tagline: ${b.tagline}`);
-    if (b?.about) lines.push(`About: ${String(b.about).slice(0, 450)}`);
+    if (b?.about) lines.push(`About: ${String(b.about).slice(0, 400)}`);
     if (b?.website_url) lines.push(`Website: ${b.website_url}`);
-
-    if (treatments.length > 0) {
-      const serviceLines = treatments.map((t: any) => {
-        const price = t.price != null ? `£${Number(t.price)}` : "";
-        const dur = t.duration_mins ? `${t.duration_mins} mins` : "";
-        const meta = [price, dur].filter(Boolean).join(" · ");
-        return `- ${t.name}${meta ? ` (${meta})` : ""}`;
-      });
-      lines.push(`Services / Treatments:\n${serviceLines.join("\n")}`);
-    }
-
     if (Array.isArray(b?.products) && b.products.length) {
       lines.push(`Products: ${b.products.slice(0, 6).map((p: any) => p.name).filter(Boolean).join(", ")}`);
     }
-
     if (lines.length === 0) {
-      return { ok: true, summary: "Business profile not fully set up yet. The owner can add services, pricing and details in Business Info." };
+      return { ok: true, summary: "No business profile filled in yet. Suggest opening Business Info to add details." };
     }
-
-    return { ok: true, summary: lines.join("\n"), data: { user: u, business: b, treatments } };
+    return { ok: true, summary: lines.join("\n"), data: { user: u, business: b } };
   } catch (e: any) {
     return { ok: false, summary: "I couldn't load the business snapshot.", error: e?.message ?? String(e) };
+  }
+}
+
+// get_millie_conversation — shows public sales chat history for leads from chat.endopulse.co.uk (improvement 3)
+export async function getMillieConversation(
+  db: SupabaseClient,
+  sessionId: string,
+): Promise<ToolResult> {
+  try {
+    const { data } = await db
+      .from("millie_public_chats")
+      .select("role, content, created_at, contact_name, contact_email, interest")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: true })
+      .limit(50);
+
+    if (!data || data.length === 0) {
+      return { ok: true, summary: "No public Millie conversation found for this session." };
+    }
+
+    let text = "Public Millie sales conversation (from chat.endopulse.co.uk):\n";
+    for (const m of data) {
+      const who = m.role === "user" ? "Customer" : "Millie";
+      text += `[${who}] ${m.content}\n`;
+    }
+    if (data[0]?.contact_name || data[0]?.interest) {
+      text += `\nLead info: ${data[0].contact_name || ""} ${data[0].interest ? `— interested in ${data[0].interest}` : ""}`;
+    }
+    return { ok: true, summary: text, data: { messages: data } };
+  } catch (e: any) {
+    return { ok: false, summary: "Failed to load Millie conversation.", error: e?.message ?? String(e) };
   }
 }
 
@@ -416,14 +399,12 @@ export const SAFFI_READ_ONLY_TOOL_DEFS = [
     type: "function" as const,
     name: "search_manuals",
     description:
-      "Semantic search over the user's uploaded manuals and documents using vector embeddings (Voyage AI). This is the preferred tool for finding detailed information about treatments, techniques, equipment specifications, aftercare, or policies from the actual manual content.",
+      "Search the user's uploaded manuals/courses/policies by name, category, description and extracted text. Use this for any product, training, treatment, policy, or 'how do I…' question rather than guessing. If the result says a manual is uploaded but not yet indexed, tell the user it needs Re-extract.",
     parameters: {
       type: "object",
       properties: {
-        query: {
-          type: "string",
-          description: "Natural language query about the manual content (e.g. 'diode laser specifications', 'lip filler aftercare protocol', 'contraindications for microneedling').",
-        },
+        query: { type: "string", description: "What to look for, e.g. 'aftercare', 'dual wavelength', 'consent'." },
+        limit: { type: "number", description: "Max results to return, default 5." },
       },
       required: ["query"],
     },
@@ -432,7 +413,7 @@ export const SAFFI_READ_ONLY_TOOL_DEFS = [
     type: "function" as const,
     name: "get_business_snapshot",
     description:
-      "Read-only snapshot of the business: owner, business name, industry, tagline, about, website, products, and active services/treatments with pricing and durations. Use this to ground yourself in what this specific business actually offers.",
+      "Read-only summary of the user, business name, industry, tagline, about copy, website, and key products. Use to anchor replies in real business identity.",
     parameters: { type: "object", properties: {}, required: [] },
   },
 ];
@@ -450,6 +431,8 @@ export async function executeReadOnlyTool(
       return searchManuals(db, userId, String(args?.query ?? ""), Number(args?.limit ?? 5));
     case "get_business_snapshot":
       return getBusinessSnapshot(db, userId);
+    case "get_millie_conversation":
+      return getMillieConversation(db, String(args?.sessionId ?? ""));
     default:
       return { ok: false, summary: "Unknown read-only tool.", error: "unknown_tool" };
   }

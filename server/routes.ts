@@ -1,5 +1,6 @@
 import { registerPublicConfigRoute } from "./routes/publicConfig";
 import { MILLIE_SYSTEM_PROMPT } from "./lib/milliePrompt";
+import { DEVELOPER_TOOLS, executeDeveloperTool } from "./lib/developerAgent";
 import { shouldEscalateToHermes, sendToHermes, executeHermesProposal } from "./hermes";
 import { recordActivityEvent, queueAgentAction } from "./lib/safiMemory";
 import { registerSafiMemoryRoutes } from "./routes/safiMemory";
@@ -4337,7 +4338,127 @@ When you retrieve data, summarise it clearly and add a brief observation where u
     }
   });
 
-    // ─── Public Millie Sales Chat (chat.endopulse.co.uk) ──────────────────────
+    // ─── Developer Agent Chat (internal AI for fixing issues in the app) ─────
+// Phase 1: Can read files, list directories, propose changes (with approval)
+// Uses Grok tool calling + will integrate Hermes + PAI in later phases
+app.post("/api/developer-agent/chat", requireAuth, async (req: AuthedRequest, res) => {
+  const { messages, sessionId } = req.body;
+  const userId = req.user!.id;
+
+  if (!messages || !Array.isArray(messages)) {
+    return res.status(400).json({ message: "messages array is required" });
+  }
+
+  try {
+    const developerSystemPrompt = `You are an expert internal developer agent for the PractiVault codebase. Your goal is to help the user (the builder) diagnose bugs, understand the architecture, and propose high-quality fixes and improvements.
+
+You have tools to explore the code: read_file, list_directory, propose_edit (to show diffs for approval), apply_edit (only after explicit user approval).
+
+When you identify a problem or have a solution, use the propose_edit tool to show a precise diff.
+
+Always explain your reasoning step by step.
+
+Be direct, cite file paths, and ask for confirmation before any edit is applied using the apply tool.
+
+The user will approve or reject your proposals.
+
+Use structured reasoning for complex tasks.
+
+Current task: Help fix issues in the app.`;
+
+    // Simple multi-turn tool calling loop with Grok
+    let currentMessages = [
+      { role: "system", content: developerSystemPrompt },
+      ...messages
+    ];
+    const maxTurns = 6;
+    let turns = 0;
+    const toolResults: any[] = [];
+
+    while (turns < maxTurns) {
+      const grokRes = await fetch("https://api.x.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.XAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "grok-3",
+          messages: currentMessages,
+          tools: DEVELOPER_TOOLS.map((t) => ({
+            type: "function",
+            function: t,
+          })),
+          tool_choice: "auto",
+          temperature: 0.2,
+          max_tokens: 2000,
+        }),
+      });
+
+      if (!grokRes.ok) {
+        const err = await grokRes.text();
+        console.error("[Developer Agent] Grok error:", err);
+        return res.status(500).json({ message: "Agent error" });
+      }
+
+      const grokData = await grokRes.json();
+      const assistantMsg = grokData.choices?.[0]?.message;
+
+      if (!assistantMsg) break;
+
+      currentMessages.push(assistantMsg);
+
+      const toolCalls = assistantMsg.tool_calls || [];
+      if (toolCalls.length === 0) {
+        // Final answer
+        const finalReply = assistantMsg.content || "I don't have a response.";
+        return res.json({
+          reply: finalReply,
+          messages: currentMessages,
+          sessionId,
+          toolResults,
+        });
+      }
+
+      // Execute tool calls
+      for (const tc of toolCalls) {
+        const toolName = tc.function.name;
+        let args: any = {};
+        try {
+          args = JSON.parse(tc.function.arguments || "{}");
+        } catch {}
+
+        let result: any;
+        try {
+          result = await executeDeveloperTool(toolName, args);
+        } catch (err: any) {
+          result = { error: err.message };
+        }
+
+        toolResults.push({ name: toolName, ...result });
+        currentMessages.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(result),
+        });
+      }
+
+      turns++;
+    }
+
+    return res.json({
+      reply: "I reached the maximum number of steps. Please ask me to continue or refine the task.",
+      messages: currentMessages,
+      sessionId,
+      toolResults,
+    });
+  } catch (err: any) {
+    console.error("[Developer Agent] Error:", err);
+    return res.status(500).json({ message: err.message || "Agent failed" });
+  }
+});
+
+// ─── Public Millie Sales Chat (chat.endopulse.co.uk) ──────────────────────
 // Fast MVP - unauthenticated endpoint for potential customers
 app.post("/api/public/millie/chat", async (req, res) => {
   const { sessionId, message, contact } = req.body;
