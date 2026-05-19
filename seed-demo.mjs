@@ -6,9 +6,14 @@
 
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = "https://flpongjcbipxcewkusof.supabase.co";
-// Service role key — bypasses RLS
-const SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZscG9uZ2pjYmlweGNld2t1c29mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Njk0OTI3NiwiZXhwIjoyMDkyNTI1Mjc2fQ.Gy3CUOG7Sfl9YiMoXTgYJHX_9UuPYoFdpL_lRwqcb0E";
+const SUPABASE_URL =
+  process.env.SUPABASE_URL || "https://flpongjcbipxcewkusof.supabase.co";
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!SERVICE_ROLE_KEY) {
+  console.error("Set SUPABASE_SERVICE_ROLE_KEY before running seed-demo.mjs");
+  process.exit(1);
+}
 
 const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
