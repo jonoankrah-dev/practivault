@@ -43,26 +43,6 @@ import {
 import { randomUUID } from "node:crypto";
 import { DEMO_INDUSTRIES } from "./demoData";
 
-const ENDO_PULSE_BRAND_NAME = "endoPulse";
-const TREATMENT_BRAND_SELECT =
-  "id,name,price,duration_mins,is_endopulse,service_brand,service_line,brand_compliance_required";
-
-function looksLikeEndopulse(name: unknown): boolean {
-  return typeof name === "string" && /endopulse/i.test(name);
-}
-
-function normalizeTreatmentBrandFields<T extends Record<string, any>>(treatment: T): T {
-  const isEndopulse = treatment.is_endopulse === true || looksLikeEndopulse(treatment.name);
-  if (!isEndopulse) return treatment;
-  return {
-    ...treatment,
-    is_endopulse: true,
-    service_brand: treatment.service_brand || ENDO_PULSE_BRAND_NAME,
-    service_line: treatment.service_line || "endopulse_treatment",
-    brand_compliance_required: treatment.brand_compliance_required ?? true,
-  };
-}
-
 // --- AUTH MIDDLEWARE ---
 type AuthedRequest = Request & {
   user?: { id: string; email: string | null };
@@ -91,7 +71,7 @@ async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction
 
 // ── Saffi must remain 100% industry-agnostic ────────────────────────────────
 // Never hardcode any specific brand or product into Saffi's prompts. The
-// previous `ENDO_PULSE_KNOWLEDGE` constant (and its unused live-website fetcher)
+// previous `ENDOPULSE_KNOWLEDGE` constant (and its unused live-website fetcher)
 // have been removed so PractiVault works equally well for a hair salon, a
 // dentist, a fitness coach, or any other business. Saffi's only sources of
 // business-specific knowledge are:
@@ -100,10 +80,10 @@ async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction
 // If you ever need to add brand-specific facts, do it as user data on those
 // tables — never in this file.
 //
-// `ENDO_PULSE_KNOWLEDGE` is kept exported as an empty string only so any
+// `ENDOPULSE_KNOWLEDGE` is kept exported as an empty string only so any
 // older legacy call-site that still references it compiles without behaviour
 // change (it now contributes nothing to the prompt).
-const ENDO_PULSE_KNOWLEDGE = "";
+const ENDOPULSE_KNOWLEDGE = "";
 
 /** Extract plain text from a PDF buffer (pdf-parse v2 API). */
 async function extractPdfText(buffer: Buffer, timeoutMs: number): Promise<string | null> {
@@ -343,7 +323,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await Promise.all([
         db
           .from("bookings")
-          .select(`*, clients(name), treatments(${TREATMENT_BRAND_SELECT})`)
+          .select("*, clients(name), treatments(name,price,duration_mins)")
           .eq("user_id", userId)
           .eq("date", today)
           .order("time", { ascending: true }),
@@ -420,88 +400,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
-  // ---- endoPulse FRANCHISE HUB ----
-  app.get("/api/endopulse/summary", requireAuth, async (req: AuthedRequest, res) => {
-    const db = req.db!;
-    const userId = req.user!.id;
-    const now = new Date();
-    const monthStartDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthStart = monthStartDate.toISOString().slice(0, 10);
-    const today = now.toISOString().slice(0, 10);
-
-    try {
-      const [treatmentsRes, bookingsRes, leadsRes] = await Promise.all([
-        db
-          .from("treatments")
-          .select("id,name,price,duration_mins,is_active,is_endopulse,service_brand,service_line,brand_compliance_required")
-          .eq("user_id", userId)
-          .eq("is_endopulse", true)
-          .order("price", { ascending: false }),
-        db
-          .from("bookings")
-          .select(`id,date,time,status,client_id,clients(name),treatments(${TREATMENT_BRAND_SELECT})`)
-          .eq("user_id", userId)
-          .gte("date", monthStart)
-          .order("date", { ascending: true })
-          .order("time", { ascending: true }),
-        db
-          .from("leads")
-          .select("id,status,treatment_interest,created_at")
-          .eq("user_id", userId)
-          .ilike("treatment_interest", "%endopulse%")
-          .gte("created_at", monthStartDate.toISOString()),
-      ]);
-
-      const err = treatmentsRes.error?.message || bookingsRes.error?.message || leadsRes.error?.message;
-      if (err) return res.status(500).json({ message: err });
-
-      const treatments = treatmentsRes.data ?? [];
-      const endoBookings = (bookingsRes.data ?? []).filter((booking: any) => booking.treatments?.is_endopulse);
-      const completedThisMonth = endoBookings.filter((booking: any) => booking.status === "completed");
-      const upcoming = endoBookings.filter((booking: any) => booking.date >= today && !["completed", "cancelled", "no_show"].includes(booking.status));
-      const revenueThisMonth = completedThisMonth.reduce(
-        (sum: number, booking: any) => sum + Number(booking.treatments?.price || 0),
-        0,
-      );
-
-      res.json({
-        brandName: ENDO_PULSE_BRAND_NAME,
-        period: { month: now.toLocaleString("en-GB", { month: "long", year: "numeric" }), monthStart },
-        treatments: {
-          total: treatments.length,
-          active: treatments.filter((t: any) => t.is_active).length,
-          requiringCompliance: treatments.filter((t: any) => t.brand_compliance_required).length,
-          items: treatments,
-        },
-        bookings: {
-          thisMonth: endoBookings.length,
-          completedThisMonth: completedThisMonth.length,
-          upcoming: upcoming.length,
-          revenueThisMonth,
-          recent: endoBookings.slice(0, 6),
-        },
-        leads: {
-          thisMonth: leadsRes.data?.length ?? 0,
-          openThisMonth: (leadsRes.data ?? []).filter((lead: any) => !["lost", "converted"].includes(lead.status)).length,
-        },
-        franchise: {
-          hubStatus: "foundation_ready",
-          nextControls: [
-            "franchisee agreements",
-            "territory assignment",
-            "brand standard checklists",
-            "machine serial tracking",
-            "training and renewal status",
-          ],
-        },
-        generatedAt: new Date().toISOString(),
-      });
-    } catch (err: any) {
-      console.error("[endopulse/summary] error:", err);
-      res.status(500).json({ message: "Failed to compute endoPulse summary" });
-    }
-  });
-
   // ---- USAGE & TRANSPARENCY DASHBOARD ----
   app.get("/api/usage/summary", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
@@ -521,7 +419,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         waAllTime,
         socialDraftsThisMonth,
         socialDraftsAllTime,
-        saffiEventsThisMonth,
+        safiEventsThisMonth,
       ] = await Promise.all([
         // Completed jobs this month + all time
         db.from("bookings").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "completed").gte("created_at", monthStart),
@@ -539,8 +437,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         db.from("activity_events").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("source", "social_studio").gte("created_at", monthStart),
         db.from("activity_events").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("source", "social_studio"),
 
-        // General Saffi / AI assistant events (broader)
-        db.from("activity_events").select("id", { count: "exact", head: true }).eq("user_id", userId).in("source", ["saffi", "voice", "ai-front-desk"]).gte("created_at", monthStart),
+        // General Safi / AI assistant events (broader)
+        db.from("activity_events").select("id", { count: "exact", head: true }).eq("user_id", userId).in("source", ["safi", "voice", "ai-front-desk"]).gte("created_at", monthStart),
       ]);
 
       const voiceSecsThisMonth = (callsThisMonth.data || []).reduce((sum: number, c: any) => sum + (Number(c.duration_secs) || 0), 0);
@@ -558,7 +456,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const socialCountMonth = socialDraftsThisMonth.count || 0;
       const socialCountAll = socialDraftsAllTime.count || 0;
 
-      const aiInteractionsMonth = (saffiEventsThisMonth.count || 0) + socialCountMonth;
+      const aiInteractionsMonth = (safiEventsThisMonth.count || 0) + socialCountMonth;
 
       // Rough "what you'd pay elsewhere" estimate (per-user + add-on style thinking)
       // Example: 3 users + AI receptionist add-on + per-job overages
@@ -629,7 +527,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       db.from("clients").select("*").eq("id", id).eq("user_id", req.user!.id).single(),
       db
         .from("bookings")
-        .select(`*, treatments(${TREATMENT_BRAND_SELECT})`)
+        .select("*, treatments(name,price,duration_mins)")
         .eq("client_id", id)
         .eq("user_id", req.user!.id)
         .order("date", { ascending: false })
@@ -704,14 +602,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const db = req.db!;
     const parsed = treatmentInsertSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
-    const insert = normalizeTreatmentBrandFields({
-      ...parsed.data,
-      user_id: req.user!.id,
-      is_active: parsed.data.is_active ?? true,
-    });
     const { data, error } = await db
       .from("treatments")
-      .insert(insert)
+      .insert({ ...parsed.data, user_id: req.user!.id, is_active: parsed.data.is_active ?? true })
       .select()
       .single();
     if (error) return res.status(500).json({ message: error.message });
@@ -720,12 +613,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch("/api/treatments/:id", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
-    const parsed = treatmentInsertSchema.partial().safeParse(req.body || {});
-    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
-    const updates = normalizeTreatmentBrandFields(parsed.data);
     const { data, error } = await db
       .from("treatments")
-      .update(updates)
+      .update(req.body || {})
       .eq("id", req.params.id)
       .eq("user_id", req.user!.id)
       .select()
@@ -752,7 +642,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       { name: "endoPulse™ Thighs Laser Contouring", duration_mins: 60, price: 420, description: "Laser contouring for thighs." },
       { name: "endoPulse™ Face & Neck Skin Tightening", duration_mins: 45, price: 380, description: "Face and neck skin tightening." },
       { name: "Patch Test", duration_mins: 15, price: 0, description: "Required patch test before treatment." },
-    ].map((t) => normalizeTreatmentBrandFields({ ...t, user_id: req.user!.id, is_active: true }));
+    ].map((t) => ({ ...t, user_id: req.user!.id, is_active: true }));
     const { data, error } = await db.from("treatments").insert(seeds).select();
     if (error) return res.status(500).json({ message: error.message });
     res.json({ seeded: true, treatments: data });
@@ -764,7 +654,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { from, to } = req.query as Record<string, string>;
     let query = db
       .from("bookings")
-      .select(`*, clients(id,name,phone,email), treatments(${TREATMENT_BRAND_SELECT})`)
+      .select("*, clients(id,name,phone,email), treatments(id,name,duration_mins,price)")
       .eq("user_id", req.user!.id)
       .order("date", { ascending: true })
       .order("time", { ascending: true });
@@ -788,7 +678,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         deposit_paid: parsed.data.deposit_paid ?? false,
         deposit_amount: parsed.data.deposit_amount ?? 0,
       })
-      .select(`*, clients(name), treatments(${TREATMENT_BRAND_SELECT})`)
+      .select("*, clients(name), treatments(name,price)")
       .single();
     if (error) return res.status(500).json({ message: error.message });
     // Timeline event
@@ -811,7 +701,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       .update(req.body || {})
       .eq("id", id)
       .eq("user_id", req.user!.id)
-      .select(`*, clients(name), treatments(${TREATMENT_BRAND_SELECT})`)
+      .select("*, clients(name), treatments(name,price)")
       .single();
     if (error) return res.status(500).json({ message: error.message });
     if (req.body?.status === "completed") {
@@ -927,7 +817,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const db = req.db!;
     const { data, error } = await db
       .from("quotes")
-      .select(`*, clients(id,name,email,phone), treatments(${TREATMENT_BRAND_SELECT})`)
+      .select("*, clients(id,name,email,phone), treatments(id,name,duration_mins)")
       .eq("user_id", req.user!.id)
       .order("created_at", { ascending: false });
     if (error) return res.status(500).json({ message: error.message });
@@ -943,7 +833,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { data, error } = await db
       .from("quotes")
       .insert(insert)
-      .select(`*, clients(name), treatments(${TREATMENT_BRAND_SELECT})`)
+      .select("*, clients(name), treatments(name)")
       .single();
     if (error) return res.status(500).json({ message: error.message });
     await db.from("client_timeline").insert({
@@ -1390,7 +1280,7 @@ Respond ONLY with a JSON object (no markdown, no code blocks):
   "caption": "full ready-to-post caption with emojis and hashtags",
   "hook": "the opening line that stops the scroll",
   "hashtags": "#tag1 #tag2 #tag3 #tag4 #fyp",
-  "keyword_cta": "the comment keyword e.g. endoPulse, MACHINE, HARLEY"
+  "keyword_cta": "the comment keyword e.g. ENDOPULSE, MACHINE, HARLEY"
 }`;
 
     try {
@@ -1553,11 +1443,11 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
   "overlays": [
     {"time": "0s", "text": "ON SCREEN TEXT"},
     {"time": "3s", "text": "Supporting point"},
-    {"time": "7s", "text": "Comment endoPulse \u2b07\ufe0f"}
+    {"time": "7s", "text": "Comment ENDOPULSE \u2b07\ufe0f"}
   ],
   "veo3_prompt": "Full cinematic Veo 3 video prompt here \u2014 detailed, specific, 3-5 sentences",
   "caption": "Full ready-to-post Instagram/TikTok caption with emojis and hashtags",
-  "keyword_cta": "comment keyword e.g. endoPulse"
+  "keyword_cta": "comment keyword e.g. ENDOPULSE"
 }`;
 
     try {
@@ -1988,7 +1878,7 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
       const { data: urlData } = req.db!.storage.from("manuals").getPublicUrl(fileName);
       const fileUrl = urlData.publicUrl;
 
-      // Extract text for Saffi (with hard timeout so a bad PDF never hangs the route)
+      // Extract text for Safi (with hard timeout so a bad PDF never hangs the route)
       let extractedText: string | null = null;
       try {
         const mime = file.mimetype || "";
@@ -2009,7 +1899,7 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
           extractedText = extractedText.slice(0, 60000) + "\n[...truncated]";
         }
       } catch {
-        // Text extraction failed or timed out — file is still stored, Saffi just won't have text
+        // Text extraction failed or timed out — file is still stored, Safi just won't have text
         extractedText = null;
       }
 
@@ -2802,11 +2692,11 @@ Rules:
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SAFFI — Fully agentic text AI
+  // SAFI — Fully agentic text AI
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // ── Saffi tool definitions (sent to xAI in session config) ─────────────────
-  const SAFFI_TOOLS = [
+  // ── Safi tool definitions (sent to xAI in session config) ─────────────────
+  const SAFI_TOOLS = [
     {
       type: "function",
       name: "get_appointments",
@@ -3297,7 +3187,7 @@ Rules:
     {
       type: "function",
       name: "create_social_draft",
-      description: "Create a Social Studio draft only after the user has approved the exact draft text. This saves a draft, records Saffi Memory, and queues the post for approval. It never posts or publishes.",
+      description: "Create a Social Studio draft only after the user has approved the exact draft text. This saves a draft, records Safi Memory, and queues the post for approval. It never posts or publishes.",
       parameters: {
         type: "object",
         properties: {
@@ -3340,14 +3230,14 @@ Rules:
     },
   ];
 
-  // ── Saffi tool executor — runs when xAI calls a function mid-conversation ───
-  async function executeSaffiTool(toolName: string, args: any, db: any): Promise<string> {
+  // ── Safi tool executor — runs when xAI calls a function mid-conversation ───
+  async function executeSafiTool(toolName: string, args: any, db: any): Promise<string> {
     const userId = db._userId;
     try {
       switch (toolName) {
         case "get_appointments": {
           let q = db.from("bookings")
-            .select(`*, clients(name), treatments(${TREATMENT_BRAND_SELECT})`)
+            .select("*, clients(name), treatments(name,price)")
             .eq("user_id", userId)
             .order("start_time", { ascending: true })
             .limit(args.limit ?? 10);
@@ -3496,7 +3386,7 @@ Rules:
         }
         case "get_bookings": {
           let q = db.from("bookings")
-            .select(`id, date, time, status, notes, clients(name, phone), treatments(${TREATMENT_BRAND_SELECT})`)
+            .select("id, date, time, status, notes, clients(name, phone), treatments(name, price, duration_mins)")
             .eq("user_id", userId)
             .order("date", { ascending: true })
             .order("time", { ascending: true })
@@ -3634,7 +3524,7 @@ Rules:
 
           const resend = new Resend(resendKey);
           const { error: emailErr } = await resend.emails.send({
-            from: "Saffi <noreply@practivault.com>",
+            from: "Safi <noreply@practivault.com>",
             to: cl.email,
             subject: `Your ${formLabel} form from ${bizName}`,
             html: `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
@@ -4069,7 +3959,7 @@ Rules:
             hashtags: args.hashtags ?? null,
             keyword_cta: args.keyword_cta ?? null,
             status: "draft",
-            notes: args.notes ?? "Created by Saffi after user approval.",
+            notes: args.notes ?? "Created by Safi after user approval.",
           }).select("id, caption, platform, post_type, status").single();
           if (error) return `Failed to save social draft: ${error.message}`;
 
@@ -4078,7 +3968,7 @@ Rules:
               userId,
               source: "social_studio",
               platform,
-              feature: "saffi_chat",
+              feature: "safi_chat",
               eventType: "draft_saved",
               entityType: "social_post",
               entityId: data.id,
@@ -4115,7 +4005,7 @@ Rules:
             db,
           );
 
-          return `Social draft saved for ${platform}. It is still a draft, and posting is queued in Saffi Memory for approval.`;
+          return `Social draft saved for ${platform}. It is still a draft, and posting is queued in Safi Memory for approval.`;
         }
         case "get_whatsapp_threads": {
           const { data: msgs } = await db.from("whatsapp_messages").select("*").eq("user_id", userId).order("sent_at", { ascending: false }).limit(200);
@@ -4168,8 +4058,8 @@ Rules:
     }
   }
 
-  // ── /api/saffi/chat — agentic text chat with full tool loop ─────────────────
-  app.post("/api/saffi/chat", requireAuth, async (req: AuthedRequest, res: Response) => {
+  // ── /api/safi/chat — agentic text chat with full tool loop ─────────────────
+  app.post("/api/safi/chat", requireAuth, async (req: AuthedRequest, res: Response) => {
     const { message, history = [], sectionContext = "" } = req.body as { message: string; history?: {role:string;content:string}[]; sectionContext?: string };
     if (!message?.trim()) return res.status(400).json({ message: "No message" });
 
@@ -4271,7 +4161,7 @@ When you retrieve data, summarise it clearly and add a brief observation where u
     // Convert OpenAI-style tools for xAI, plus the new shared read-only tools.
     // Longer term: these will be exposed as proper PAI Skills (see server/pai/skills)
     const allToolDefs = [
-      ...SAFFI_TOOLS,
+      ...SAFI_TOOLS,
       ...SAFFI_READ_ONLY_TOOL_DEFS,
     ];
     const xaiTools = allToolDefs.map(t => ({
@@ -4289,13 +4179,13 @@ When you retrieve data, summarise it clearly and add a brief observation where u
       { role: "user", content: message },
     ];
 
-    const trivialSaffiReply = (s: string) => {
+    const trivialSafiReply = (s: string) => {
       const t = (s ?? "").trim();
       return !t || /^(ok\.?|okay\.?|done\.?|sure\.?|got it\.?|noted\.?)$/i.test(t);
     };
 
     /** When the model returns only tool calls then "ok" / empty text, turn tool output into a user-visible answer. */
-    async function synthesizeSaffiMarkdownReply(msgs: any[]): Promise<string> {
+    async function synthesizeSafiMarkdownReply(msgs: any[]): Promise<string> {
       try {
         const synthRes = await fetch("https://api.x.ai/v1/chat/completions", {
           method: "POST",
@@ -4356,10 +4246,10 @@ When you retrieve data, summarise it clearly and add a brief observation where u
       // No tool calls — we have the final answer (or need one synthesis pass after tools)
       if (!assistantMsg.tool_calls?.length) {
         const reply = (assistantMsg.content ?? "").trim();
-        if (!trivialSaffiReply(reply)) {
+        if (!trivialSafiReply(reply)) {
           return res.json({ reply, messages });
         }
-        const synthesized = await synthesizeSaffiMarkdownReply(messages);
+        const synthesized = await synthesizeSafiMarkdownReply(messages);
         if (synthesized) {
           return res.json({ reply: synthesized, messages });
         }
@@ -4391,7 +4281,7 @@ When you retrieve data, summarise it clearly and add a brief observation where u
 
           // Existing CRUD/agentic tools
           const dbWithUser = Object.assign(Object.create(Object.getPrototypeOf(db)), db, { _userId: userId });
-          const result = await executeSaffiTool(toolName, args, dbWithUser);
+          const result = await executeSafiTool(toolName, args, dbWithUser);
           return { tool_call_id: tc.id, role: "tool" as const, content: result };
         })
       );
@@ -4405,13 +4295,13 @@ When you retrieve data, summarise it clearly and add a brief observation where u
       const m = messages[i];
       if (m.role === "assistant" && typeof m.content === "string") {
         const t = m.content.trim();
-        if (t && !trivialSaffiReply(t)) {
+        if (t && !trivialSafiReply(t)) {
           fallback = t;
           break;
         }
       }
     }
-    if (!fallback) fallback = await synthesizeSaffiMarkdownReply(messages);
+    if (!fallback) fallback = await synthesizeSafiMarkdownReply(messages);
     if (!fallback) {
       fallback =
         "I couldn't finish that reply in time. Please try again with a shorter question, or split it into two steps (e.g. first **list clients**, then **add one**).";
@@ -4461,6 +4351,13 @@ app.post("/api/developer-agent/chat", requireAuth, async (req: AuthedRequest, re
 
   try {
     const developerSystemPrompt = `You are an expert internal developer agent for the PractiVault codebase. Your goal is to help the user (the builder) diagnose bugs, understand the architecture, and propose high-quality fixes and improvements.
+
+IMPORTANT — read server/CODEBASE.md first (read_file) before claiming missing route modules or a SQLite data layer.
+
+Facts (verify with tools; do not invent):
+- Most HTTP APIs are in server/routes.ts, not server/routes/bookings.ts etc.
+- server/routes/ only has publicConfig.ts and saffiMemory.ts.
+- Production data is Supabase-only (server/supabase.ts).
 
 You have tools to explore the code: read_file, list_directory, propose_edit (to show diffs for approval), apply_edit (only after explicit user approval).
 
@@ -4723,6 +4620,171 @@ app.post("/api/public/millie/chat", async (req, res) => {
   }
 });
 
+// ─── Saphie AI — chat + voice transcription + manuals ──────────────────────
+
+  const ADMIN_USER_ID = "d76f928a-3d62-4c7c-918b-e66e5760d816";
+
+  const saphieUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+
+  // GET messages
+  app.get("/api/saphie/messages", requireAuth, async (req: AuthedRequest, res) => {
+    const { data, error } = await req.db!
+      .from("buddy_messages")
+      .select("*")
+      .eq("user_id", req.user!.id)
+      .order("created_at", { ascending: true });
+    if (error) return res.status(500).json({ message: error.message });
+    res.json(data ?? []);
+  });
+
+  // DELETE messages
+  app.delete("/api/saphie/messages", requireAuth, async (req: AuthedRequest, res) => {
+    const { error } = await req.db!
+      .from("buddy_messages")
+      .delete()
+      .eq("user_id", req.user!.id);
+    if (error) return res.status(500).json({ message: error.message });
+    res.json({ ok: true });
+  });
+
+  // POST chat
+  app.post("/api/saphie/chat", requireAuth, async (req: AuthedRequest, res) => {
+    const { content } = req.body;
+    if (!content?.trim()) return res.status(400).json({ message: "No content" });
+
+    // Fetch all data sources in parallel
+    const [userRes, historyRes, manualsRes, bizRes] = await Promise.all([
+      req.db!.from("users").select("name, business_name, industry").eq("id", req.user!.id).single(),
+      req.db!.from("buddy_messages").select("role, content").eq("user_id", req.user!.id).order("created_at", { ascending: true }).limit(10),
+      req.db!.from("manuals").select("name, extracted_text").eq("user_id", req.user!.id).not("extracted_text", "is", null).order("created_at", { ascending: true }),
+      req.db!.from("business_info").select("*").eq("user_id", req.user!.id).single(),
+    ]);
+    const userData = userRes.data;
+    const history = historyRes.data;
+    const manuals = manualsRes.data;
+    const bizInfo = bizRes.data;
+
+    // Industry-agnostic: do not stuff manual contents into the prompt; just
+    // tell Saffi how many manuals are available so she can call search_manuals
+    // when the user asks something specific.
+    const manualContext = (manuals && manuals.length > 0)
+      ? `\n\nManuals available for this business: ${manuals.length}. Answer from the business profile when you can; do not invent specifics if they aren't there.`
+      : "";
+
+    // Save user message
+    await req.db!.from("buddy_messages").insert({
+      user_id: req.user!.id, role: "user", content: content.trim(),
+    });
+
+    // Build business info context for Saphie
+    let bizContext = "";
+    if (bizInfo) {
+      if (bizInfo.tagline) bizContext += `\nTagline: ${bizInfo.tagline}`;
+      if (bizInfo.about) bizContext += `\nAbout: ${bizInfo.about}`;
+      if (bizInfo.website_url) bizContext += `\nWebsite: ${bizInfo.website_url}`;
+      if (bizInfo.instagram_url) bizContext += `\nInstagram: ${bizInfo.instagram_url}`;
+      if (bizInfo.tiktok_url) bizContext += `\nTikTok: ${bizInfo.tiktok_url}`;
+      if (bizInfo.products && (bizInfo.products as any[]).length > 0) {
+        const productLines = (bizInfo.products as any[]).map((p: any) =>
+          `- ${p.name}${p.price ? ` (${p.price})` : ""}${p.category ? ` [${p.category}]` : ""}: ${p.description || ""}`
+        ).join("\n");
+        bizContext += `\n\nProducts & Services:\n${productLines}`;
+      }
+      if (bizInfo.faqs && (bizInfo.faqs as any[]).length > 0) {
+        const faqLines = (bizInfo.faqs as any[]).map((f: any) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n");
+        bizContext += `\n\nFrequently Asked Questions:\n${faqLines}`;
+      }
+    }
+
+    // ── Saffi must remain 100% industry-agnostic. Never hardcode any
+    //    specific brand or product. Business-specific facts come from
+    //    business_info / manuals only. ────────────────────────────────────
+    const systemPrompt = `You are Saffi, the AI assistant for ${userData?.business_name ?? "this business"}.${bizContext}${manualContext}
+
+You are industry-agnostic — the business above could be a salon, a dentist, a fitness studio, a tradesperson, an aesthetics practitioner, a coach, or anything else. Use ONLY the business profile and manuals provided. Do not assume products, prices, policies, or industry-specific facts.
+
+Style: warm, friendly, knowledgeable. Keep replies concise (2-3 short sentences) since they may be spoken aloud. Be helpful, never pushy. If you don't know something specific to this business, say so plainly and offer to get someone from the team to come back to the customer.
+
+When you do know something from the profile, share it confidently with the actual details (names, prices, descriptions) — never be vague.`;
+
+    const grokChatRes = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.XAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "grok-3-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...(history ?? []).map((m: any) => ({ role: m.role, content: m.content })),
+          { role: "user", content: content.trim() },
+        ],
+        max_tokens: 150,
+        temperature: 0.7,
+      }),
+    });
+
+    if (!grokChatRes.ok) {
+      const err = await grokChatRes.text();
+      return res.status(500).json({ message: "Grok chat error: " + err });
+    }
+
+    const grokChatData = await grokChatRes.json() as any;
+    const reply = grokChatData.choices?.[0]?.message?.content ?? "Sorry, I couldn't get a response.";
+
+    // Save assistant reply in background — don't await, reply to client immediately
+    void Promise.resolve(
+      req.db!.from("buddy_messages").insert({
+        user_id: req.user!.id, role: "assistant", content: reply,
+      }),
+    ).catch(() => {});
+
+    res.json({ reply });
+  });
+
+  // POST transcribe — xAI Grok STT (/v1/stt)
+  app.post("/api/saphie/transcribe", requireAuth, saphieUpload.single("audio"), async (req: AuthedRequest, res) => {
+    if (!req.file) return res.status(400).json({ message: "No audio file" });
+
+    const ext = req.file.mimetype.includes("mp4") ? "mp4"
+      : req.file.mimetype.includes("ogg") ? "ogg" : "webm";
+
+    // Build multipart using native Node — xAI STT needs file last
+    const boundary = `----GrokSTTBoundary${Date.now()}`;
+    const bodyParts: Buffer[] = [];
+    const appendField = (name: string, value: string) => {
+      bodyParts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`));
+    };
+    // xAI requires file to be last field
+    appendField("language", "en");
+    appendField("format", "true");
+    bodyParts.push(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="audio.${ext}"\r\nContent-Type: ${req.file.mimetype}\r\n\r\n`
+    ));
+    bodyParts.push(req.file.buffer);
+    bodyParts.push(Buffer.from(`\r\n--${boundary}--\r\n`));
+    const bodyBuffer = Buffer.concat(bodyParts);
+
+    const sttRes = await fetch("https://api.x.ai/v1/stt", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.XAI_API_KEY}`,
+        "Content-Type": `multipart/form-data; boundary=${boundary}`,
+        "Content-Length": String(bodyBuffer.length),
+      },
+      body: bodyBuffer,
+    });
+
+    if (!sttRes.ok) {
+      const err = await sttRes.text();
+      return res.status(500).json({ message: "Grok STT error: " + err });
+    }
+
+    const result = await sttRes.json() as any;
+    res.json({ text: result.text ?? "" });
+  });
+
   // POST /api/saffi/voice — Saffi TTS playback via xAI Grok (voice_id 'eve').
   // Playback only. No tool calls, no command execution, no actions. Server-side
   // proxy so XAI_API_KEY is never exposed to the browser. Returns audio/mpeg
@@ -4785,8 +4847,8 @@ app.post("/api/public/millie/chat", async (req, res) => {
     }
   });
 
-  // POST /api/saffi/speak — Grok (xAI) TTS → returns WAV audio
-  app.post("/api/saffi/speak", requireAuth, async (req: AuthedRequest, res) => {
+  // POST /api/saphie/speak — Grok (xAI) TTS → returns WAV audio
+  app.post("/api/saphie/speak", requireAuth, async (req: AuthedRequest, res) => {
     const { text } = req.body;
     if (!text?.trim()) return res.status(400).json({ message: "No text" });
 
@@ -4899,8 +4961,8 @@ app.post("/api/public/millie/chat", async (req, res) => {
         createdBy: "integration",
       });
 
-      // ── Saffi auto-reply ────────────────────────────────────────────────────
-      // Fetch business context for Saffi (inc. live website)
+      // ── Safi auto-reply ────────────────────────────────────────────────────
+      // Fetch business context for Safi (inc. live website)
       const [bizRes, manualsRes, userRes] = await Promise.all([
         supabase.from("business_info").select("*").eq("user_id", userId).maybeSingle(),
         supabase.from("manuals").select("name, extracted_text").eq("user_id", userId).not("extracted_text", "is", null).order("created_at", { ascending: true }),
@@ -4961,7 +5023,7 @@ app.post("/api/public/millie/chat", async (req, res) => {
       }
 
       const businessLabel = userData?.business_name || "the business";
-      let saffiSystem = `Your name is Saffi. You work for ${businessLabel} and you are messaging customers on WhatsApp on behalf of the business.${bizContext}${manualContext}${waWebsiteContext}
+      let safiSystem = `Your name is Saffi. You work for ${businessLabel} and you are messaging customers on WhatsApp on behalf of the business.${bizContext}${manualContext}${waWebsiteContext}
 
 You are a real member of the team as far as the customer is concerned. Never say you are an AI, a bot, an assistant, or an automated service. Never say "AI", "automated", "virtual", or anything that reveals you are not human. If someone asks directly whether you are a bot or AI, deflect warmly: "I'm Saffi, part of the ${businessLabel} team — how can I help you?"
 
@@ -4974,8 +5036,8 @@ If a customer asks about products, services, prices, bookings, or general enquir
 IMPORTANT: Reply only with the message text to send. Do not explain what you are doing.`;
 
       // ── Knowledge-safety: layer 3 (redact source) + layer 4 (instruction)
-      saffiSystem = redactSystemPrompt(saffiSystem, guard.riskLevel);
-      saffiSystem = injectGuardDirective(saffiSystem, guard.riskLevel, guard.categories);
+      safiSystem = redactSystemPrompt(safiSystem, guard.riskLevel);
+      safiSystem = injectGuardDirective(safiSystem, guard.riskLevel, guard.categories);
 
       // ── Layer 5a: hard short-circuit. For prompt-extraction, credential, or
       // private-data probes, never call the LLM at all — send a soft refusal.
@@ -5036,7 +5098,7 @@ IMPORTANT: Reply only with the message text to send. Do not explain what you are
           body: JSON.stringify({
             model: "grok-3-mini",
             messages: [
-              { role: "system", content: saffiSystem },
+              { role: "system", content: safiSystem },
               ...conversationHistory.slice(-9), // last 9 + new message = 10
               { role: "user", content: text },
             ],
@@ -5088,7 +5150,7 @@ IMPORTANT: Reply only with the message text to send. Do not explain what you are
                   body: reply,
                 });
 
-                // Store Saffi's outbound reply
+                // Store Safi's outbound reply
                 const { data: outboundMessage } = await supabase.from("whatsapp_messages").insert({
                   user_id: userId,
                   client_id: clientMatch?.id || null,
@@ -5164,7 +5226,7 @@ IMPORTANT: Reply only with the message text to send. Do not explain what you are
           }
         }
       }
-      // ── End Saffi auto-reply ────────────────────────────────────────────────
+      // ── End Safi auto-reply ────────────────────────────────────────────────
 
       // Return empty TwiML — sendStatus(200) sends "OK" as body which Twilio delivers as a message
       res.setHeader("Content-Type", "text/xml");

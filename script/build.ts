@@ -10,8 +10,6 @@ const allowlist = [
   "axios",
   "cors",
   "date-fns",
-  "drizzle-orm",
-  "drizzle-zod",
   "express",
   "express-rate-limit",
   "express-session",
