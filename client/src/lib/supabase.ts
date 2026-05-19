@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { normalizeSupabaseUrl } from "@shared/supabaseUrl";
 
 type PublicConfig = {
   ok: true;
@@ -47,7 +48,7 @@ type PublicConfig = {
                                                                     }
 
                                                                     function buildClient(url: string, key: string): SupabaseClient {
-                                                                      return createClient(url, key, {
+                                                                      return createClient(normalizeSupabaseUrl(url), key, {
                                                                           auth: {
                                                                                 persistSession: true,
                                                                                       autoRefreshToken: true,
