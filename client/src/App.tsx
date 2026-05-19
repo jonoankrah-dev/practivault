@@ -92,7 +92,9 @@ function Protected({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!session) return null;
+  if (!session) {
+    return <Redirect to="/login" />;
+  }
 
   return (
     <>
