@@ -1,8 +1,8 @@
 /**
- * Social Studio — fully managed by Safi AI
+ * Social Studio — fully managed by Saffi AI
  */
 import { Sparkles } from "lucide-react";
-import SafiSectionChat from "@/components/SafiSectionChat";
+import SaffiSectionChat from "@/components/SaffiSectionChat";
 
 const SUGGESTIONS = [
   "Write an Instagram advertising post for the endoPulse machine sale",
@@ -23,7 +23,7 @@ OFFICIAL WEBSITE: https://www.endopulse.co.uk
 INSTAGRAM: @endopulse
 
 ACCURATE PRODUCT FACTS (always use these — do not invent):
-- EndoPulse™ 980nm + 1470nm dual wavelength laser — UK CE-Marked
+- endoPulse™ 980nm + 1470nm dual wavelength laser — UK CE-Marked
 - Stimulates collagen and elastin, activates fibroblasts
 - Treatments: face, neck, jawline, under eyes, jowls, tummy, arms, thighs, back, sensitive areas
 - Non-surgical, minimally invasive, minimal downtime
@@ -79,9 +79,9 @@ Reel scripts need a strong hook in the first 2 seconds + a Veo 3 video prompt.`;
 
 export default function SocialStudio() {
   return (
-    <SafiSectionChat
+    <SaffiSectionChat
       section="Social Studio"
-      description="Safi creates advertising posts, reels, and captions using real endoPulse™ data"
+      description="Saffi creates advertising posts, reels, and captions using real endoPulse™ data"
       icon={<Sparkles className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}

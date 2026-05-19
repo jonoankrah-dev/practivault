@@ -3,7 +3,7 @@ import {
   recordActivityEvent,
   queueAgentAction,
   type AgentActionStatus,
-} from "../lib/safiMemory";
+} from "../lib/saffiMemory";
 
 type AuthedRequest = Request & {
   user?: { id: string; email: string | null };
@@ -31,7 +31,7 @@ function clampLimit(raw: unknown, def = 50, max = 200): number {
   return Math.min(n, max);
 }
 
-export function registerSafiMemoryRoutes(app: Express): void {
+export function registerSaffiMemoryRoutes(app: Express): void {
   app.get("/api/activity-events", async (req: AuthedRequest, res: Response) => {
     try {
       const userId = req.user!.id;
@@ -216,7 +216,7 @@ export function registerSafiMemoryRoutes(app: Express): void {
         await recordActivityEvent(
           {
             userId,
-            source: "safi",
+            source: "saffi",
             feature: "approval_queue",
             eventType: `action_${patch.status as string}`,
             entityType: "agent_action",
@@ -269,7 +269,7 @@ export function registerSafiMemoryRoutes(app: Express): void {
       await recordActivityEvent(
         {
           userId,
-          source: "safi",
+          source: "saffi",
           feature: "approval_queue",
           eventType: "action_ready_for_execution",
           entityType: "agent_action",

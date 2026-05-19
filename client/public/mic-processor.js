@@ -1,5 +1,5 @@
 /**
- * Safi MicProcessor — AudioWorklet
+ * Saffi MicProcessor — AudioWorklet
  * Runs in the audio thread. Buffers mic input and posts chunks to main thread.
  * The main thread resamples to 24kHz and encodes as PCM16.
  */

@@ -1,8 +1,8 @@
 /**
- * Consent Forms — fully managed by Safi AI
+ * Consent Forms — fully managed by Saffi AI
  */
 import { ShieldCheck } from "lucide-react";
-import SafiSectionChat from "@/components/SafiSectionChat";
+import SaffiSectionChat from "@/components/SaffiSectionChat";
 
 const SUGGESTIONS = [
   "Show all pending consent forms",
@@ -51,9 +51,9 @@ When listing forms, highlight any overdue ones (>7 days unsigned) clearly.`;
 
 export default function Consent() {
   return (
-    <SafiSectionChat
+    <SaffiSectionChat
       section="Consent Forms"
-      description="Safi sends and tracks consent forms for your clients"
+      description="Saffi sends and tracks consent forms for your clients"
       icon={<ShieldCheck className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}

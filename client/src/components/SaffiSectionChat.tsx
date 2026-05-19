@@ -1,6 +1,6 @@
 /**
- * SafiSectionChat — reusable Safi chat UI for any section takeover.
- * Passes `sectionContext` so Safi knows which section it's operating in.
+ * SaffiSectionChat — reusable Saffi chat UI for any section takeover.
+ * Passes `sectionContext` so Saffi knows which section it's operating in.
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -30,7 +30,7 @@ interface Props {
   icon: React.ReactNode;
   /** Suggestion chips shown in the empty state */
   suggestions: string[];
-  /** Longer context injected at the top of each request so Safi knows where it is */
+  /** Longer context injected at the top of each request so Saffi knows where it is */
   sectionContext: string;
   /**
    * `full` — section takeover (default). `embedded` — compact card for use under a real UI
@@ -39,7 +39,7 @@ interface Props {
   variant?: "full" | "embedded";
 }
 
-export default function SafiSectionChat({
+export default function SaffiSectionChat({
   section, description, icon, suggestions, sectionContext, variant = "full",
 }: Props) {
   const embedded = variant === "embedded";
@@ -67,7 +67,7 @@ export default function SafiSectionChat({
     historyRef.current = [...historyRef.current.slice(-9), { role: "user", content: msg }];
 
     try {
-      const res = await apiRequest("POST", "/api/safi/chat", {
+      const res = await apiRequest("POST", "/api/saffi/chat", {
         message: msg,
         history: historyRef.current.slice(0, -1),
         sectionContext,

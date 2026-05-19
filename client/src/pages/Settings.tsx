@@ -13,7 +13,7 @@ import { apiRequest, queryClient, getAuthToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "wouter";
-import { ENDOPULSE_DEMO } from "@/lib/demoBranding";
+import { ENDO_PULSE_DEMO } from "@/lib/demoBranding";
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -58,16 +58,16 @@ export default function SettingsPage() {
     onError: (e: any) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
   });
 
-  const applyEndoPulseSocial = useMutation({
+  const applyEndopulseSocial = useMutation({
     mutationFn: async () => {
       const payload = {
-        tagline: ENDOPULSE_DEMO.tagline,
+        tagline: ENDO_PULSE_DEMO.tagline,
         about: bi?.about ?? "",
         logo_url: bi?.logo_url ?? "",
-        website_url: ENDOPULSE_DEMO.website,
-        instagram_url: ENDOPULSE_DEMO.instagram_url,
-        tiktok_url: ENDOPULSE_DEMO.tiktok_url,
-        facebook_url: ENDOPULSE_DEMO.facebook_url,
+        website_url: ENDO_PULSE_DEMO.website,
+        instagram_url: ENDO_PULSE_DEMO.instagram_url,
+        tiktok_url: ENDO_PULSE_DEMO.tiktok_url,
+        facebook_url: ENDO_PULSE_DEMO.facebook_url,
         youtube_url: bi?.youtube_url ?? "",
         products: bi?.products ?? [],
         faqs: bi?.faqs ?? [],
@@ -77,10 +77,10 @@ export default function SettingsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/business-info"] });
-      setSocialIg(ENDOPULSE_DEMO.instagram_url);
-      setSocialFb(ENDOPULSE_DEMO.facebook_url);
-      setSocialTt(ENDOPULSE_DEMO.tiktok_url);
-      setSocialWeb(ENDOPULSE_DEMO.website);
+      setSocialIg(ENDO_PULSE_DEMO.instagram_url);
+      setSocialFb(ENDO_PULSE_DEMO.facebook_url);
+      setSocialTt(ENDO_PULSE_DEMO.tiktok_url);
+      setSocialWeb(ENDO_PULSE_DEMO.website);
       toast({ title: "endoPulse demo links applied" });
     },
     onError: (e: any) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
@@ -406,8 +406,8 @@ export default function SettingsPage() {
             type="button"
             variant="secondary"
             size="sm"
-            onClick={() => applyEndoPulseSocial.mutate()}
-            disabled={applyEndoPulseSocial.isPending}
+            onClick={() => applyEndopulseSocial.mutate()}
+            disabled={applyEndopulseSocial.isPending}
           >
             Apply endoPulse demo links
           </Button>

@@ -1,7 +1,7 @@
 -- =============================================================================
--- Safi memory system — foundation
+-- Saffi memory system — foundation
 -- activity_events: durable log of important app/business events
--- agent_action_queue: Safi's prepared actions awaiting approval
+-- agent_action_queue: Saffi's prepared actions awaiting approval
 -- =============================================================================
 
 create extension if not exists "pgcrypto";
@@ -24,7 +24,7 @@ create table if not exists public.activity_events (
   sensitivity text not null default 'normal'
     check (sensitivity in ('normal', 'sensitive', 'restricted')),
   created_by text not null default 'system'
-    check (created_by in ('user', 'safi', 'system', 'integration')),
+    check (created_by in ('user', 'saffi', 'system', 'integration')),
   created_at timestamptz not null default now()
 );
 
@@ -83,8 +83,8 @@ create table if not exists public.agent_action_queue (
   rejected_reason text,
   executed_at timestamptz,
   execution_result jsonb,
-  created_by text not null default 'safi'
-    check (created_by in ('user', 'safi', 'system', 'integration')),
+  created_by text not null default 'saffi'
+    check (created_by in ('user', 'saffi', 'system', 'integration')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

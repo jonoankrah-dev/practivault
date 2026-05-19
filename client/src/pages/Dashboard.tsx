@@ -6,6 +6,7 @@ import PageHeader from "@/components/PageHeader";
 import StatusBadge from "@/components/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { endoPulseTreatmentLabel } from "@/lib/endopulse";
 
 type Stats = {
   todaysRevenue: number;
@@ -154,6 +155,11 @@ export default function Dashboard() {
                     <div className="text-sm font-medium truncate">{b.clients?.name || "—"}</div>
                     <div className="text-xs text-muted-foreground truncate">
                       {b.treatments?.name} · {b.treatments?.duration_mins}min
+                      {endoPulseTreatmentLabel(b.treatments) && (
+                        <span className="ml-2 rounded-full bg-[#E83A8E]/10 px-2 py-0.5 text-[10px] font-semibold text-[#E83A8E]">
+                          {endoPulseTreatmentLabel(b.treatments)}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="text-sm font-medium text-foreground">

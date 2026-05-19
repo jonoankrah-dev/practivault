@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "../supabase";
 
-export type ActivityCreatedBy = "user" | "safi" | "system" | "integration";
+export type ActivityCreatedBy = "user" | "saffi" | "system" | "integration";
 export type ActivityVisibility = "private" | "team" | "public";
 export type ActivitySensitivity = "normal" | "sensitive" | "restricted";
 
@@ -71,7 +71,7 @@ export async function recordActivityEvent(
 ): Promise<string | null> {
   try {
     if (!input.userId || !input.source || !input.eventType || !input.title) {
-      console.warn("[safi-memory] recordActivityEvent skipped: missing required field", {
+      console.warn("[saffi-memory] recordActivityEvent skipped: missing required field", {
         hasUserId: !!input.userId,
         hasSource: !!input.source,
         hasEventType: !!input.eventType,
@@ -102,12 +102,12 @@ export async function recordActivityEvent(
       .single();
 
     if (error) {
-      console.warn("[safi-memory] recordActivityEvent insert failed:", error.message);
+      console.warn("[saffi-memory] recordActivityEvent insert failed:", error.message);
       return null;
     }
     return data?.id ?? null;
   } catch (e) {
-    console.warn("[safi-memory] recordActivityEvent threw:", (e as Error).message);
+    console.warn("[saffi-memory] recordActivityEvent threw:", (e as Error).message);
     return null;
   }
 }
@@ -121,7 +121,7 @@ export async function queueAgentAction(
 ): Promise<string | null> {
   try {
     if (!input.userId || !input.actionType || !input.title) {
-      console.warn("[safi-memory] queueAgentAction skipped: missing required field");
+      console.warn("[saffi-memory] queueAgentAction skipped: missing required field");
       return null;
     }
 
@@ -141,18 +141,18 @@ export async function queueAgentAction(
         payload: input.payload ?? {},
         status: input.status ?? "pending_approval",
         approval_required: input.approvalRequired ?? true,
-        created_by: input.createdBy ?? "safi",
+        created_by: input.createdBy ?? "saffi",
       })
       .select("id")
       .single();
 
     if (error) {
-      console.warn("[safi-memory] queueAgentAction insert failed:", error.message);
+      console.warn("[saffi-memory] queueAgentAction insert failed:", error.message);
       return null;
     }
     return data?.id ?? null;
   } catch (e) {
-    console.warn("[safi-memory] queueAgentAction threw:", (e as Error).message);
+    console.warn("[saffi-memory] queueAgentAction threw:", (e as Error).message);
     return null;
   }
 }

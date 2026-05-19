@@ -63,7 +63,7 @@ function ChannelIcon({ channel, className }: { channel: string; className?: stri
   return <Icon className={cn("h-3.5 w-3.5", className)} />;
 }
 
-export default function SafiAdmin({ onBack }: { onBack?: () => void }) {
+export default function SaffiAdmin({ onBack }: { onBack?: () => void }) {
   const { toast } = useToast();
   const [channel, setChannel] = useState<AiFrontDeskChannel>("manual");
   const [message, setMessage] = useState("");

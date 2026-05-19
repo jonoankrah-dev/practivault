@@ -1,8 +1,8 @@
 /**
- * Bookings — fully managed by Safi AI
+ * Bookings — fully managed by Saffi AI
  */
 import { CalendarDays } from "lucide-react";
-import SafiSectionChat from "@/components/SafiSectionChat";
+import SaffiSectionChat from "@/components/SaffiSectionChat";
 
 const SUGGESTIONS = [
   "Show me today's bookings",
@@ -42,9 +42,9 @@ If a client or treatment isn't found, explain clearly and suggest the user add t
 
 export default function Bookings() {
   return (
-    <SafiSectionChat
+    <SaffiSectionChat
       section="Bookings"
-      description="Safi manages all your appointments and scheduling"
+      description="Saffi manages all your appointments and scheduling"
       icon={<CalendarDays className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}

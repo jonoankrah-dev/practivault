@@ -85,7 +85,7 @@ function HermesProposalCard({ proposal, onApprove }: {
   const getDefaultPayloadForType = (type: string) => {
     if (type === "complete_treatment") return { areasTreated: [], clientName: "" };
     if (type === "deduct_consumables") return { items: [""], quantities: [1] };
-    if (type === "schedule_follow_up") return { weeksFromNow: 4, service: "EndoPulse Follow-up" };
+    if (type === "schedule_follow_up") return { weeksFromNow: 4, service: "endoPulse Follow-up" };
     if (type === "create_task") return { title: "New internal task", priority: "medium" };
     if (type === "log_client_feedback") return { clientName: "", sentiment: "positive", message: "" };
     if (type === "send_customer_message") return { customerId: "", message: "" };
@@ -291,7 +291,7 @@ export default function Saffi({
     setTimeout(scrollToBottom, 50);
 
     try {
-      const res = await fetch("/api/safi/chat", {
+      const res = await fetch("/api/saffi/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -1,5 +1,5 @@
 /**
- * Hermes Test Suite — Full EndoPulse Flow (Reasoning + Execution Simulation)
+ * Hermes Test Suite — Full endoPulse Flow (Reasoning + Execution Simulation)
  *
  * Run with:
  *   npx tsx server/hermes/test/test-hermes.ts
@@ -10,7 +10,7 @@
 import { sendToHermes, shouldEscalateToHermes } from "../index";
 
 const testCases = [
-  // === Authentic EndoPulse practitioner language (inspired by official course + tutor manual) ===
+  // === Authentic endoPulse practitioner language (inspired by official course + tutor manual) ===
   "Just finished lower face and jawline on Mrs Thompson, endoPulse 1470nm, total energy 950J at 8W, 3 passes, used 6ml 1% lidocaine, compression garment applied, client tolerated very well and was pleased with the tightening",
 
   "Submental and neck tightening completed on Sarah, fibre moved in fan vectors, 2 passes, 720J delivered, mild erythema as clinical endpoint reached, client happy, no issues",
@@ -24,7 +24,7 @@ const testCases = [
   "Neck and platysma bands treated, careful near marginal mandibular nerve, only retrograde passes near danger zones, 680J, lidocaine 8ml, client fine, compression on",
 
   // === Weaker / edge cases ===
-  "EndoPulse session finished",
+  "endoPulse session finished",
   "Used lidocaine and did 2 passes on the jawline",
   "Client was happy with the result after treatment",
 

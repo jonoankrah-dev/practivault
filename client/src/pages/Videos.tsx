@@ -1,9 +1,9 @@
 /**
- * Training Videos — add video form (link or upload) + Safi AI chat
+ * Training Videos — add video form (link or upload) + Saffi AI chat
  */
 import { useState, useRef } from "react";
 import { Video, Upload, Link2, X, Loader2, Trash2, ExternalLink, Play, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
-import SafiSectionChat from "@/components/SafiSectionChat";
+import SaffiSectionChat from "@/components/SaffiSectionChat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,7 +27,7 @@ const SUGGESTIONS = [
   "Show videos by category",
 ];
 
-const SECTION_CONTEXT = `You are Safi, the practice manager for this business. You are in the Training Videos section.
+const SECTION_CONTEXT = `You are Saffi, the practice manager for this business. You are in the Training Videos section.
 
 When this section opens, immediately call get_videos and show a summary grouped by category. Don't wait to be asked.
 
@@ -330,11 +330,11 @@ export default function Videos() {
         </div>
       </div>
 
-      {/* RIGHT — Safi chat */}
+      {/* RIGHT — Saffi chat */}
       <div className="flex-1 min-w-0">
-        <SafiSectionChat
+        <SaffiSectionChat
           section="Training Videos"
-          description="Safi manages your training video library"
+          description="Saffi manages your training video library"
           icon={<Video className="h-4 w-4 text-[#E83A8E]" />}
           suggestions={SUGGESTIONS}
           sectionContext={SECTION_CONTEXT}

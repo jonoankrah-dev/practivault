@@ -10,7 +10,7 @@ const FEATURES = [
   { label: "Leads pipeline & follow-ups", solo: true, team: true, growth: true },
   { label: "Full manuals & training library", solo: true, team: true, growth: true },
   { label: "Social Studio (AI content)", solo: true, team: true, growth: true },
-  { label: "Safi AI assistant (chat + voice)", solo: true, team: true, growth: true },
+  { label: "Saffi AI assistant (chat + voice)", solo: true, team: true, growth: true },
   { label: "AI Phone Receptionist (24/7 calls & SMS)", solo: true, team: true, growth: true },
   { label: "Client self-portal & self-quoting", solo: true, team: true, growth: true },
   { label: "Smart route optimization", solo: "Basic", team: true, growth: true },

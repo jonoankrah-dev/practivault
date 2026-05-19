@@ -18,9 +18,11 @@ import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 let pdf2picFromBuffer: any;
 let createWorker: any;
 
+type ExtractMethod = "text" | "pdfjs" | "hybrid" | "ocr";
+
 interface ExtractResult {
   text: string | null;
-  method: "text" | "pdfjs" | "hybrid" | "ocr";
+  method: ExtractMethod;
   success: boolean;
   error?: string;
   pageCount?: number;
@@ -58,7 +60,7 @@ export async function extractPdfTextImproved(
 
   // Combine results intelligently
   let finalText: string | null = null;
-  let method: "text" | "pdfjs" | "hybrid" = "text";
+  let method: ExtractMethod = "text";
 
   if (pdfParseText && pdfjsText) {
     if (pdfjsText.length > pdfParseText.length * 1.3) {
@@ -83,10 +85,11 @@ export async function extractPdfTextImproved(
     try {
       const ocrText = await extractWithOcr(buffer, timeoutMs);
       if (ocrText && ocrText.length > 100) {
-        finalText = finalText
-          ? `${finalText}\n\n--- OCR Extracted Content ---\n${ocrText}`
+        const textBeforeOcr = finalText;
+        finalText = textBeforeOcr
+          ? `${textBeforeOcr}\n\n--- OCR Extracted Content ---\n${ocrText}`
           : ocrText;
-        method = finalText.includes("OCR") ? "hybrid" : "ocr";
+        method = textBeforeOcr ? "hybrid" : "ocr";
       }
     } catch (e: any) {
       console.warn("[pdf-extractor] OCR fallback failed:", e.message);

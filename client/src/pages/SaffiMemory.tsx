@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Clock, PlayCircle, RefreshCw, X, Zap } from "lucide-react";
-import { safiMemoryApi } from "@/lib/queryClient";
+import { saffiMemoryApi } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -34,22 +34,22 @@ function formatDate(value: string) {
   });
 }
 
-export default function SafiMemory() {
+export default function SaffiMemory() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const eventsQuery = useQuery({
     queryKey: ["/api/activity-events", "recent"],
-    queryFn: () => safiMemoryApi.recentEvents(50),
+    queryFn: () => saffiMemoryApi.recentEvents(50),
     refetchInterval: 30_000,
   });
   const actionsQuery = useQuery({
     queryKey: ["/api/agent-actions", "pending"],
-    queryFn: () => safiMemoryApi.pendingActions(),
+    queryFn: () => saffiMemoryApi.pendingActions(),
     refetchInterval: 30_000,
   });
   const approvedQuery = useQuery({
     queryKey: ["/api/agent-actions", "approved"],
-    queryFn: () => safiMemoryApi.approvedActions(),
+    queryFn: () => saffiMemoryApi.approvedActions(),
     refetchInterval: 30_000,
   });
 
@@ -64,11 +64,11 @@ export default function SafiMemory() {
   async function updateAction(id: string, status: "approved" | "rejected") {
     try {
       if (status === "approved") {
-        await safiMemoryApi.approveAction(id);
+        await saffiMemoryApi.approveAction(id);
         toast({ title: "Approved", description: "Saffi can now pick this up when the executor is added." });
       } else {
         const reason = window.prompt("Reason for rejection? (optional)") ?? undefined;
-        await safiMemoryApi.rejectAction(id, reason);
+        await saffiMemoryApi.rejectAction(id, reason);
         toast({ title: "Rejected", description: "Saffi will learn from that decision." });
       }
       await refresh();
@@ -79,7 +79,7 @@ export default function SafiMemory() {
 
   async function prepareExecution(id: string) {
     try {
-      await safiMemoryApi.prepareExecution(id);
+      await saffiMemoryApi.prepareExecution(id);
       toast({
         title: "Prepared",
         description: "This is now ready for the future executor. Nothing has been sent or posted.",
@@ -109,7 +109,7 @@ export default function SafiMemory() {
             </p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={refresh} data-testid="button-refresh-safi-memory">
+        <Button variant="outline" size="sm" onClick={refresh} data-testid="button-refresh-saffi-memory">
           <RefreshCw className="h-3.5 w-3.5 mr-2" />
           Refresh
         </Button>

@@ -1,8 +1,8 @@
 /**
- * Invoices — fully managed by Safi AI
+ * Invoices — fully managed by Saffi AI
  */
 import { Receipt } from "lucide-react";
-import SafiSectionChat from "@/components/SafiSectionChat";
+import SaffiSectionChat from "@/components/SaffiSectionChat";
 
 const SUGGESTIONS = [
   "Show all unpaid invoices",
@@ -40,9 +40,9 @@ Default due date is 30 days from today unless the user specifies otherwise.`;
 
 export default function Invoices() {
   return (
-    <SafiSectionChat
+    <SaffiSectionChat
       section="Invoices"
-      description="Safi handles all your invoicing and payment tracking"
+      description="Saffi handles all your invoicing and payment tracking"
       icon={<Receipt className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}

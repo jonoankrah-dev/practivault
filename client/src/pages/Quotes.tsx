@@ -1,8 +1,8 @@
 /**
- * Quotes — fully managed by Safi AI
+ * Quotes — fully managed by Saffi AI
  */
 import { FileText } from "lucide-react";
-import SafiSectionChat from "@/components/SafiSectionChat";
+import SaffiSectionChat from "@/components/SaffiSectionChat";
 
 const SUGGESTIONS = [
   "Show all pending quotes",
@@ -40,9 +40,9 @@ Quote numbers are auto-generated — do not ask the user for them.`;
 
 export default function Quotes() {
   return (
-    <SafiSectionChat
+    <SaffiSectionChat
       section="Quotes"
-      description="Safi creates and manages all your quotes and estimates"
+      description="Saffi creates and manages all your quotes and estimates"
       icon={<FileText className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}

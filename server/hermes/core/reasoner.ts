@@ -1,5 +1,5 @@
 /**
- * Hermes Reasoner - The intelligent core (Aesthetics / EndoPulse focused)
+ * Hermes Reasoner - The intelligent core (Aesthetics / endoPulse focused)
  *
  * This is where the deep understanding happens.
  * Currently a very strong advanced mock tuned for real-world aesthetics clinic language.
@@ -64,7 +64,7 @@ export async function getHermesReasoning(
 
 /**
  * Fetches relevant manual chunks via semantic search and formats them for injection into Hermes.
- * This is the key to making Hermes actually "know" the user's uploaded EndoPulse materials.
+ * This is the key to making Hermes actually "know" the user's uploaded endoPulse materials.
  */
 async function getRelevantManualContext(
   db: SupabaseClient,
@@ -111,7 +111,7 @@ async function callRealGrokHermes(
 
   // === Pass 2: Inject relevant manual content via RAG when available ===
   // This is the key integration — Hermes now reasons with the user's actual uploaded manuals
-  // (especially powerful when they upload the official EndoPulse tutor manual / course).
+  // (especially powerful when they upload the official endoPulse tutor manual / course).
   let enhancedSystemPrompt = HERMES_SYSTEM_PROMPT;
 
   if (db && userId) {
@@ -129,7 +129,7 @@ async function callRealGrokHermes(
     { role: "user", content: userMessage },
   ];
 
-  // Add a high-quality few-shot example using the improved EndoPulse-specific tool schemas
+  // Add a high-quality few-shot example using the improved endoPulse-specific tool schemas
   const fewShotMessages = [
     { role: "system", content: enhancedSystemPrompt },
     { 
@@ -254,7 +254,7 @@ async function callRealGrokHermes(
   const proposal: HermesProposal = {
     summary: `Hermes (Grok) proposed ${actions.length} action(s)`,
     actions,
-    reasoning: "Analyzed using real Grok model with EndoPulse knowledge.",
+    reasoning: "Analyzed using real Grok model with endoPulse knowledge.",
     confidence: 0.85,
   };
 
@@ -269,11 +269,11 @@ function generateDescriptionForAction(actionType: string, args: any): string {
     case "complete_treatment":
       const areas = args.areasTreated?.join(", ") || "";
       const wl = args.wavelength ? ` (${args.wavelength})` : "";
-      return `Complete EndoPulse treatment${areas ? ` on ${areas}` : ""}${wl}`;
+      return `Complete endoPulse treatment${areas ? ` on ${areas}` : ""}${wl}`;
     case "deduct_consumables":
       return `Deduct consumables: ${args.items?.join(", ") || "items"}`;
     case "record_treatment_note":
-      return "Record detailed clinical EndoPulse treatment note";
+      return "Record detailed clinical endoPulse treatment note";
     case "log_client_feedback":
       return `${args.sentiment || "Client"} feedback logged`;
     case "schedule_follow_up":
@@ -288,7 +288,7 @@ function generateDescriptionForAction(actionType: string, args: any): string {
 }
 
 // ============================================
-// Advanced Aesthetics / EndoPulse Mock Reasoner
+// Advanced Aesthetics / endoPulse Mock Reasoner
 // ============================================
 
 interface ExtractedDetails {
@@ -332,7 +332,7 @@ function generateAestheticsMockResponse(
         passes: details.numPasses,
         settings: details.passesOrSettings,
       },
-      description: `Complete EndoPulse treatment${
+      description: `Complete endoPulse treatment${
         details.areasTreated.length > 0 ? ` — ${details.areasTreated.join(", ")}` : ""
       }${details.clientName ? ` for ${details.clientName}` : ""}`,
     });
@@ -369,7 +369,7 @@ function generateAestheticsMockResponse(
       lidocaine: details.lidocaineUsed,
       compression: details.compressionApplied,
     },
-    description: "Record detailed EndoPulse treatment note (energy, passes, anaesthetic, post-care)",
+    description: "Record detailed endoPulse treatment note (energy, passes, anaesthetic, post-care)",
   });
   confidence += 0.12;
 
@@ -463,7 +463,7 @@ function extractAestheticsDetails(message: string, lower: string): ExtractedDeta
   // === 3. Robust consumables + quantity extraction ===
   const productsUsed = extractConsumablesWithQuantity(message, lower);
 
-  // === 4. Passes / settings / machine + real EndoPulse parameters ===
+  // === 4. Passes / settings / machine + real endoPulse parameters ===
   let passesOrSettings: string | null = null;
   const settingsMatch = message.match(/(\d+)\s*(?:passes?|pass)|settings?\s*[:=]?\s*([^,\.]+)/i);
   if (settingsMatch) {

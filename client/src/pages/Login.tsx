@@ -35,16 +35,23 @@ export default function Login() {
   }, [industry]);
 
   useEffect(() => {
-    if (session) {
-      // If the active session belongs to a demo account, sign it out silently
-      // so the real user can log in instead of being bounced to demo dashboard.
-      const email = session.user?.email ?? "";
-      if (email.endsWith("@practivault-demo.app")) {
-        supabase.auth.signOut();
-        return;
-      }
-      navigate("/dashboard");
+    if (!session) return;
+    const email = session.user?.email ?? "";
+    if (email.endsWith("@practivault-demo.app")) {
+      void supabase.auth.signOut();
+      return;
     }
+    let cancelled = false;
+    fetch("/api/me", {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    }).then((res) => {
+      if (cancelled) return;
+      if (res.ok) navigate("/dashboard");
+      else void supabase.auth.signOut();
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [session, navigate]);
 
   async function onSubmit(e: React.FormEvent) {

@@ -38,7 +38,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useIndustry } from "@/contexts/IndustryContext";
 import StatusBadge from "@/components/StatusBadge";
-import SafiSectionChat from "@/components/SafiSectionChat";
+import SaffiSectionChat from "@/components/SaffiSectionChat";
 import { Link, useLocation } from "wouter";
 import { Plus, Pencil, Trash2, Users, Search, Loader2, Bot } from "lucide-react";
 import type { Client, ClientStage } from "@shared/schema";
@@ -455,7 +455,7 @@ export default function Clients() {
         <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium mb-2">
           Assistant
         </p>
-        <SafiSectionChat
+        <SaffiSectionChat
           variant="embedded"
           section="Saffi"
           description={`Same ${entityLabel.toLowerCase()} as the table — filtered list is sent with each message.`}

@@ -1,5 +1,5 @@
 -- =============================================================================
--- Inventory System for PractiVault (EndoPulse & General Use)
+-- Inventory System for PractiVault (endoPulse & General Use)
 -- Supports consumable tracking for Hermes + general business use
 -- =============================================================================
 

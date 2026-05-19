@@ -26,7 +26,7 @@ export const HERMES_TOOLS: HermesTool[] = [
     type: "function",
     function: {
       name: "complete_treatment",
-      description: "Mark an EndoPulse endolaser treatment session as completed in the system. Use when the practitioner clearly indicates the treatment has finished.",
+      description: "Mark an endoPulse endolaser treatment session as completed in the system. Use when the practitioner clearly indicates the treatment has finished.",
       parameters: {
         type: "object",
         properties: {
@@ -50,7 +50,7 @@ export const HERMES_TOOLS: HermesTool[] = [
     type: "function",
     function: {
       name: "deduct_consumables",
-      description: "Deduct consumables used during the EndoPulse treatment from inventory (lidocaine, optical fibres, gauze, numbing cream, etc.).",
+      description: "Deduct consumables used during the endoPulse treatment from inventory (lidocaine, optical fibres, gauze, numbing cream, etc.).",
       parameters: {
         type: "object",
         properties: {
@@ -112,7 +112,7 @@ export const HERMES_TOOLS: HermesTool[] = [
     type: "function",
     function: {
       name: "schedule_follow_up",
-      description: "Schedule a follow-up or review appointment (typically 4–6 weeks post EndoPulse treatment).",
+      description: "Schedule a follow-up or review appointment (typically 4–6 weeks post endoPulse treatment).",
       parameters: {
         type: "object",
         properties: {

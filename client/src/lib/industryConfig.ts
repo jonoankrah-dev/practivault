@@ -58,9 +58,10 @@ const NAV = {
   customers:   { href: "/clients",          label: "Customers",       icon: Users },
   students:    { href: "/clients",          label: "Students",        icon: Users },
   patients:    { href: "/clients",          label: "Patients",        icon: Users },
-  safi:        { href: "/safi",             label: "Saffi AI",        icon: Bot },
-  safiMemory:  { href: "/safi-memory",      label: "Saffi Memory",    icon: BrainCircuit },
+  saffi:        { href: "/saffi",             label: "Saffi AI",        icon: Bot },
+  saffiMemory:  { href: "/saffi-memory",      label: "Saffi Memory",    icon: BrainCircuit },
   usage:       { href: "/usage",            label: "Usage & Transparency", icon: BarChart3, badgeKey: undefined },
+  endopulseHub:{ href: "/endopulse-hub",   label: "endoPulse Hub",  icon: HeartPulse },
   aiFrontDesk: { href: "/ai-front-desk",   label: "AI Front Desk",   icon: MessageSquare,  badgeKey: "afdToday" },
   aiPhone:     { href: "/phone-receptionist",label:"AI Receptionist", icon: Phone,          badgeKey: "missedCallsToday" },
   social:      { href: "/social-studio",    label: "Social Studio",   icon: Camera },
@@ -102,8 +103,8 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
       dashboard: "Dashboard", stock: "Stock",
     },
     nav: [
-      NAV.dashboard, NAV.appointments, NAV.clients,
-      NAV.safi, NAV.safiMemory, NAV.usage, NAV.social, NAV.whatsapp,
+      NAV.dashboard, NAV.endopulseHub, NAV.appointments, NAV.clients,
+      NAV.saffi, NAV.saffiMemory, NAV.usage, NAV.social, NAV.whatsapp,
       NAV.leads, NAV.quotes, NAV.consent,
       NAV.team, NAV.invoices, NAV.photos,
       NAV.manuals, NAV.videos, NAV.packages,
@@ -125,7 +126,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
     },
     nav: [
       NAV.dashboard, NAV.appointments, NAV.clients,
-      NAV.safi, NAV.safiMemory, NAV.social, NAV.whatsapp,
+      NAV.saffi, NAV.saffiMemory, NAV.social, NAV.whatsapp,
       NAV.leads, NAV.quotes, NAV.consent,
       NAV.team, NAV.invoices, NAV.photos,
       NAV.stock, NAV.cpd, NAV.locations, NAV.settings,
@@ -145,7 +146,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
     },
     nav: [
       NAV.dashboard, NAV.jobs, NAV.customers,
-      NAV.safi, NAV.safiMemory,
+      NAV.saffi, NAV.saffiMemory,
       NAV.enquiries, NAV.quotes, NAV.riskAssess,
       NAV.team, NAV.invoices, NAV.materials,
       NAV.manuals, NAV.locations, NAV.settings,
@@ -165,7 +166,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
     },
     nav: [
       NAV.dashboard, NAV.jobs, NAV.customers,
-      NAV.safi, NAV.safiMemory,
+      NAV.saffi, NAV.saffiMemory,
       NAV.enquiries, NAV.quotes, NAV.riskAssess,
       NAV.team, NAV.invoices, NAV.materials,
       NAV.manuals, NAV.locations, NAV.settings,
@@ -185,7 +186,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
     },
     nav: [
       NAV.dashboard, NAV.jobs, NAV.customers,
-      NAV.safi, NAV.safiMemory,
+      NAV.saffi, NAV.saffiMemory,
       NAV.enquiries, NAV.quotes, NAV.riskAssess,
       NAV.team, NAV.invoices, NAV.materials,
       NAV.manuals, NAV.locations, NAV.settings,
@@ -205,7 +206,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
     },
     nav: [
       NAV.dashboard, NAV.jobs, NAV.customers,
-      NAV.safi, NAV.safiMemory, NAV.social,
+      NAV.saffi, NAV.saffiMemory, NAV.social,
       NAV.enquiries, NAV.quotes,
       NAV.team, NAV.invoices, NAV.materials,
       NAV.locations, NAV.settings,
@@ -225,7 +226,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
     },
     nav: [
       NAV.dashboard, NAV.sessions, NAV.students,
-      NAV.safi, NAV.safiMemory, NAV.social,
+      NAV.saffi, NAV.saffiMemory, NAV.social,
       NAV.enquiries, NAV.proposals, NAV.enrollment,
       NAV.team, NAV.invoices,
       NAV.videos, NAV.packages,
@@ -246,7 +247,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
     },
     nav: [
       NAV.dashboard, NAV.appointments, NAV.patients,
-      NAV.safi,
+      NAV.saffi,
       NAV.leads, NAV.consent,
       NAV.team, NAV.invoices, NAV.photos,
       NAV.manuals, NAV.cpd, NAV.locations, NAV.settings,
@@ -266,7 +267,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
     },
     nav: [
       NAV.dashboard, NAV.jobs, NAV.customers,
-      NAV.safi,
+      NAV.saffi,
       NAV.enquiries, NAV.quotes, NAV.riskAssess,
       NAV.team, NAV.invoices, NAV.materials,
       NAV.manuals, NAV.locations, NAV.settings,
@@ -286,7 +287,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
     },
     nav: [
       NAV.dashboard, NAV.jobs, NAV.customers,
-      NAV.safi,
+      NAV.saffi,
       NAV.enquiries, NAV.quotes, NAV.riskAssess,
       NAV.team, NAV.invoices, NAV.materials,
       NAV.manuals, NAV.locations, NAV.settings,
@@ -305,8 +306,8 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
       dashboard: "Dashboard", stock: "Stock",
     },
     nav: [
-      NAV.dashboard, NAV.bookings, NAV.clients,
-      NAV.safi, NAV.safiMemory, NAV.usage, NAV.social, NAV.whatsapp,
+      NAV.dashboard, NAV.endopulseHub, NAV.bookings, NAV.clients,
+      NAV.saffi, NAV.saffiMemory, NAV.usage, NAV.social, NAV.whatsapp,
       NAV.leads, NAV.quotes, NAV.consent,
       NAV.team, NAV.invoices, NAV.photos,
       NAV.manuals, NAV.videos, NAV.packages,

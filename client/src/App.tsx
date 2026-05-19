@@ -33,11 +33,12 @@ import Videos from "@/pages/Videos";
 import Packages from "@/pages/Packages";
 import Pricing from "@/pages/Pricing";
 import Usage from "@/pages/Usage";
+import EndopulseHub from "@/pages/EndopulseHub";
 import CpdLog from "@/pages/CpdLog";
 import Locations from "@/pages/Locations";
 import Stock from "@/pages/Stock";
-import Safi from "@/pages/Safi";
-import SafiMemory from "@/pages/SafiMemory";
+import Saffi from "@/pages/Saffi";
+import SaffiMemory from "@/pages/SaffiMemory";
 import WhatsApp from "@/pages/WhatsApp";
 import SetupAssistant from "@/pages/SetupAssistant";
 import NotFound from "@/pages/not-found";
@@ -176,6 +177,11 @@ function AppRouter() {
           <Usage />
         </Protected>
       </Route>
+      <Route path="/endopulse-hub">
+        <Protected>
+          <EndopulseHub />
+        </Protected>
+      </Route>
       <Route path="/leads">
         <Protected>
           <Leads />
@@ -251,14 +257,14 @@ function AppRouter() {
           <WhatsApp />
         </Protected>
       </Route>
-      <Route path="/safi">
+      <Route path="/saffi">
         <Protected>
-          <Safi />
+          <Saffi />
         </Protected>
       </Route>
-      <Route path="/safi-memory">
+      <Route path="/saffi-memory">
         <Protected>
-          <SafiMemory />
+          <SaffiMemory />
         </Protected>
       </Route>
       <Route component={NotFound} />

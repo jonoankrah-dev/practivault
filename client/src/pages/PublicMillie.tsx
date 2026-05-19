@@ -12,7 +12,7 @@ export default function PublicMillie() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: "Hi, I'm Millie from the EndoPulse team. How can I help you with the machine or training today? xx",
+      content: "Hi, I'm Millie from the endoPulse team. How can I help you with the machine or training today? xx",
     },
   ]);
   const [input, setInput] = useState('');
@@ -83,7 +83,7 @@ export default function PublicMillie() {
           </div>
           <div>
             <div className="font-semibold text-xl text-[#1E2937]">Millie</div>
-            <div className="text-sm text-[#64748B]">EndoPulse Advisor</div>
+            <div className="text-sm text-[#64748B]">endoPulse Advisor</div>
           </div>
         </div>
       </div>
@@ -142,7 +142,7 @@ export default function PublicMillie() {
             </button>
           </div>
           <p className="text-center text-[11px] text-[#94A3B8] mt-3">
-            This is a real conversation with Millie from the EndoPulse team.
+            This is a real conversation with Millie from the endoPulse team.
           </p>
         </div>
       </div>

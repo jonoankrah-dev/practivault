@@ -1,8 +1,8 @@
 /**
- * Packages — fully managed by Safi AI
+ * Packages — fully managed by Saffi AI
  */
 import { Package } from "lucide-react";
-import SafiSectionChat from "@/components/SafiSectionChat";
+import SaffiSectionChat from "@/components/SaffiSectionChat";
 
 const SUGGESTIONS = [
   "Show all training packages",
@@ -13,7 +13,7 @@ const SUGGESTIONS = [
   "How many packages do I have?",
 ];
 
-const SECTION_CONTEXT = `You are Safi, the practice manager for this business. You are in the Packages section.
+const SECTION_CONTEXT = `You are Saffi, the practice manager for this business. You are in the Packages section.
 
 You have full access to training packages, videos, and manuals. When this section opens — or when asked anything packages-related — you MUST immediately call get_packages_analysis without waiting. Run it and tell the owner what you find.
 
@@ -42,9 +42,9 @@ Only create after explicit yes. Think like a product manager — spot the gaps a
 
 export default function Packages() {
   return (
-    <SafiSectionChat
+    <SaffiSectionChat
       section="Packages"
-      description="Safi manages your training packages and bundles"
+      description="Saffi manages your training packages and bundles"
       icon={<Package className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}

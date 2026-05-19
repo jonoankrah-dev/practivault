@@ -33,6 +33,10 @@ export type Treatment = {
   price: number;
   description: string | null;
   is_active: boolean;
+  is_endopulse: boolean;
+  service_brand: string | null;
+  service_line: "general" | "endopulse_treatment" | "endopulse_machine" | "endopulse_training";
+  brand_compliance_required: boolean;
   created_at: string;
 };
 
@@ -209,6 +213,10 @@ export const treatmentInsertSchema = z.object({
   price: z.number().nonnegative(),
   description: z.string().nullable().optional(),
   is_active: z.boolean().optional(),
+  is_endopulse: z.boolean().optional(),
+  service_brand: z.string().nullable().optional(),
+  service_line: z.enum(["general", "endopulse_treatment", "endopulse_machine", "endopulse_training"]).optional(),
+  brand_compliance_required: z.boolean().optional(),
 });
 
 export const bookingInsertSchema = z.object({

@@ -14,7 +14,7 @@
  *     rule: spoken Saffi must NEVER send WhatsApps, post social, send quotes,
  *     send invoices, or approve/reject queued actions. She prepares only.
  *   - No tools are exposed on this realtime session — tool use stays on the
- *     existing /api/safi/chat text endpoint, where approvals are enforced.
+ *     existing /api/saffi/chat text endpoint, where approvals are enforced.
  */
 
 import type { Server as HttpServer, IncomingMessage } from "node:http";
@@ -27,7 +27,7 @@ import {
   executeReadOnlyTool,
   isReadOnlyTool,
   getBusinessSnapshot,
-} from "../lib/safiReadOnlyTools";
+} from "../lib/saffiReadOnlyTools";
 
 // Vapi legacy code removed. Now using xAI Grok realtime only.
 //
