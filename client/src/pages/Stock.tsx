@@ -1,8 +1,8 @@
 /**
- * Stock — fully managed by Safi AI
+ * Stock — fully managed by Saffi AI
  */
 import { Package } from "lucide-react";
-import SafiSectionChat from "@/components/SafiSectionChat";
+import SaffiSectionChat from "@/components/SaffiSectionChat";
 
 const SUGGESTIONS = [
   "What's my current stock level?",
@@ -13,7 +13,7 @@ const SUGGESTIONS = [
   "What stock items do I have from my supplier?",
 ];
 
-const SECTION_CONTEXT = `You are Safi, the practice manager for this business. You are in the Stock section.
+const SECTION_CONTEXT = `You are Saffi, the practice manager for this business. You are in the Stock section.
 
 You have full access to stock and inventory data. When this section opens — or when asked anything stock-related — you MUST immediately call get_stock_analysis without waiting to be asked. Run it right away and report what you find.
 
@@ -39,9 +39,9 @@ Only proceed after explicit yes. Be proactive — don't wait to be asked what's 
 
 export default function Stock() {
   return (
-    <SafiSectionChat
+    <SaffiSectionChat
       section="Stock"
-      description="Safi manages your inventory and stock levels"
+      description="Saffi manages your inventory and stock levels"
       icon={<Package className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}

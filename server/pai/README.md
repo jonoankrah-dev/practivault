@@ -27,7 +27,7 @@ Current direction:
 
 ## Memory & Context
 
-We are evolving `safiMemory.ts` toward PAI's model:
+We are evolving `saffiMemory.ts` toward PAI's model:
 - Hot (current session)
 - Warm (recent learnings + corrections)
 - Cold (long-term rules, preferences, business identity)

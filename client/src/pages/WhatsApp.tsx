@@ -1,9 +1,9 @@
 /**
- * WhatsApp Inbox — split-panel: thread list left, conversation right, Safi chat far right
+ * WhatsApp Inbox — split-panel: thread list left, conversation right, Saffi chat far right
  */
 import { useState, useEffect, useRef } from "react";
 import { MessageCircle, Send, Loader2, ChevronLeft, CheckCheck, Clock, Wifi, WifiOff } from "lucide-react";
-import SafiSectionChat from "@/components/SafiSectionChat";
+import SaffiSectionChat from "@/components/SaffiSectionChat";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -43,7 +43,7 @@ const SUGGESTIONS = [
   "Write a follow-up for a client who hasn't booked in 3 months",
 ];
 
-const SECTION_CONTEXT = `You are Safi, the practice manager for this business. You are in the WhatsApp Inbox section.
+const SECTION_CONTEXT = `You are Saffi, the practice manager for this business. You are in the WhatsApp Inbox section.
 
 When this section opens, immediately call get_whatsapp_threads and show a summary — how many conversations, how many unread, and who has messaged recently.
 
@@ -184,7 +184,7 @@ export default function WhatsApp() {
         {/* Setup notice */}
         <div className="mx-3 mt-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
           <p className="font-medium mb-0.5">Connect your number</p>
-          <p className="text-amber-700">Add your Meta API credentials to Railway to go live. Ask Safi for the setup guide.</p>
+          <p className="text-amber-700">Add your Meta API credentials to Railway to go live. Ask Saffi for the setup guide.</p>
         </div>
 
         {/* Thread list */}
@@ -248,7 +248,7 @@ export default function WhatsApp() {
           <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
             <MessageCircle className="h-12 w-12 text-muted-foreground/20 mb-3" />
             <p className="text-sm font-medium text-muted-foreground">Select a conversation</p>
-            <p className="text-xs text-muted-foreground/70 mt-1">Choose a contact from the left, or ask Safi to draft a message.</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">Choose a contact from the left, or ask Saffi to draft a message.</p>
           </div>
         ) : (
           <>
@@ -326,11 +326,11 @@ export default function WhatsApp() {
         )}
       </div>
 
-      {/* RIGHT PANEL — Safi */}
+      {/* RIGHT PANEL — Saffi */}
       <div className="w-[340px] shrink-0">
-        <SafiSectionChat
+        <SaffiSectionChat
           section="WhatsApp"
-          description="Safi reads your messages and drafts replies"
+          description="Saffi reads your messages and drafts replies"
           icon={<MessageCircle className="h-4 w-4 text-[#25D366]" />}
           suggestions={SUGGESTIONS}
           sectionContext={SECTION_CONTEXT}

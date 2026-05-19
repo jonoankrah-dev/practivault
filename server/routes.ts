@@ -2,14 +2,14 @@ import { registerPublicConfigRoute } from "./routes/publicConfig";
 import { MILLIE_SYSTEM_PROMPT } from "./lib/milliePrompt";
 import { DEVELOPER_TOOLS, executeDeveloperTool } from "./lib/developerAgent";
 import { shouldEscalateToHermes, sendToHermes, executeHermesProposal } from "./hermes";
-import { recordActivityEvent, queueAgentAction } from "./lib/safiMemory";
-import { registerSafiMemoryRoutes } from "./routes/safiMemory";
+import { recordActivityEvent, queueAgentAction } from "./lib/saffiMemory";
+import { registerSaffiMemoryRoutes } from "./routes/saffiMemory";
 import { registerSaffiRealtime, saffiRealtimeTokenHandler } from "./realtime/saffiRealtime";
 import {
   SAFFI_READ_ONLY_TOOL_DEFS,
   executeReadOnlyTool,
   getBusinessSnapshot,
-} from "./lib/safiReadOnlyTools";
+} from "./lib/saffiReadOnlyTools";
 import {
   classifyInbound,
   redactSystemPrompt,
@@ -248,7 +248,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   return requireAuth(req as AuthedRequest, res, next);
 });
 
-  registerSafiMemoryRoutes(app);
+  registerSaffiMemoryRoutes(app);
 
   // Saffi realtime: auth-gated token endpoint + WSS bridge to xAI.
   app.post("/api/saffi/realtime/token", requireAuth, (req, res) => saffiRealtimeTokenHandler(req as any, res));
@@ -419,7 +419,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         waAllTime,
         socialDraftsThisMonth,
         socialDraftsAllTime,
-        safiEventsThisMonth,
+        saffiEventsThisMonth,
       ] = await Promise.all([
         // Completed jobs this month + all time
         db.from("bookings").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "completed").gte("created_at", monthStart),
@@ -437,8 +437,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         db.from("activity_events").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("source", "social_studio").gte("created_at", monthStart),
         db.from("activity_events").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("source", "social_studio"),
 
-        // General Safi / AI assistant events (broader)
-        db.from("activity_events").select("id", { count: "exact", head: true }).eq("user_id", userId).in("source", ["safi", "voice", "ai-front-desk"]).gte("created_at", monthStart),
+        // General Saffi / AI assistant events (broader)
+        db.from("activity_events").select("id", { count: "exact", head: true }).eq("user_id", userId).in("source", ["saffi", "voice", "ai-front-desk"]).gte("created_at", monthStart),
       ]);
 
       const voiceSecsThisMonth = (callsThisMonth.data || []).reduce((sum: number, c: any) => sum + (Number(c.duration_secs) || 0), 0);
@@ -456,7 +456,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const socialCountMonth = socialDraftsThisMonth.count || 0;
       const socialCountAll = socialDraftsAllTime.count || 0;
 
-      const aiInteractionsMonth = (safiEventsThisMonth.count || 0) + socialCountMonth;
+      const aiInteractionsMonth = (saffiEventsThisMonth.count || 0) + socialCountMonth;
 
       // Rough "what you'd pay elsewhere" estimate (per-user + add-on style thinking)
       // Example: 3 users + AI receptionist add-on + per-job overages
@@ -1343,7 +1343,7 @@ Respond ONLY with a JSON object (no markdown, no code blocks):
             keyword_cta: generatedPost.keyword_cta,
             hashtags: generatedPost.hashtags,
           },
-          createdBy: "safi",
+          createdBy: "saffi",
         },
         req.db!,
       );
@@ -1359,7 +1359,7 @@ Respond ONLY with a JSON object (no markdown, no code blocks):
           payload: generatedPost,
           status: "pending_approval",
           approvalRequired: true,
-          createdBy: "safi",
+          createdBy: "saffi",
         },
         req.db!,
       );
@@ -1878,7 +1878,7 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
       const { data: urlData } = req.db!.storage.from("manuals").getPublicUrl(fileName);
       const fileUrl = urlData.publicUrl;
 
-      // Extract text for Safi (with hard timeout so a bad PDF never hangs the route)
+      // Extract text for Saffi (with hard timeout so a bad PDF never hangs the route)
       let extractedText: string | null = null;
       try {
         const mime = file.mimetype || "";
@@ -1899,7 +1899,7 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
           extractedText = extractedText.slice(0, 60000) + "\n[...truncated]";
         }
       } catch {
-        // Text extraction failed or timed out — file is still stored, Safi just won't have text
+        // Text extraction failed or timed out — file is still stored, Saffi just won't have text
         extractedText = null;
       }
 
@@ -2692,11 +2692,11 @@ Rules:
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SAFI — Fully agentic text AI
+  // SAFFI — Fully agentic text AI
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // ── Safi tool definitions (sent to xAI in session config) ─────────────────
-  const SAFI_TOOLS = [
+  // ── Saffi tool definitions (sent to xAI in session config) ─────────────────
+  const SAFFI_TOOLS = [
     {
       type: "function",
       name: "get_appointments",
@@ -3187,7 +3187,7 @@ Rules:
     {
       type: "function",
       name: "create_social_draft",
-      description: "Create a Social Studio draft only after the user has approved the exact draft text. This saves a draft, records Safi Memory, and queues the post for approval. It never posts or publishes.",
+      description: "Create a Social Studio draft only after the user has approved the exact draft text. This saves a draft, records Saffi Memory, and queues the post for approval. It never posts or publishes.",
       parameters: {
         type: "object",
         properties: {
@@ -3230,8 +3230,8 @@ Rules:
     },
   ];
 
-  // ── Safi tool executor — runs when xAI calls a function mid-conversation ───
-  async function executeSafiTool(toolName: string, args: any, db: any): Promise<string> {
+  // ── Saffi tool executor — runs when xAI calls a function mid-conversation ───
+  async function executeSaffiTool(toolName: string, args: any, db: any): Promise<string> {
     const userId = db._userId;
     try {
       switch (toolName) {
@@ -3524,7 +3524,7 @@ Rules:
 
           const resend = new Resend(resendKey);
           const { error: emailErr } = await resend.emails.send({
-            from: "Safi <noreply@practivault.com>",
+            from: "Saffi <noreply@practivault.com>",
             to: cl.email,
             subject: `Your ${formLabel} form from ${bizName}`,
             html: `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
@@ -3959,7 +3959,7 @@ Rules:
             hashtags: args.hashtags ?? null,
             keyword_cta: args.keyword_cta ?? null,
             status: "draft",
-            notes: args.notes ?? "Created by Safi after user approval.",
+            notes: args.notes ?? "Created by Saffi after user approval.",
           }).select("id, caption, platform, post_type, status").single();
           if (error) return `Failed to save social draft: ${error.message}`;
 
@@ -3968,7 +3968,7 @@ Rules:
               userId,
               source: "social_studio",
               platform,
-              feature: "safi_chat",
+              feature: "saffi_chat",
               eventType: "draft_saved",
               entityType: "social_post",
               entityId: data.id,
@@ -3979,7 +3979,7 @@ Rules:
                 post_type: postType,
                 status: data.status,
               },
-              createdBy: "safi",
+              createdBy: "saffi",
             },
             db,
           );
@@ -4000,12 +4000,12 @@ Rules:
               },
               status: "pending_approval",
               approvalRequired: true,
-              createdBy: "safi",
+              createdBy: "saffi",
             },
             db,
           );
 
-          return `Social draft saved for ${platform}. It is still a draft, and posting is queued in Safi Memory for approval.`;
+          return `Social draft saved for ${platform}. It is still a draft, and posting is queued in Saffi Memory for approval.`;
         }
         case "get_whatsapp_threads": {
           const { data: msgs } = await db.from("whatsapp_messages").select("*").eq("user_id", userId).order("sent_at", { ascending: false }).limit(200);
@@ -4058,8 +4058,8 @@ Rules:
     }
   }
 
-  // ── /api/safi/chat — agentic text chat with full tool loop ─────────────────
-  app.post("/api/safi/chat", requireAuth, async (req: AuthedRequest, res: Response) => {
+  // ── /api/saffi/chat — agentic text chat with full tool loop ─────────────────
+  app.post("/api/saffi/chat", requireAuth, async (req: AuthedRequest, res: Response) => {
     const { message, history = [], sectionContext = "" } = req.body as { message: string; history?: {role:string;content:string}[]; sectionContext?: string };
     if (!message?.trim()) return res.status(400).json({ message: "No message" });
 
@@ -4161,7 +4161,7 @@ When you retrieve data, summarise it clearly and add a brief observation where u
     // Convert OpenAI-style tools for xAI, plus the new shared read-only tools.
     // Longer term: these will be exposed as proper PAI Skills (see server/pai/skills)
     const allToolDefs = [
-      ...SAFI_TOOLS,
+      ...SAFFI_TOOLS,
       ...SAFFI_READ_ONLY_TOOL_DEFS,
     ];
     const xaiTools = allToolDefs.map(t => ({
@@ -4179,13 +4179,13 @@ When you retrieve data, summarise it clearly and add a brief observation where u
       { role: "user", content: message },
     ];
 
-    const trivialSafiReply = (s: string) => {
+    const trivialSaffiReply = (s: string) => {
       const t = (s ?? "").trim();
       return !t || /^(ok\.?|okay\.?|done\.?|sure\.?|got it\.?|noted\.?)$/i.test(t);
     };
 
     /** When the model returns only tool calls then "ok" / empty text, turn tool output into a user-visible answer. */
-    async function synthesizeSafiMarkdownReply(msgs: any[]): Promise<string> {
+    async function synthesizeSaffiMarkdownReply(msgs: any[]): Promise<string> {
       try {
         const synthRes = await fetch("https://api.x.ai/v1/chat/completions", {
           method: "POST",
@@ -4246,10 +4246,10 @@ When you retrieve data, summarise it clearly and add a brief observation where u
       // No tool calls — we have the final answer (or need one synthesis pass after tools)
       if (!assistantMsg.tool_calls?.length) {
         const reply = (assistantMsg.content ?? "").trim();
-        if (!trivialSafiReply(reply)) {
+        if (!trivialSaffiReply(reply)) {
           return res.json({ reply, messages });
         }
-        const synthesized = await synthesizeSafiMarkdownReply(messages);
+        const synthesized = await synthesizeSaffiMarkdownReply(messages);
         if (synthesized) {
           return res.json({ reply: synthesized, messages });
         }
@@ -4281,7 +4281,7 @@ When you retrieve data, summarise it clearly and add a brief observation where u
 
           // Existing CRUD/agentic tools
           const dbWithUser = Object.assign(Object.create(Object.getPrototypeOf(db)), db, { _userId: userId });
-          const result = await executeSafiTool(toolName, args, dbWithUser);
+          const result = await executeSaffiTool(toolName, args, dbWithUser);
           return { tool_call_id: tc.id, role: "tool" as const, content: result };
         })
       );
@@ -4295,13 +4295,13 @@ When you retrieve data, summarise it clearly and add a brief observation where u
       const m = messages[i];
       if (m.role === "assistant" && typeof m.content === "string") {
         const t = m.content.trim();
-        if (t && !trivialSafiReply(t)) {
+        if (t && !trivialSaffiReply(t)) {
           fallback = t;
           break;
         }
       }
     }
-    if (!fallback) fallback = await synthesizeSafiMarkdownReply(messages);
+    if (!fallback) fallback = await synthesizeSaffiMarkdownReply(messages);
     if (!fallback) {
       fallback =
         "I couldn't finish that reply in time. Please try again with a shorter question, or split it into two steps (e.g. first **list clients**, then **add one**).";
@@ -4613,171 +4613,6 @@ app.post("/api/public/millie/chat", async (req, res) => {
   }
 });
 
-// ─── Saphie AI — chat + voice transcription + manuals ──────────────────────
-
-  const ADMIN_USER_ID = "d76f928a-3d62-4c7c-918b-e66e5760d816";
-
-  const saphieUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
-
-  // GET messages
-  app.get("/api/saphie/messages", requireAuth, async (req: AuthedRequest, res) => {
-    const { data, error } = await req.db!
-      .from("buddy_messages")
-      .select("*")
-      .eq("user_id", req.user!.id)
-      .order("created_at", { ascending: true });
-    if (error) return res.status(500).json({ message: error.message });
-    res.json(data ?? []);
-  });
-
-  // DELETE messages
-  app.delete("/api/saphie/messages", requireAuth, async (req: AuthedRequest, res) => {
-    const { error } = await req.db!
-      .from("buddy_messages")
-      .delete()
-      .eq("user_id", req.user!.id);
-    if (error) return res.status(500).json({ message: error.message });
-    res.json({ ok: true });
-  });
-
-  // POST chat
-  app.post("/api/saphie/chat", requireAuth, async (req: AuthedRequest, res) => {
-    const { content } = req.body;
-    if (!content?.trim()) return res.status(400).json({ message: "No content" });
-
-    // Fetch all data sources in parallel
-    const [userRes, historyRes, manualsRes, bizRes] = await Promise.all([
-      req.db!.from("users").select("name, business_name, industry").eq("id", req.user!.id).single(),
-      req.db!.from("buddy_messages").select("role, content").eq("user_id", req.user!.id).order("created_at", { ascending: true }).limit(10),
-      req.db!.from("manuals").select("name, extracted_text").eq("user_id", req.user!.id).not("extracted_text", "is", null).order("created_at", { ascending: true }),
-      req.db!.from("business_info").select("*").eq("user_id", req.user!.id).single(),
-    ]);
-    const userData = userRes.data;
-    const history = historyRes.data;
-    const manuals = manualsRes.data;
-    const bizInfo = bizRes.data;
-
-    // Industry-agnostic: do not stuff manual contents into the prompt; just
-    // tell Saffi how many manuals are available so she can call search_manuals
-    // when the user asks something specific.
-    const manualContext = (manuals && manuals.length > 0)
-      ? `\n\nManuals available for this business: ${manuals.length}. Answer from the business profile when you can; do not invent specifics if they aren't there.`
-      : "";
-
-    // Save user message
-    await req.db!.from("buddy_messages").insert({
-      user_id: req.user!.id, role: "user", content: content.trim(),
-    });
-
-    // Build business info context for Saphie
-    let bizContext = "";
-    if (bizInfo) {
-      if (bizInfo.tagline) bizContext += `\nTagline: ${bizInfo.tagline}`;
-      if (bizInfo.about) bizContext += `\nAbout: ${bizInfo.about}`;
-      if (bizInfo.website_url) bizContext += `\nWebsite: ${bizInfo.website_url}`;
-      if (bizInfo.instagram_url) bizContext += `\nInstagram: ${bizInfo.instagram_url}`;
-      if (bizInfo.tiktok_url) bizContext += `\nTikTok: ${bizInfo.tiktok_url}`;
-      if (bizInfo.products && (bizInfo.products as any[]).length > 0) {
-        const productLines = (bizInfo.products as any[]).map((p: any) =>
-          `- ${p.name}${p.price ? ` (${p.price})` : ""}${p.category ? ` [${p.category}]` : ""}: ${p.description || ""}`
-        ).join("\n");
-        bizContext += `\n\nProducts & Services:\n${productLines}`;
-      }
-      if (bizInfo.faqs && (bizInfo.faqs as any[]).length > 0) {
-        const faqLines = (bizInfo.faqs as any[]).map((f: any) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n");
-        bizContext += `\n\nFrequently Asked Questions:\n${faqLines}`;
-      }
-    }
-
-    // ── Saffi must remain 100% industry-agnostic. Never hardcode any
-    //    specific brand or product. Business-specific facts come from
-    //    business_info / manuals only. ────────────────────────────────────
-    const systemPrompt = `You are Saffi, the AI assistant for ${userData?.business_name ?? "this business"}.${bizContext}${manualContext}
-
-You are industry-agnostic — the business above could be a salon, a dentist, a fitness studio, a tradesperson, an aesthetics practitioner, a coach, or anything else. Use ONLY the business profile and manuals provided. Do not assume products, prices, policies, or industry-specific facts.
-
-Style: warm, friendly, knowledgeable. Keep replies concise (2-3 short sentences) since they may be spoken aloud. Be helpful, never pushy. If you don't know something specific to this business, say so plainly and offer to get someone from the team to come back to the customer.
-
-When you do know something from the profile, share it confidently with the actual details (names, prices, descriptions) — never be vague.`;
-
-    const grokChatRes = await fetch("https://api.x.ai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.XAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "grok-3-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...(history ?? []).map((m: any) => ({ role: m.role, content: m.content })),
-          { role: "user", content: content.trim() },
-        ],
-        max_tokens: 150,
-        temperature: 0.7,
-      }),
-    });
-
-    if (!grokChatRes.ok) {
-      const err = await grokChatRes.text();
-      return res.status(500).json({ message: "Grok chat error: " + err });
-    }
-
-    const grokChatData = await grokChatRes.json() as any;
-    const reply = grokChatData.choices?.[0]?.message?.content ?? "Sorry, I couldn't get a response.";
-
-    // Save assistant reply in background — don't await, reply to client immediately
-    void Promise.resolve(
-      req.db!.from("buddy_messages").insert({
-        user_id: req.user!.id, role: "assistant", content: reply,
-      }),
-    ).catch(() => {});
-
-    res.json({ reply });
-  });
-
-  // POST transcribe — xAI Grok STT (/v1/stt)
-  app.post("/api/saphie/transcribe", requireAuth, saphieUpload.single("audio"), async (req: AuthedRequest, res) => {
-    if (!req.file) return res.status(400).json({ message: "No audio file" });
-
-    const ext = req.file.mimetype.includes("mp4") ? "mp4"
-      : req.file.mimetype.includes("ogg") ? "ogg" : "webm";
-
-    // Build multipart using native Node — xAI STT needs file last
-    const boundary = `----GrokSTTBoundary${Date.now()}`;
-    const bodyParts: Buffer[] = [];
-    const appendField = (name: string, value: string) => {
-      bodyParts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`));
-    };
-    // xAI requires file to be last field
-    appendField("language", "en");
-    appendField("format", "true");
-    bodyParts.push(Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="audio.${ext}"\r\nContent-Type: ${req.file.mimetype}\r\n\r\n`
-    ));
-    bodyParts.push(req.file.buffer);
-    bodyParts.push(Buffer.from(`\r\n--${boundary}--\r\n`));
-    const bodyBuffer = Buffer.concat(bodyParts);
-
-    const sttRes = await fetch("https://api.x.ai/v1/stt", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.XAI_API_KEY}`,
-        "Content-Type": `multipart/form-data; boundary=${boundary}`,
-        "Content-Length": String(bodyBuffer.length),
-      },
-      body: bodyBuffer,
-    });
-
-    if (!sttRes.ok) {
-      const err = await sttRes.text();
-      return res.status(500).json({ message: "Grok STT error: " + err });
-    }
-
-    const result = await sttRes.json() as any;
-    res.json({ text: result.text ?? "" });
-  });
-
   // POST /api/saffi/voice — Saffi TTS playback via xAI Grok (voice_id 'eve').
   // Playback only. No tool calls, no command execution, no actions. Server-side
   // proxy so XAI_API_KEY is never exposed to the browser. Returns audio/mpeg
@@ -4840,8 +4675,8 @@ When you do know something from the profile, share it confidently with the actua
     }
   });
 
-  // POST /api/saphie/speak — Grok (xAI) TTS → returns WAV audio
-  app.post("/api/saphie/speak", requireAuth, async (req: AuthedRequest, res) => {
+  // POST /api/saffi/speak — Grok (xAI) TTS → returns WAV audio
+  app.post("/api/saffi/speak", requireAuth, async (req: AuthedRequest, res) => {
     const { text } = req.body;
     if (!text?.trim()) return res.status(400).json({ message: "No text" });
 
@@ -4954,8 +4789,8 @@ When you do know something from the profile, share it confidently with the actua
         createdBy: "integration",
       });
 
-      // ── Safi auto-reply ────────────────────────────────────────────────────
-      // Fetch business context for Safi (inc. live website)
+      // ── Saffi auto-reply ────────────────────────────────────────────────────
+      // Fetch business context for Saffi (inc. live website)
       const [bizRes, manualsRes, userRes] = await Promise.all([
         supabase.from("business_info").select("*").eq("user_id", userId).maybeSingle(),
         supabase.from("manuals").select("name, extracted_text").eq("user_id", userId).not("extracted_text", "is", null).order("created_at", { ascending: true }),
@@ -5016,7 +4851,7 @@ When you do know something from the profile, share it confidently with the actua
       }
 
       const businessLabel = userData?.business_name || "the business";
-      let safiSystem = `Your name is Saffi. You work for ${businessLabel} and you are messaging customers on WhatsApp on behalf of the business.${bizContext}${manualContext}${waWebsiteContext}
+      let saffiSystem = `Your name is Saffi. You work for ${businessLabel} and you are messaging customers on WhatsApp on behalf of the business.${bizContext}${manualContext}${waWebsiteContext}
 
 You are a real member of the team as far as the customer is concerned. Never say you are an AI, a bot, an assistant, or an automated service. Never say "AI", "automated", "virtual", or anything that reveals you are not human. If someone asks directly whether you are a bot or AI, deflect warmly: "I'm Saffi, part of the ${businessLabel} team — how can I help you?"
 
@@ -5029,8 +4864,8 @@ If a customer asks about products, services, prices, bookings, or general enquir
 IMPORTANT: Reply only with the message text to send. Do not explain what you are doing.`;
 
       // ── Knowledge-safety: layer 3 (redact source) + layer 4 (instruction)
-      safiSystem = redactSystemPrompt(safiSystem, guard.riskLevel);
-      safiSystem = injectGuardDirective(safiSystem, guard.riskLevel, guard.categories);
+      saffiSystem = redactSystemPrompt(saffiSystem, guard.riskLevel);
+      saffiSystem = injectGuardDirective(saffiSystem, guard.riskLevel, guard.categories);
 
       // ── Layer 5a: hard short-circuit. For prompt-extraction, credential, or
       // private-data probes, never call the LLM at all — send a soft refusal.
@@ -5075,7 +4910,7 @@ IMPORTANT: Reply only with the message text to send. Do not explain what you are
               title: `Saffi declined a restricted request`,
               summary: `from ${from}: ${text.slice(0, 120)}`,
               payload: { categories: guard.categories, probingScore: guard.probingScore, risk: guard.riskLevel },
-              createdBy: "safi",
+              createdBy: "saffi",
             });
           }
         } catch (e: any) {
@@ -5091,7 +4926,7 @@ IMPORTANT: Reply only with the message text to send. Do not explain what you are
           body: JSON.stringify({
             model: "grok-3-mini",
             messages: [
-              { role: "system", content: safiSystem },
+              { role: "system", content: saffiSystem },
               ...conversationHistory.slice(-9), // last 9 + new message = 10
               { role: "user", content: text },
             ],
@@ -5122,7 +4957,7 @@ IMPORTANT: Reply only with the message text to send. Do not explain what you are
                 title: `Saffi reply rewritten by knowledge guard`,
                 summary: `reason=${checked.reason}`,
                 payload: { categories: guard.categories, risk: guard.riskLevel, reason: checked.reason },
-                createdBy: "safi",
+                createdBy: "saffi",
               });
             }
             reply = checked.reply;
@@ -5143,7 +4978,7 @@ IMPORTANT: Reply only with the message text to send. Do not explain what you are
                   body: reply,
                 });
 
-                // Store Safi's outbound reply
+                // Store Saffi's outbound reply
                 const { data: outboundMessage } = await supabase.from("whatsapp_messages").insert({
                   user_id: userId,
                   client_id: clientMatch?.id || null,
@@ -5168,7 +5003,7 @@ IMPORTANT: Reply only with the message text to send. Do not explain what you are
                   title: `WhatsApp sent to ${clientMatch?.name || from}`,
                   summary: reply.slice(0, 200),
                   payload: { to: from, twilio_sid: sent.sid, initiated_by: "saffi" },
-                  createdBy: "safi",
+                  createdBy: "saffi",
                 });
               } catch (sendErr: any) {
                 console.error("Twilio send error:", sendErr.message);
@@ -5198,7 +5033,7 @@ IMPORTANT: Reply only with the message text to send. Do not explain what you are
                 title: `WhatsApp reply drafted for ${clientMatch?.name || from}`,
                 summary: reply.slice(0, 200),
                 payload: { to: from, reason: "pending_twilio_credentials" },
-                createdBy: "safi",
+                createdBy: "saffi",
               });
               void queueAgentAction({
                 userId,
@@ -5213,13 +5048,13 @@ IMPORTANT: Reply only with the message text to send. Do not explain what you are
                 payload: { whatsapp_message_id: draftMessage?.id ?? null },
                 status: "pending_approval",
                 approvalRequired: true,
-                createdBy: "safi",
+                createdBy: "saffi",
               });
             }
           }
         }
       }
-      // ── End Safi auto-reply ────────────────────────────────────────────────
+      // ── End Saffi auto-reply ────────────────────────────────────────────────
 
       // Return empty TwiML — sendStatus(200) sends "OK" as body which Twilio delivers as a message
       res.setHeader("Content-Type", "text/xml");

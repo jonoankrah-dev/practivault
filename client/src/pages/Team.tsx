@@ -1,8 +1,8 @@
 /**
- * Team — fully managed by Safi AI
+ * Team — fully managed by Saffi AI
  */
 import { Users } from "lucide-react";
-import SafiSectionChat from "@/components/SafiSectionChat";
+import SaffiSectionChat from "@/components/SaffiSectionChat";
 
 const SUGGESTIONS = [
   "Show me my full team",
@@ -14,7 +14,7 @@ const SUGGESTIONS = [
   "Do we have good role coverage?",
 ];
 
-const SECTION_CONTEXT = `You are Safi, the practice manager for this business. You are in the Team section.
+const SECTION_CONTEXT = `You are Saffi, the practice manager for this business. You are in the Team section.
 
 You have full access to team data. When this section opens — or when asked anything team-related — you MUST proactively call get_team_analysis straight away without being asked. Don't wait. Don't list options. Just run the analysis and report what you find. Then be ready for follow-ups using the other tools.
 
@@ -51,9 +51,9 @@ Be warm, concise, proactive. Spot problems before they become issues. After ever
 
 export default function Team() {
   return (
-    <SafiSectionChat
+    <SaffiSectionChat
       section="Team"
-      description="Safi manages your team members and invitations"
+      description="Saffi manages your team members and invitations"
       icon={<Users className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}

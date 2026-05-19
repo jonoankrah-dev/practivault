@@ -1,8 +1,8 @@
 /**
- * CPD Log — fully managed by Safi AI
+ * CPD Log — fully managed by Saffi AI
  */
 import { GraduationCap } from "lucide-react";
-import SafiSectionChat from "@/components/SafiSectionChat";
+import SaffiSectionChat from "@/components/SaffiSectionChat";
 
 const SUGGESTIONS = [
   "Show my full CPD log",
@@ -13,7 +13,7 @@ const SUGGESTIONS = [
   "Add a First Aid course — 6 hours, today",
 ];
 
-const SECTION_CONTEXT = `You are Safi, the practice manager for this business. You are in the CPD Log section.
+const SECTION_CONTEXT = `You are Saffi, the practice manager for this business. You are in the CPD Log section.
 
 You have full access to CPD training records. When this section opens — or when asked anything CPD-related — you MUST immediately call get_cpd_analysis without being asked. Run it straight away.
 
@@ -47,9 +47,9 @@ Only log after explicit yes. Be the kind of CPD tracker that actually keeps peop
 
 export default function CpdLog() {
   return (
-    <SafiSectionChat
+    <SaffiSectionChat
       section="CPD Log"
-      description="Safi tracks your CPD hours and training records"
+      description="Saffi tracks your CPD hours and training records"
       icon={<GraduationCap className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}

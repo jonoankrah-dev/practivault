@@ -291,7 +291,7 @@ export default function Saffi({
     setTimeout(scrollToBottom, 50);
 
     try {
-      const res = await fetch("/api/safi/chat", {
+      const res = await fetch("/api/saffi/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -1,8 +1,8 @@
 /**
- * Social Studio — fully managed by Safi AI
+ * Social Studio — fully managed by Saffi AI
  */
 import { Sparkles } from "lucide-react";
-import SafiSectionChat from "@/components/SafiSectionChat";
+import SaffiSectionChat from "@/components/SaffiSectionChat";
 
 const SUGGESTIONS = [
   "Write an Instagram advertising post for the endoPulse machine sale",
@@ -79,9 +79,9 @@ Reel scripts need a strong hook in the first 2 seconds + a Veo 3 video prompt.`;
 
 export default function SocialStudio() {
   return (
-    <SafiSectionChat
+    <SaffiSectionChat
       section="Social Studio"
-      description="Safi creates advertising posts, reels, and captions using real endoPulse™ data"
+      description="Saffi creates advertising posts, reels, and captions using real endoPulse™ data"
       icon={<Sparkles className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}

@@ -1,12 +1,12 @@
 /**
- * Manuals — PDF upload panel + Safi AI chat
+ * Manuals — PDF upload panel + Saffi AI chat
  */
 import { useState, useRef } from "react";
 import {
   BookOpen, Upload, X, FileText, Loader2, Trash2,
   ExternalLink, ChevronDown, ChevronUp, AlertTriangle, RefreshCw,
 } from "lucide-react";
-import SafiSectionChat from "@/components/SafiSectionChat";
+import SaffiSectionChat from "@/components/SaffiSectionChat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,7 +39,7 @@ const SUGGESTIONS = [
   "Answer a client question from my manuals",
 ];
 
-const SECTION_CONTEXT = `You are Safi, the practice manager for this business. You are in the Manuals section.
+const SECTION_CONTEXT = `You are Saffi, the practice manager for this business. You are in the Manuals section.
 
 When this section opens, immediately call get_manuals and show a clear summary grouped by category. Don't wait to be asked.
 
@@ -136,7 +136,7 @@ export default function Manuals() {
 
       toast({
         title: "Manual uploaded",
-        description: `"${name}" is now in your library and Safi can read it.`,
+        description: `"${name}" is now in your library and Saffi can read it.`,
       });
       setName(""); setDescription(""); setCategory("other"); setFile(null);
       if (fileRef.current) fileRef.current.value = "";
@@ -453,11 +453,11 @@ export default function Manuals() {
         </div>
       </div>
 
-      {/* RIGHT — Safi chat */}
+      {/* RIGHT — Saffi chat */}
       <div className="flex-1 min-w-0">
-        <SafiSectionChat
+        <SaffiSectionChat
           section="Manuals"
-          description="Safi reads and answers questions from your documents"
+          description="Saffi reads and answers questions from your documents"
           icon={<BookOpen className="h-4 w-4 text-[#E83A8E]" />}
           suggestions={SUGGESTIONS}
           sectionContext={SECTION_CONTEXT}

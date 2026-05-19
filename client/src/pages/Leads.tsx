@@ -1,8 +1,8 @@
 /**
- * Leads — fully managed by Safi AI
+ * Leads — fully managed by Saffi AI
  */
 import { UserPlus } from "lucide-react";
-import SafiSectionChat from "@/components/SafiSectionChat";
+import SaffiSectionChat from "@/components/SaffiSectionChat";
 
 const SUGGESTIONS = [
   "Show me all new leads",
@@ -42,9 +42,9 @@ Only call the create_lead or update_lead tool after they confirm.`;
 
 export default function Leads() {
   return (
-    <SafiSectionChat
+    <SaffiSectionChat
       section="Leads"
-      description="Safi tracks and manages all your leads and enquiries"
+      description="Saffi tracks and manages all your leads and enquiries"
       icon={<UserPlus className="h-4 w-4 text-[#E83A8E]" />}
       suggestions={SUGGESTIONS}
       sectionContext={SECTION_CONTEXT}

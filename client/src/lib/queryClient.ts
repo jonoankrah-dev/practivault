@@ -56,7 +56,7 @@ async function authedJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await res.json()) as T;
 }
 
-export const safiMemoryApi = {
+export const saffiMemoryApi = {
   recentEvents: (limit = 50) =>
     authedJson<{ events: any[] }>(`/api/activity-events?limit=${limit}`),
   pendingActions: () =>

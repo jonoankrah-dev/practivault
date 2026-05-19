@@ -1,9 +1,9 @@
 /**
- * Before & After — photo upload form + Safi AI chat
+ * Before & After — photo upload form + Saffi AI chat
  */
 import { useState, useRef } from "react";
 import { Camera, Upload, X, Loader2, Trash2, ChevronDown, ChevronUp, ImageIcon, AlertTriangle } from "lucide-react";
-import SafiSectionChat from "@/components/SafiSectionChat";
+import SaffiSectionChat from "@/components/SaffiSectionChat";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -36,7 +36,7 @@ const SUGGESTIONS = [
   "Show all endoPulse treatment photos",
 ];
 
-const SECTION_CONTEXT = `You are Safi, the practice manager for this business. You are in the Before & After section.
+const SECTION_CONTEXT = `You are Saffi, the practice manager for this business. You are in the Before & After section.
 
 When this section opens, immediately call get_before_after_photos and show a summary — how many records, which clients, recent activity. Don't wait to be asked.
 
@@ -337,11 +337,11 @@ export default function Photos() {
         </div>
       </div>
 
-      {/* RIGHT — Safi chat */}
+      {/* RIGHT — Saffi chat */}
       <div className="flex-1 min-w-0">
-        <SafiSectionChat
+        <SaffiSectionChat
           section="Before & After"
-          description="Safi manages and analyses your treatment photo records"
+          description="Saffi manages and analyses your treatment photo records"
           icon={<Camera className="h-4 w-4 text-[#E83A8E]" />}
           suggestions={SUGGESTIONS}
           sectionContext={SECTION_CONTEXT}
