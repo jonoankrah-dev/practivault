@@ -11,7 +11,7 @@ const SUPABASE_URL =
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SERVICE_ROLE_KEY) {
-  console.error("Set SUPABASE_SERVICE_ROLE_KEY before running seed-demo.mjs");
+  console.error("Set SUPABASE_SERVICE_ROLE_KEY before running: node seed-demo.mjs");
   process.exit(1);
 }
 

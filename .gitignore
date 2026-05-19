@@ -11,3 +11,7 @@ xai-api-key.txt
 
 # Build output
 dist/
+
+# Legacy local SQLite (removed; app uses Supabase)
+data.db
+data.db-*

@@ -26,9 +26,9 @@ PractiVault is a full-featured SaaS platform that helps businesses manage leads,
 ## 📁 Project Structure
 
 - `client/` — React frontend
-- `server/` — Node.js backend
-- `shared/` — Shared types and utilities
-- `supabase/` — Database migrations
+- `server/` — Node.js backend (`routes.ts` holds most HTTP APIs; `server/routes/` has small route modules only)
+- `shared/` — Shared Zod schemas and TypeScript types
+- `supabase/migrations/` — Postgres migrations (source of truth for schema)
 
 ## 🚀 Getting Started
 
