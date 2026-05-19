@@ -8,6 +8,7 @@ import { Logo } from "@/components/Logo";
 import ShellFooter from "@/components/ShellFooter";
 import { cn } from "@/lib/utils";
 import DeveloperAgentChat from "@/components/DeveloperAgentChat";
+import { isWhatsAppEnabled } from "@/lib/features";
 
 function useSidebarCounts() {
   const { data: leads } = useQuery<any[]>({ queryKey: ["/api/leads"], staleTime: 60_000 });

@@ -4,6 +4,7 @@
  * This is the single source of truth for all industry personalisation.
  */
 
+import { isWhatsAppEnabled } from "./features";
 import {
   LayoutDashboard, CalendarDays, Users, Sparkles, FileText,
   ShieldCheck, Settings, MessageSquare, Camera, Phone, BookOpen,
