@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
-import { setAuthToken, queryClient } from "@/lib/queryClient";
+import { setAuthToken, setOnUnauthorized, queryClient } from "@/lib/queryClient";
 
 type AuthContextValue = {
   session: Session | null;
@@ -20,19 +20,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Read session on mount
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setAuthToken(data.session?.access_token ?? null);
-      setLoading(false);
+    setOnUnauthorized(() => {
+      void supabase.auth.signOut();
     });
+    return () => setOnUnauthorized(null);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function initSession() {
+      const { data: sessionData } = await supabase.auth.getSession();
+      let active = sessionData.session;
+      if (active) {
+        const { data: userData, error } = await supabase.auth.getUser();
+        if (error || !userData.user) {
+          await supabase.auth.signOut();
+          active = null;
+        }
+      }
+      if (cancelled) return;
+      setSession(active);
+      setAuthToken(active?.access_token ?? null);
+      setLoading(false);
+    }
+
+    void initSession();
+
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       setAuthToken(newSession?.access_token ?? null);
-      // Invalidate queries when auth changes
       queryClient.invalidateQueries();
     });
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   async function signIn(email: string, password: string) {

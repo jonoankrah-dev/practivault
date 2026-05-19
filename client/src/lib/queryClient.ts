@@ -5,15 +5,26 @@ const API_BASE = "";
 
 // Global auth token holder — updated by AuthContext
 let authToken: string | null = null;
+let onUnauthorized: (() => void) | null = null;
+
 export function setAuthToken(token: string | null) {
   authToken = token;
 }
 export function getAuthToken() {
   return authToken;
 }
+export function setOnUnauthorized(handler: (() => void) | null) {
+  onUnauthorized = handler;
+}
+
+function handleUnauthorized() {
+  authToken = null;
+  onUnauthorized?.();
+}
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
+    if (res.status === 401) handleUnauthorized();
     let text = "";
     try {
       text = (await res.text()) || res.statusText;
@@ -27,7 +38,6 @@ async function throwIfResNotOk(res: Response) {
 function authHeaders(hasBody: boolean): HeadersInit {
   const h: Record<string, string> = {};
   if (hasBody) h["Content-Type"] = "application/json";
-  // Use module-level authToken (set by AuthContext or DemoApp via setAuthToken)
   if (authToken) h["Authorization"] = `Bearer ${authToken}`;
   return h;
 }
@@ -56,7 +66,7 @@ async function authedJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await res.json()) as T;
 }
 
-export const saffiMemoryApi = {
+export const safiMemoryApi = {
   recentEvents: (limit = 50) =>
     authedJson<{ events: any[] }>(`/api/activity-events?limit=${limit}`),
   pendingActions: () =>
@@ -79,13 +89,19 @@ export const saffiMemoryApi = {
     }),
 };
 
+/** Alias for Saffi-branded pages */
+export const saffiMemoryApi = safiMemoryApi;
+
 type UnauthorizedBehavior = "returnNull" | "throw";
 export const getQueryFn: <T>(options: { on401: UnauthorizedBehavior }) => QueryFunction<T> =
   ({ on401 }) =>
   async ({ queryKey }) => {
     const url = queryKey.join("/") as string;
     const res = await fetch(`${API_BASE}${url}`, { headers: authHeaders(false) });
-    if (on401 === "returnNull" && res.status === 401) return null as any;
+    if (res.status === 401) {
+      handleUnauthorized();
+      if (on401 === "returnNull") return null as any;
+    }
     await throwIfResNotOk(res);
     return await res.json();
   };
