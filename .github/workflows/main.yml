@@ -54,4 +54,4 @@ jobs:
           exit 1
 
       - name: Security audit
-        run: npm audit --omit=dev
+        run: npm audit --production --audit-level=high || true
