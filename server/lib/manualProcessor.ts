@@ -295,10 +295,28 @@ export class ManualProcessor {
       embedding: (chunk as any).embedding || null,
     }));
 
-    // Delete old chunks first (for re-processing)
-    await this.db.from("manual_chunks").delete().eq("manual_id", manualId);
+    const { data: insertedRows, error: insertError } = await this.db
+      .from("manual_chunks")
+      .insert(rows)
+      .select("id");
+    if (insertError) throw insertError;
 
-    const { error } = await this.db.from("manual_chunks").insert(rows);
-    if (error) throw error;
+    const insertedIds = (insertedRows || [])
+      .map((row: any) => row.id)
+      .filter(Boolean);
+    if (insertedIds.length !== rows.length) {
+      throw new Error("Inserted manual chunks could not be confirmed");
+    }
+
+    // Only remove the previous index after replacement chunks are safely stored.
+    const { error: deleteError } = await this.db
+      .from("manual_chunks")
+      .delete()
+      .eq("manual_id", manualId)
+      .eq("user_id", userId)
+      .not("id", "in", `(${insertedIds.join(",")})`);
+    if (deleteError) {
+      console.warn("[ManualProcessor] Failed to clean up old manual chunks:", deleteError.message);
+    }
   }
 }

@@ -1,6 +1,6 @@
 import { registerPublicConfigRoute } from "./routes/publicConfig";
 import { MILLIE_SYSTEM_PROMPT } from "./lib/milliePrompt";
-import { DEVELOPER_TOOLS, executeDeveloperTool } from "./lib/developerAgent";
+import { DEVELOPER_TOOLS, executeDeveloperTool, isDeveloperAgentAuthorized } from "./lib/developerAgent";
 import { shouldEscalateToHermes, sendToHermes, executeHermesProposal } from "./hermes";
 import { recordActivityEvent, queueAgentAction } from "./lib/safiMemory";
 import { registerSafiMemoryRoutes } from "./routes/safiMemory";
@@ -4344,6 +4344,12 @@ When you retrieve data, summarise it clearly and add a brief observation where u
 app.post("/api/developer-agent/chat", requireAuth, async (req: AuthedRequest, res) => {
   const { messages, sessionId } = req.body;
   const userId = req.user!.id;
+
+  if (!isDeveloperAgentAuthorized(req.user!)) {
+    return res.status(403).json({
+      message: "Developer Agent access is restricted to explicitly allowed operators.",
+    });
+  }
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ message: "messages array is required" });

@@ -5,9 +5,41 @@ import path from "node:path";
 // Allowed root for safety (only within the project)
 const PROJECT_ROOT = process.cwd();
 
+type DeveloperAgentUser = {
+  id: string;
+  email: string | null;
+};
+
+function parseAllowlist(value: string | undefined): Set<string> {
+  return new Set(
+    (value || "")
+      .split(",")
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean)
+  );
+}
+
+export function isDeveloperAgentAuthorized(
+  user: DeveloperAgentUser,
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  // Default-deny: this route can read and write project files, so access must
+  // be granted explicitly by deployment configuration.
+  const allowedUserIds = parseAllowlist(env.DEVELOPER_AGENT_ALLOWED_USER_IDS);
+  const allowedEmails = parseAllowlist(env.DEVELOPER_AGENT_ALLOWED_EMAILS);
+  const email = user.email?.toLowerCase() || "";
+
+  return allowedUserIds.has(user.id.toLowerCase()) || (!!email && allowedEmails.has(email));
+}
+
 function resolveSafePath(relativePath: string): string {
   const fullPath = path.resolve(PROJECT_ROOT, relativePath);
-  if (!fullPath.startsWith(PROJECT_ROOT)) {
+  const relativeToRoot = path.relative(PROJECT_ROOT, fullPath);
+
+  if (
+    relativeToRoot.startsWith("..") ||
+    path.isAbsolute(relativeToRoot)
+  ) {
     throw new Error("Access outside project root is not allowed");
   }
   return fullPath;

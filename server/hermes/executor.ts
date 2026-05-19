@@ -99,10 +99,15 @@ async function executeSingleAction(
 async function executeCompleteTreatment(payload: any, context: ExecutionContext): Promise<boolean> {
   const { db, userId } = context;
   let targetBookingId = context.bookingId || payload.bookingId;
+  const requestedClientName =
+    typeof payload.clientName === "string" ? payload.clientName.trim() : "";
 
   // === Smart Booking Resolution (Improvement #2) ===
   if (!targetBookingId) {
-    targetBookingId = await resolveMostRelevantBooking(db, userId, payload.clientName);
+    targetBookingId = await resolveMostRelevantBooking(db, userId, requestedClientName || null);
+    if (!targetBookingId && requestedClientName) {
+      throw new Error(`Could not uniquely match an open booking for ${requestedClientName}`);
+    }
   }
 
   if (!targetBookingId) {
@@ -141,8 +146,8 @@ async function executeCompleteTreatment(payload: any, context: ExecutionContext)
 
 /**
  * Smart resolver: finds the most relevant pending booking
- * - Matches by client name if provided (fuzzy)
- * - Falls back to most recent incomplete booking
+ * - Matches by client name if provided (fuzzy, but only when unique)
+ * - Falls back to most recent incomplete booking only when no client name was supplied
  * - Handles cases where client name is partial
  */
 async function resolveMostRelevantBooking(
@@ -163,22 +168,24 @@ async function resolveMostRelevantBooking(
   // Try to match client name
   if (clientName) {
     const lowerName = clientName.toLowerCase().trim();
+    if (!lowerName) return bookings[0].id;
 
     // Exact or contains match
-    let match = bookings.find((b: any) => 
+    let matches = bookings.filter((b: any) =>
       b.clients?.name?.toLowerCase().includes(lowerName)
     );
 
-    if (!match) {
+    if (matches.length === 0) {
       // Try reverse match (last name)
       const nameParts = lowerName.split(" ");
-      match = bookings.find((b: any) => {
+      matches = bookings.filter((b: any) => {
         const clientNameLower = (b.clients?.name || "").toLowerCase();
         return nameParts.some(part => clientNameLower.includes(part));
       });
     }
 
-    if (match) return match.id;
+    const uniqueMatches = Array.from(new Map(matches.map((b: any) => [b.id, b])).values());
+    return uniqueMatches.length === 1 ? (uniqueMatches[0] as any).id : null;
   }
 
   // Fallback: most recent upcoming booking
