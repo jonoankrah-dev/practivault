@@ -61,6 +61,7 @@ const NAV = {
   saffi:        { href: "/saffi",             label: "Saffi AI",        icon: Bot },
   saffiMemory:  { href: "/saffi-memory",      label: "Saffi Memory",    icon: BrainCircuit },
   usage:       { href: "/usage",            label: "Usage & Transparency", icon: BarChart3, badgeKey: undefined },
+  endopulseHub:{ href: "/endopulse-hub",   label: "EndoPulse Hub",  icon: HeartPulse },
   aiFrontDesk: { href: "/ai-front-desk",   label: "AI Front Desk",   icon: MessageSquare,  badgeKey: "afdToday" },
   aiPhone:     { href: "/phone-receptionist",label:"AI Receptionist", icon: Phone,          badgeKey: "missedCallsToday" },
   social:      { href: "/social-studio",    label: "Social Studio",   icon: Camera },
@@ -102,7 +103,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
       dashboard: "Dashboard", stock: "Stock",
     },
     nav: [
-      NAV.dashboard, NAV.appointments, NAV.clients,
+      NAV.dashboard, NAV.endopulseHub, NAV.appointments, NAV.clients,
       NAV.saffi, NAV.saffiMemory, NAV.usage, NAV.social, NAV.whatsapp,
       NAV.leads, NAV.quotes, NAV.consent,
       NAV.team, NAV.invoices, NAV.photos,
@@ -305,7 +306,7 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
       dashboard: "Dashboard", stock: "Stock",
     },
     nav: [
-      NAV.dashboard, NAV.bookings, NAV.clients,
+      NAV.dashboard, NAV.endopulseHub, NAV.bookings, NAV.clients,
       NAV.saffi, NAV.saffiMemory, NAV.usage, NAV.social, NAV.whatsapp,
       NAV.leads, NAV.quotes, NAV.consent,
       NAV.team, NAV.invoices, NAV.photos,

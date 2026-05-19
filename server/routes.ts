@@ -43,6 +43,26 @@ import {
 import { randomUUID } from "node:crypto";
 import { DEMO_INDUSTRIES } from "./demoData";
 
+const ENDOPULSE_BRAND_NAME = "EndoPulse";
+const TREATMENT_BRAND_SELECT =
+  "id,name,price,duration_mins,is_endopulse,service_brand,service_line,brand_compliance_required";
+
+function looksLikeEndoPulse(name: unknown): boolean {
+  return typeof name === "string" && /endopulse/i.test(name);
+}
+
+function normalizeTreatmentBrandFields<T extends Record<string, any>>(treatment: T): T {
+  const isEndoPulse = treatment.is_endopulse === true || looksLikeEndoPulse(treatment.name);
+  if (!isEndoPulse) return treatment;
+  return {
+    ...treatment,
+    is_endopulse: true,
+    service_brand: treatment.service_brand || ENDOPULSE_BRAND_NAME,
+    service_line: treatment.service_line || "endopulse_treatment",
+    brand_compliance_required: treatment.brand_compliance_required ?? true,
+  };
+}
+
 // --- AUTH MIDDLEWARE ---
 type AuthedRequest = Request & {
   user?: { id: string; email: string | null };
@@ -183,8 +203,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           source: "manual",
           treatment_interest:
             c.enquiry_type === "training"
-              ? "endoPulse™ Training"
-              : "endoPulse™ Treatment",
+              ? "EndoPulse™ Training"
+              : "EndoPulse™ Treatment",
           status: "new",
           ai_score: 65,
           notes: `Created from phone call. ${c.summary ? `Summary: ${c.summary}` : ""}`,
@@ -323,7 +343,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await Promise.all([
         db
           .from("bookings")
-          .select("*, clients(name), treatments(name,price,duration_mins)")
+          .select(`*, clients(name), treatments(${TREATMENT_BRAND_SELECT})`)
           .eq("user_id", userId)
           .eq("date", today)
           .order("time", { ascending: true }),
@@ -398,6 +418,88 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       highScoreLeads: highScoreLeads.data || [],
       revenueByMonth: months,
     });
+  });
+
+  // ---- ENDOPULSE FRANCHISE HUB ----
+  app.get("/api/endopulse/summary", requireAuth, async (req: AuthedRequest, res) => {
+    const db = req.db!;
+    const userId = req.user!.id;
+    const now = new Date();
+    const monthStartDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthStart = monthStartDate.toISOString().slice(0, 10);
+    const today = now.toISOString().slice(0, 10);
+
+    try {
+      const [treatmentsRes, bookingsRes, leadsRes] = await Promise.all([
+        db
+          .from("treatments")
+          .select("id,name,price,duration_mins,is_active,is_endopulse,service_brand,service_line,brand_compliance_required")
+          .eq("user_id", userId)
+          .eq("is_endopulse", true)
+          .order("price", { ascending: false }),
+        db
+          .from("bookings")
+          .select(`id,date,time,status,client_id,clients(name),treatments(${TREATMENT_BRAND_SELECT})`)
+          .eq("user_id", userId)
+          .gte("date", monthStart)
+          .order("date", { ascending: true })
+          .order("time", { ascending: true }),
+        db
+          .from("leads")
+          .select("id,status,treatment_interest,created_at")
+          .eq("user_id", userId)
+          .ilike("treatment_interest", "%endopulse%")
+          .gte("created_at", monthStartDate.toISOString()),
+      ]);
+
+      const err = treatmentsRes.error?.message || bookingsRes.error?.message || leadsRes.error?.message;
+      if (err) return res.status(500).json({ message: err });
+
+      const treatments = treatmentsRes.data ?? [];
+      const endoBookings = (bookingsRes.data ?? []).filter((booking: any) => booking.treatments?.is_endopulse);
+      const completedThisMonth = endoBookings.filter((booking: any) => booking.status === "completed");
+      const upcoming = endoBookings.filter((booking: any) => booking.date >= today && !["completed", "cancelled", "no_show"].includes(booking.status));
+      const revenueThisMonth = completedThisMonth.reduce(
+        (sum: number, booking: any) => sum + Number(booking.treatments?.price || 0),
+        0,
+      );
+
+      res.json({
+        brandName: ENDOPULSE_BRAND_NAME,
+        period: { month: now.toLocaleString("en-GB", { month: "long", year: "numeric" }), monthStart },
+        treatments: {
+          total: treatments.length,
+          active: treatments.filter((t: any) => t.is_active).length,
+          requiringCompliance: treatments.filter((t: any) => t.brand_compliance_required).length,
+          items: treatments,
+        },
+        bookings: {
+          thisMonth: endoBookings.length,
+          completedThisMonth: completedThisMonth.length,
+          upcoming: upcoming.length,
+          revenueThisMonth,
+          recent: endoBookings.slice(0, 6),
+        },
+        leads: {
+          thisMonth: leadsRes.data?.length ?? 0,
+          openThisMonth: (leadsRes.data ?? []).filter((lead: any) => !["lost", "converted"].includes(lead.status)).length,
+        },
+        franchise: {
+          hubStatus: "foundation_ready",
+          nextControls: [
+            "franchisee agreements",
+            "territory assignment",
+            "brand standard checklists",
+            "machine serial tracking",
+            "training and renewal status",
+          ],
+        },
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      console.error("[endopulse/summary] error:", err);
+      res.status(500).json({ message: "Failed to compute EndoPulse summary" });
+    }
   });
 
   // ---- USAGE & TRANSPARENCY DASHBOARD ----
@@ -527,7 +629,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       db.from("clients").select("*").eq("id", id).eq("user_id", req.user!.id).single(),
       db
         .from("bookings")
-        .select("*, treatments(name,price,duration_mins)")
+        .select(`*, treatments(${TREATMENT_BRAND_SELECT})`)
         .eq("client_id", id)
         .eq("user_id", req.user!.id)
         .order("date", { ascending: false })
@@ -602,9 +704,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const db = req.db!;
     const parsed = treatmentInsertSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+    const insert = normalizeTreatmentBrandFields({
+      ...parsed.data,
+      user_id: req.user!.id,
+      is_active: parsed.data.is_active ?? true,
+    });
     const { data, error } = await db
       .from("treatments")
-      .insert({ ...parsed.data, user_id: req.user!.id, is_active: parsed.data.is_active ?? true })
+      .insert(insert)
       .select()
       .single();
     if (error) return res.status(500).json({ message: error.message });
@@ -613,9 +720,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch("/api/treatments/:id", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
+    const parsed = treatmentInsertSchema.partial().safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+    const updates = normalizeTreatmentBrandFields(parsed.data);
     const { data, error } = await db
       .from("treatments")
-      .update(req.body || {})
+      .update(updates)
       .eq("id", req.params.id)
       .eq("user_id", req.user!.id)
       .select()
@@ -636,13 +746,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { data: existing } = await db.from("treatments").select("id").eq("user_id", req.user!.id).limit(1);
     if (existing && existing.length > 0) return res.json({ seeded: false, existing: true });
     const seeds = [
-      { name: "endoPulse™ Full Body Laser Skin Tightening", duration_mins: 90, price: 650, description: "Full body non-invasive laser skin tightening treatment." },
-      { name: "endoPulse™ Abdomen Laser Fat Melting", duration_mins: 60, price: 450, description: "Targeted abdominal fat melting with laser technology." },
-      { name: "endoPulse™ Arms Laser Contouring", duration_mins: 45, price: 350, description: "Laser contouring for upper arms." },
-      { name: "endoPulse™ Thighs Laser Contouring", duration_mins: 60, price: 420, description: "Laser contouring for thighs." },
-      { name: "endoPulse™ Face & Neck Skin Tightening", duration_mins: 45, price: 380, description: "Face and neck skin tightening." },
+      { name: "EndoPulse™ Full Body Laser Skin Tightening", duration_mins: 90, price: 650, description: "Full body non-invasive laser skin tightening treatment." },
+      { name: "EndoPulse™ Abdomen Laser Fat Melting", duration_mins: 60, price: 450, description: "Targeted abdominal fat melting with laser technology." },
+      { name: "EndoPulse™ Arms Laser Contouring", duration_mins: 45, price: 350, description: "Laser contouring for upper arms." },
+      { name: "EndoPulse™ Thighs Laser Contouring", duration_mins: 60, price: 420, description: "Laser contouring for thighs." },
+      { name: "EndoPulse™ Face & Neck Skin Tightening", duration_mins: 45, price: 380, description: "Face and neck skin tightening." },
       { name: "Patch Test", duration_mins: 15, price: 0, description: "Required patch test before treatment." },
-    ].map((t) => ({ ...t, user_id: req.user!.id, is_active: true }));
+    ].map((t) => normalizeTreatmentBrandFields({ ...t, user_id: req.user!.id, is_active: true }));
     const { data, error } = await db.from("treatments").insert(seeds).select();
     if (error) return res.status(500).json({ message: error.message });
     res.json({ seeded: true, treatments: data });
@@ -654,7 +764,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { from, to } = req.query as Record<string, string>;
     let query = db
       .from("bookings")
-      .select("*, clients(id,name,phone,email), treatments(id,name,duration_mins,price)")
+      .select(`*, clients(id,name,phone,email), treatments(${TREATMENT_BRAND_SELECT})`)
       .eq("user_id", req.user!.id)
       .order("date", { ascending: true })
       .order("time", { ascending: true });
@@ -678,7 +788,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         deposit_paid: parsed.data.deposit_paid ?? false,
         deposit_amount: parsed.data.deposit_amount ?? 0,
       })
-      .select("*, clients(name), treatments(name,price)")
+      .select(`*, clients(name), treatments(${TREATMENT_BRAND_SELECT})`)
       .single();
     if (error) return res.status(500).json({ message: error.message });
     // Timeline event
@@ -701,7 +811,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       .update(req.body || {})
       .eq("id", id)
       .eq("user_id", req.user!.id)
-      .select("*, clients(name), treatments(name,price)")
+      .select(`*, clients(name), treatments(${TREATMENT_BRAND_SELECT})`)
       .single();
     if (error) return res.status(500).json({ message: error.message });
     if (req.body?.status === "completed") {
@@ -817,7 +927,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const db = req.db!;
     const { data, error } = await db
       .from("quotes")
-      .select("*, clients(id,name,email,phone), treatments(id,name,duration_mins)")
+      .select(`*, clients(id,name,email,phone), treatments(${TREATMENT_BRAND_SELECT})`)
       .eq("user_id", req.user!.id)
       .order("created_at", { ascending: false });
     if (error) return res.status(500).json({ message: error.message });
@@ -833,7 +943,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { data, error } = await db
       .from("quotes")
       .insert(insert)
-      .select("*, clients(name), treatments(name)")
+      .select(`*, clients(name), treatments(${TREATMENT_BRAND_SELECT})`)
       .single();
     if (error) return res.status(500).json({ message: error.message });
     await db.from("client_timeline").insert({
@@ -3237,7 +3347,7 @@ Rules:
       switch (toolName) {
         case "get_appointments": {
           let q = db.from("bookings")
-            .select("*, clients(name), treatments(name,price)")
+            .select(`*, clients(name), treatments(${TREATMENT_BRAND_SELECT})`)
             .eq("user_id", userId)
             .order("start_time", { ascending: true })
             .limit(args.limit ?? 10);
@@ -3386,7 +3496,7 @@ Rules:
         }
         case "get_bookings": {
           let q = db.from("bookings")
-            .select("id, date, time, status, notes, clients(name, phone), treatments(name, price, duration_mins)")
+            .select(`id, date, time, status, notes, clients(name, phone), treatments(${TREATMENT_BRAND_SELECT})`)
             .eq("user_id", userId)
             .order("date", { ascending: true })
             .order("time", { ascending: true })

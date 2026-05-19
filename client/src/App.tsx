@@ -33,6 +33,7 @@ import Videos from "@/pages/Videos";
 import Packages from "@/pages/Packages";
 import Pricing from "@/pages/Pricing";
 import Usage from "@/pages/Usage";
+import EndoPulseHub from "@/pages/EndoPulseHub";
 import CpdLog from "@/pages/CpdLog";
 import Locations from "@/pages/Locations";
 import Stock from "@/pages/Stock";
@@ -174,6 +175,11 @@ function AppRouter() {
       <Route path="/usage">
         <Protected>
           <Usage />
+        </Protected>
+      </Route>
+      <Route path="/endopulse-hub">
+        <Protected>
+          <EndoPulseHub />
         </Protected>
       </Route>
       <Route path="/leads">
