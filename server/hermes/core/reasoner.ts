@@ -410,7 +410,7 @@ function generateAestheticsMockResponse(
   }
 
   // === Final Decision ===
-  const shouldEscalate = actions.length >= 2 && confidence >= 0.68;
+  const shouldEscalate = actions.length >= 1 && confidence >= 0.55;
 
   if (!shouldEscalate) {
     return {

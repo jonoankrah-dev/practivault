@@ -1,6 +1,6 @@
 {
-  "include": ["client/src/**/*", "shared/**/*", "server/**/*", "discord-bot/**/*"],
-  "exclude": ["node_modules", "build", "dist", "**/*.test.ts", "server/storage.ts"],
+  "include": ["client/src/**/*", "shared/**/*", "server/**/*"],
+  "exclude": ["node_modules", "build", "dist", "**/*.test.ts", "server/storage.ts", "discord-bot"],
   "compilerOptions": {
     "target": "ES2022",
     "incremental": true,

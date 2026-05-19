@@ -1,7 +1,12 @@
 import { registerPublicConfigRoute } from "./routes/publicConfig";
 import { MILLIE_SYSTEM_PROMPT } from "./lib/milliePrompt";
 import { DEVELOPER_TOOLS, executeDeveloperTool } from "./lib/developerAgent";
-import { shouldEscalateToHermes, sendToHermes, executeHermesProposal } from "./hermes";
+import {
+  shouldEscalateToHermes,
+  sendToHermes,
+  executeHermesProposal,
+  hermesResponseToSaffiPayload,
+} from "./hermes";
 import { recordActivityEvent, queueAgentAction } from "./lib/safiMemory";
 import { registerSafiMemoryRoutes } from "./routes/safiMemory";
 import { registerSaffiRealtime, saffiRealtimeTokenHandler } from "./realtime/saffiRealtime";
@@ -40,7 +45,7 @@ import {
   socialPostInsertSchema,
   socialPostGenerateSchema,
 } from "../shared/schema";
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { DEMO_INDUSTRIES } from "./demoData";
 
 // --- AUTH MIDDLEWARE ---
@@ -67,43 +72,6 @@ async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction
   } catch (e: any) {
     res.status(401).json({ message: e.message || "Auth failed" });
   }
-}
-
-/** Optional auth for POST /api/developer-agent/chat: Grokson can send X-Dev-Agent-Secret instead of a user JWT. */
-function devAgentSecretEqual(a: string, b: string): boolean {
-  try {
-    const ba = Buffer.from(a, "utf8");
-    const bb = Buffer.from(b, "utf8");
-    if (ba.length !== bb.length) return false;
-    return timingSafeEqual(ba, bb);
-  } catch {
-    return false;
-  }
-}
-
-async function requireAuthOrDevAgentInternal(
-  req: AuthedRequest,
-  res: Response,
-  next: NextFunction,
-) {
-  const expected = process.env.DEV_AGENT_INTERNAL_SECRET?.trim();
-  const presented = (req.headers["x-dev-agent-secret"] as string | undefined)?.trim();
-  const botUserId = process.env.DEV_AGENT_BOT_USER_ID?.trim();
-
-  if (
-    expected &&
-    expected.length >= 24 &&
-    presented &&
-    botUserId &&
-    devAgentSecretEqual(expected, presented)
-  ) {
-    req.user = { id: botUserId, email: "grokson@internal.local" };
-    req.token = "";
-    req.db = supabaseAdmin;
-    return next();
-  }
-
-  return requireAuth(req, res, next);
 }
 
 // ── Saffi must remain 100% industry-agnostic ────────────────────────────────
@@ -4107,18 +4075,29 @@ Rules:
     // If the message matches Hermes trigger keywords, escalate to Hermes for deeper reasoning
     if (shouldEscalateToHermes(message)) {
       try {
-        const hermesResponse = await sendToHermes(message, { userId, db: req.db, sectionContext });
-        
-        if (hermesResponse.shouldEscalate && hermesResponse.proposal) {
-          // Return a clean structure so the frontend can render a nice proposal card
-          return res.json({
-            reply: "Hermes has analyzed your request and has a proposal.",
-            hermesProposal: hermesResponse.proposal,
-            requiresApproval: true,
-          });
+        const hermesResponse = await sendToHermes(message, {
+          userId,
+          db: req.db,
+          sectionContext,
+        });
+        const hermesPayload = hermesResponseToSaffiPayload(hermesResponse);
+        if (hermesPayload?.hermesProposal) {
+          return res.json(hermesPayload);
         }
+        if (hermesPayload?.reply) {
+          return res.json({ reply: hermesPayload.reply });
+        }
+        console.warn(
+          "[Hermes] Keyword match but no proposal — falling through to Saffi tool loop",
+          { shouldEscalate: hermesResponse.shouldEscalate, hasProposal: !!hermesResponse.proposal },
+        );
       } catch (err) {
         console.error("[Hermes] Error during escalation:", err);
+        const detail = err instanceof Error ? err.message : String(err);
+        return res.json({
+          reply: `Hermes could not complete this update (${detail}). Tell me what to log and I will help as Saffi.`,
+          hermesFailed: true,
+        });
       }
     }
 
@@ -4378,7 +4357,7 @@ When you retrieve data, summarise it clearly and add a brief observation where u
     // ─── Developer Agent Chat (internal AI for fixing issues in the app) ─────
 // Phase 1: Can read files, list directories, propose changes (with approval)
 // Uses Grok tool calling + will integrate Hermes + PAI in later phases
-app.post("/api/developer-agent/chat", requireAuthOrDevAgentInternal, async (req: AuthedRequest, res) => {
+app.post("/api/developer-agent/chat", requireAuth, async (req: AuthedRequest, res) => {
   const { messages, sessionId } = req.body;
   const userId = req.user!.id;
 

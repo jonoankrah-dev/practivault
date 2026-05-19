@@ -24,8 +24,10 @@ function HermesProposalCard({ proposal, onApprove }: {
   const [approving, setApproving] = useState(false);
   const [approved, setApproved] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editedActions, setEditedActions] = useState(() => 
-    proposal.actions ? JSON.parse(JSON.stringify(proposal.actions)) : []
+  const [editedActions, setEditedActions] = useState(() =>
+    proposal.actions?.length
+      ? JSON.parse(JSON.stringify(proposal.actions))
+      : [],
   );
 
   const HERMES_ACTION_TYPES = [
@@ -308,7 +310,7 @@ export default function Saffi({
       if (data.hermesProposal) {
         setMessages([...newMessages, { 
           role: "assistant", 
-          content: "Hermes has analyzed your request and prepared actions.", 
+          content: data.reply || "Hermes has analyzed your request and prepared actions.", 
           hermesProposal: data.hermesProposal 
         }]);
       } else if (data.reply) {

@@ -58,7 +58,7 @@ export async function extractPdfTextImproved(
 
   // Combine results intelligently
   let finalText: string | null = null;
-  let method: "text" | "pdfjs" | "hybrid" = "text";
+  let method: "text" | "pdfjs" | "hybrid" | "ocr" = "text";
 
   if (pdfParseText && pdfjsText) {
     if (pdfjsText.length > pdfParseText.length * 1.3) {

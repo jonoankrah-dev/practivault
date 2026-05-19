@@ -19,10 +19,15 @@ export { HERMES_CONFIG } from "./config";
 // Execution Layer (new)
 export { executeHermesProposal } from "./executor";
 export type { ExecutionContext, ExecutionResult } from "./executor";
+export {
+  normalizeHermesProposal,
+  hermesResponseToSaffiPayload,
+} from "./saffiBridge";
+export type { SaffiHermesPayload } from "./saffiBridge";
 
 // Public API functions
 import { HermesResponse } from "./types";
-import { HERMES_TRIGGER_KEYWORDS, isJobUpdateMessage } from "./keywords";
+import { isJobUpdateMessage } from "./keywords";
 import { getHermesReasoning } from "./core/reasoner";
 import { HERMES_CONFIG } from "./config";
 
@@ -45,15 +50,10 @@ export function shouldEscalateToHermes(message: string): boolean {
 /**
  * Main entry point.
  * Saffi calls this when it wants Hermes to deeply reason about a message.
- *
- * Context can include:
- *   - userId: string
- *   - db: SupabaseClient (recommended) → enables Hermes to search the user's uploaded manuals via RAG
- *   - sectionContext: string
  */
 export async function sendToHermes(
   userMessage: string,
-  context?: Record<string, any>
+  context?: Record<string, any>,
 ): Promise<HermesResponse> {
   if (HERMES_CONFIG.verboseLogging) {
     console.log("[Hermes] sendToHermes called with:", userMessage);
