@@ -1,30 +1,86 @@
-import { createClient } from "@supabase/supabase-js";
-import { normalizeSupabaseUrl } from "../shared/supabaseUrl";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  isSupabaseConfigured,
+  resolveSupabaseAnonKey,
+  resolveSupabaseServiceRoleKey,
+  resolveSupabaseUrl,
+} from "./config/supabaseEnv";
 
-const SUPABASE_URL = normalizeSupabaseUrl(process.env.SUPABASE_URL || "");
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY!;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+let supabaseClient: SupabaseClient | null = null;
+let supabaseAdminClient: SupabaseClient | null = null;
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.warn("[supabase] Missing SUPABASE_URL or SUPABASE_ANON_KEY env vars");
+function warnIfMissing(): void {
+  if (!isSupabaseConfigured()) {
+    console.warn("[supabase] Missing SUPABASE_URL or SUPABASE_ANON_KEY env vars");
+  }
 }
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false },
+function getUrlAndAnon(): { url: string; anonKey: string } {
+  const url = resolveSupabaseUrl();
+  const anonKey = resolveSupabaseAnonKey();
+  if (!url || !anonKey) {
+    throw new Error(
+      "supabaseUrl is required. Set SUPABASE_URL and SUPABASE_ANON_KEY (or run in production with built-in project defaults).",
+    );
+  }
+  return { url, anonKey };
+}
+
+function getClient(): SupabaseClient {
+  if (!supabaseClient) {
+    warnIfMissing();
+    const { url, anonKey } = getUrlAndAnon();
+    supabaseClient = createClient(url, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  }
+  return supabaseClient;
+}
+
+function getAdminClient(): SupabaseClient {
+  if (!supabaseAdminClient) {
+    warnIfMissing();
+    const { url, anonKey } = getUrlAndAnon();
+    const serviceKey = resolveSupabaseServiceRoleKey() || anonKey;
+    supabaseAdminClient = createClient(url, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  }
+  return supabaseAdminClient;
+}
+
+/** @deprecated Prefer getSupabase() — kept for existing imports. */
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_target, prop) {
+    const client = getClient();
+    const value = (client as unknown as Record<string | symbol, unknown>)[prop];
+    return typeof value === "function" ? value.bind(client) : value;
+  },
 });
 
-// Server-side best-effort writes that need to happen outside a user's request
-// can use the service role key when it is available. If it is not configured,
-// this falls back to the anon key and RLS may reject those writes safely.
-export const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false },
+/** @deprecated Prefer getSupabaseAdmin() — kept for existing imports. */
+export const supabaseAdmin = new Proxy({} as SupabaseClient, {
+  get(_target, prop) {
+    const client = getAdminClient();
+    const value = (client as unknown as Record<string | symbol, unknown>)[prop];
+    return typeof value === "function" ? value.bind(client) : value;
+  },
 });
+
+export function getSupabase(): SupabaseClient {
+  return getClient();
+}
+
+export function getSupabaseAdmin(): SupabaseClient {
+  return getAdminClient();
+}
 
 // Build a supabase client that forwards the user's JWT so RLS policies
 // evaluate the correct auth.uid(). We still use the anon key, but attach the
 // Authorization header so row-level security picks up the authenticated user.
 export function supabaseForUser(token: string) {
-  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  const { url, anonKey } = getUrlAndAnon();
+  return createClient(url, anonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { headers: { Authorization: `Bearer ${token}` } },
   });

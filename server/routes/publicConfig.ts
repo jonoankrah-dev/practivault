@@ -1,13 +1,13 @@
 import type { Express, Request, Response } from "express";
+import {
+  resolveSupabaseAnonKey,
+  resolveSupabaseUrl,
+} from "../config/supabaseEnv";
 
 export function registerPublicConfigRoute(app: Express): void {
   app.get("/api/public-config", (_req: Request, res: Response) => {
-    const supabaseUrl =
-      process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
-    const supabaseAnonKey =
-      process.env.VITE_SUPABASE_ANON_KEY ||
-      process.env.SUPABASE_ANON_KEY ||
-      "";
+    const supabaseUrl = resolveSupabaseUrl();
+    const supabaseAnonKey = resolveSupabaseAnonKey();
 
     res.set("Cache-Control", "no-store");
     res.set("Pragma", "no-cache");
