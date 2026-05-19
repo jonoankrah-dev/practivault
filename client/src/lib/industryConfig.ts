@@ -4,7 +4,6 @@
  * This is the single source of truth for all industry personalisation.
  */
 
-import { isWhatsAppEnabled } from "./features";
 import {
   LayoutDashboard, CalendarDays, Users, Sparkles, FileText,
   ShieldCheck, Settings, MessageSquare, Camera, Phone, BookOpen,
@@ -316,7 +315,17 @@ export const INDUSTRY_CONFIGS: Record<string, IndustryConfig> = {
   },
 };
 
+function withoutDisabledNav(config: IndustryConfig): IndustryConfig {
+  if (isWhatsAppEnabled()) return config;
+  return {
+    ...config,
+    nav: config.nav.filter((item) => item.href !== "/whatsapp"),
+  };
+}
+
 export function getIndustryConfig(industry?: string | null): IndustryConfig {
-  if (!industry) return INDUSTRY_CONFIGS.default;
-  return INDUSTRY_CONFIGS[industry] ?? INDUSTRY_CONFIGS.default;
+  const base = !industry
+    ? INDUSTRY_CONFIGS.default
+    : (INDUSTRY_CONFIGS[industry] ?? INDUSTRY_CONFIGS.default);
+  return withoutDisabledNav(base);
 }

@@ -16,7 +16,13 @@ function useSidebarCounts() {
   const { data: consent } = useQuery<any[]>({ queryKey: ["/api/consent"], staleTime: 60_000 });
   const { data: afd } = useQuery<any[]>({ queryKey: ["/api/ai-front-desk"], staleTime: 60_000 });
   const { data: calls } = useQuery<any[]>({ queryKey: ["/api/calls"], staleTime: 60_000 });
-  const { data: waCount } = useQuery<{ count: number }>({ queryKey: ["/api/whatsapp/unread-count"], staleTime: 30_000, refetchInterval: 30_000 });
+  const waEnabled = isWhatsAppEnabled();
+  const { data: waCount } = useQuery<{ count: number }>({
+    queryKey: ["/api/whatsapp/unread-count"],
+    enabled: waEnabled,
+    staleTime: 30_000,
+    refetchInterval: waEnabled ? 30_000 : false,
+  });
 
   const newLeads = leads?.filter((l) => l.status === "new").length || 0;
   const pipelineValue =
