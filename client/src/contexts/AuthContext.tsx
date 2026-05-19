@@ -20,12 +20,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Read session on mount
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setAuthToken(data.session?.access_token ?? null);
-      setLoading(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        setSession(data.session);
+        setAuthToken(data.session?.access_token ?? null);
+      })
+      .catch(() => {
+        setSession(null);
+        setAuthToken(null);
+      })
+      .finally(() => setLoading(false));
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       setAuthToken(newSession?.access_token ?? null);
