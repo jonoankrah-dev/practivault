@@ -262,7 +262,7 @@ export default function Manuals() {
                 <Input
                   value={name}
                   onChange={e => setName(e.target.value)}
-                  placeholder="e.g. EndoPulse Protocol Guide"
+                  placeholder="e.g. endoPulse Protocol Guide"
                   className="h-8 text-sm"
                 />
               </div>

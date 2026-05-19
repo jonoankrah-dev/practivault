@@ -61,7 +61,7 @@ const NAV = {
   saffi:        { href: "/saffi",             label: "Saffi AI",        icon: Bot },
   saffiMemory:  { href: "/saffi-memory",      label: "Saffi Memory",    icon: BrainCircuit },
   usage:       { href: "/usage",            label: "Usage & Transparency", icon: BarChart3, badgeKey: undefined },
-  endopulseHub:{ href: "/endopulse-hub",   label: "EndoPulse Hub",  icon: HeartPulse },
+  endopulseHub:{ href: "/endopulse-hub",   label: "endoPulse Hub",  icon: HeartPulse },
   aiFrontDesk: { href: "/ai-front-desk",   label: "AI Front Desk",   icon: MessageSquare,  badgeKey: "afdToday" },
   aiPhone:     { href: "/phone-receptionist",label:"AI Receptionist", icon: Phone,          badgeKey: "missedCallsToday" },
   social:      { href: "/social-studio",    label: "Social Studio",   icon: Camera },

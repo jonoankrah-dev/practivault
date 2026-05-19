@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Instagram, Facebook, Globe, Music2 } from "lucide-react";
-import { ENDOPULSE_DEMO } from "@/lib/demoBranding";
+import { ENDO_PULSE_DEMO } from "@/lib/demoBranding";
 import { cn } from "@/lib/utils";
 
 type BizInfo = {
@@ -14,10 +14,10 @@ function resolveSocials(bi: BizInfo | undefined) {
   const hasAny = !!(bi?.instagram_url || bi?.facebook_url || bi?.tiktok_url || bi?.website_url);
   if (!hasAny) {
     return {
-      website: ENDOPULSE_DEMO.website,
-      instagram: ENDOPULSE_DEMO.instagram_url,
-      facebook: ENDOPULSE_DEMO.facebook_url,
-      tiktok: ENDOPULSE_DEMO.tiktok_url,
+      website: ENDO_PULSE_DEMO.website,
+      instagram: ENDO_PULSE_DEMO.instagram_url,
+      facebook: ENDO_PULSE_DEMO.facebook_url,
+      tiktok: ENDO_PULSE_DEMO.tiktok_url,
       isDemoFallback: true,
     };
   }

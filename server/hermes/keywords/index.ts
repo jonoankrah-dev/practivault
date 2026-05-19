@@ -47,7 +47,7 @@ export const GENERAL_UPDATE_KEYWORDS = [
   "job update",
 ];
 
-// === EndoPulse / Endolaser Specific Keywords (from official course & tutor manual) ===
+// === endoPulse / Endolaser Specific Keywords (from official course & tutor manual) ===
 export const AESTHETICS_TREATMENT_KEYWORDS = [
   "endopulse",
   "endo pulse",

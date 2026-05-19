@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest } from "@/lib/queryClient";
 
-type EndoPulseSummary = {
+type EndopulseSummary = {
   brandName: string;
   period: { month: string; monthStart: string };
   treatments: {
@@ -62,8 +62,8 @@ function MetricCard({
   );
 }
 
-export default function EndoPulseHub() {
-  const { data, isLoading, error } = useQuery<EndoPulseSummary>({
+export default function EndopulseHub() {
+  const { data, isLoading, error } = useQuery<EndopulseSummary>({
     queryKey: ["/api/endopulse/summary"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/endopulse/summary");
@@ -75,8 +75,8 @@ export default function EndoPulseHub() {
   if (error) {
     return (
       <div className="p-8">
-        <PageHeader title="EndoPulse Hub" subtitle="Franchise operating layer" />
-        <div className="mt-4 text-sm text-red-600">Could not load EndoPulse data.</div>
+        <PageHeader title="endoPulse Hub" subtitle="Franchise operating layer" />
+        <div className="mt-4 text-sm text-red-600">Could not load endoPulse data.</div>
       </div>
     );
   }
@@ -84,8 +84,8 @@ export default function EndoPulseHub() {
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-8">
       <PageHeader
-        title="EndoPulse Hub"
-        subtitle="The operating home for EndoPulse treatments, franchise standards, and machine-led services."
+        title="endoPulse Hub"
+        subtitle="The operating home for endoPulse treatments, franchise standards, and machine-led services."
       />
 
       <div className="rounded-2xl border border-[#E83A8E]/20 bg-gradient-to-br from-[#E83A8E]/10 to-white p-5">
@@ -95,16 +95,16 @@ export default function EndoPulseHub() {
               Franchise foundation
             </div>
             <div className="mt-1 text-xl font-semibold text-foreground">
-              EndoPulse is now tracked as a controlled service line.
+              endoPulse is now tracked as a controlled service line.
             </div>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Any treatment tagged as EndoPulse can be reported separately from general services, labelled in
+              Any treatment tagged as endoPulse can be reported separately from general services, labelled in
               bookings, and later tied to franchisee agreements, machine serials, territory rules, and brand
               standards.
             </p>
           </div>
           <div className="rounded-full border border-[#E83A8E]/20 bg-white px-3 py-1.5 text-xs font-semibold text-[#E83A8E]">
-            {data?.brandName ?? "EndoPulse"} service line
+            {data?.brandName ?? "endoPulse"} service line
           </div>
         </div>
       </div>
@@ -119,7 +119,7 @@ export default function EndoPulseHub() {
         <>
           <div className="grid gap-4 md:grid-cols-4">
             <MetricCard
-              label="EndoPulse services"
+              label="endoPulse services"
               value={`${data?.treatments.active ?? 0}`}
               sub={`${data?.treatments.total ?? 0} tagged treatment records`}
               icon={BadgeCheck}
@@ -137,7 +137,7 @@ export default function EndoPulseHub() {
               icon={PoundSterling}
             />
             <MetricCard
-              label="EndoPulse leads"
+              label="endoPulse leads"
               value={`${data?.leads.openThisMonth ?? 0}`}
               sub={`${data?.leads.thisMonth ?? 0} enquiries this month`}
               icon={Sparkles}
@@ -147,12 +147,12 @@ export default function EndoPulseHub() {
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardContent className="p-5">
-                <h2 className="text-sm font-semibold">Tagged EndoPulse treatments</h2>
+                <h2 className="text-sm font-semibold">Tagged endoPulse treatments</h2>
                 <div className="mt-4 divide-y divide-border">
                   {(data?.treatments.items ?? []).length === 0 ? (
                     <div className="py-6 text-sm text-muted-foreground">
-                      No EndoPulse treatments are tagged yet. Add or seed treatments with EndoPulse in the name,
-                      or mark them as EndoPulse when editing services.
+                      No endoPulse treatments are tagged yet. Add or seed treatments with endoPulse in the name,
+                      or mark them as endoPulse when editing services.
                     </div>
                   ) : (
                     data!.treatments.items.map((t) => (

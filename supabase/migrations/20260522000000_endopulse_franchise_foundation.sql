@@ -1,5 +1,5 @@
--- EndoPulse franchise foundation.
--- Treat EndoPulse as a controlled service line instead of only a word in the
+-- endoPulse franchise foundation.
+-- Treat endoPulse as a controlled service line instead of only a word in the
 -- treatment name. Existing seed data is backfilled below.
 
 alter table public.treatments
@@ -23,7 +23,7 @@ alter table public.treatments
 update public.treatments
 set
   is_endopulse = true,
-  service_brand = coalesce(service_brand, 'EndoPulse'),
+  service_brand = coalesce(service_brand, 'endoPulse'),
   service_line = case
     when service_line = 'general' then 'endopulse_treatment'
     else service_line
@@ -35,10 +35,10 @@ create index if not exists treatments_user_endopulse_idx
   on public.treatments (user_id, is_endopulse, is_active);
 
 comment on column public.treatments.is_endopulse is
-  'True when this service is part of the controlled EndoPulse service line.';
+  'True when this service is part of the controlled endoPulse service line.';
 
 comment on column public.treatments.service_brand is
-  'Brand/service mark shown in franchise reporting, e.g. EndoPulse.';
+  'Brand/service mark shown in franchise reporting, e.g. endoPulse.';
 
 comment on column public.treatments.service_line is
   'Controlled service line for franchise reporting and compliance workflows.';

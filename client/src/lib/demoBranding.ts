@@ -1,6 +1,6 @@
 /** Default demo brand (endoPulse) — socials and web used in Settings presets + footer fallbacks. */
 
-export const ENDOPULSE_DEMO = {
+export const ENDO_PULSE_DEMO = {
   company: "endoPulse",
   website: "https://endopulse.co.uk",
   tagline:

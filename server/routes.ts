@@ -43,21 +43,21 @@ import {
 import { randomUUID } from "node:crypto";
 import { DEMO_INDUSTRIES } from "./demoData";
 
-const ENDOPULSE_BRAND_NAME = "EndoPulse";
+const ENDO_PULSE_BRAND_NAME = "endoPulse";
 const TREATMENT_BRAND_SELECT =
   "id,name,price,duration_mins,is_endopulse,service_brand,service_line,brand_compliance_required";
 
-function looksLikeEndoPulse(name: unknown): boolean {
+function looksLikeEndopulse(name: unknown): boolean {
   return typeof name === "string" && /endopulse/i.test(name);
 }
 
 function normalizeTreatmentBrandFields<T extends Record<string, any>>(treatment: T): T {
-  const isEndoPulse = treatment.is_endopulse === true || looksLikeEndoPulse(treatment.name);
-  if (!isEndoPulse) return treatment;
+  const isEndopulse = treatment.is_endopulse === true || looksLikeEndopulse(treatment.name);
+  if (!isEndopulse) return treatment;
   return {
     ...treatment,
     is_endopulse: true,
-    service_brand: treatment.service_brand || ENDOPULSE_BRAND_NAME,
+    service_brand: treatment.service_brand || ENDO_PULSE_BRAND_NAME,
     service_line: treatment.service_line || "endopulse_treatment",
     brand_compliance_required: treatment.brand_compliance_required ?? true,
   };
@@ -91,7 +91,7 @@ async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction
 
 // ── Saffi must remain 100% industry-agnostic ────────────────────────────────
 // Never hardcode any specific brand or product into Saffi's prompts. The
-// previous `ENDOPULSE_KNOWLEDGE` constant (and its unused live-website fetcher)
+// previous `ENDO_PULSE_KNOWLEDGE` constant (and its unused live-website fetcher)
 // have been removed so PractiVault works equally well for a hair salon, a
 // dentist, a fitness coach, or any other business. Saffi's only sources of
 // business-specific knowledge are:
@@ -100,10 +100,10 @@ async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction
 // If you ever need to add brand-specific facts, do it as user data on those
 // tables — never in this file.
 //
-// `ENDOPULSE_KNOWLEDGE` is kept exported as an empty string only so any
+// `ENDO_PULSE_KNOWLEDGE` is kept exported as an empty string only so any
 // older legacy call-site that still references it compiles without behaviour
 // change (it now contributes nothing to the prompt).
-const ENDOPULSE_KNOWLEDGE = "";
+const ENDO_PULSE_KNOWLEDGE = "";
 
 /** Extract plain text from a PDF buffer (pdf-parse v2 API). */
 async function extractPdfText(buffer: Buffer, timeoutMs: number): Promise<string | null> {
@@ -203,8 +203,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           source: "manual",
           treatment_interest:
             c.enquiry_type === "training"
-              ? "EndoPulse™ Training"
-              : "EndoPulse™ Treatment",
+              ? "endoPulse™ Training"
+              : "endoPulse™ Treatment",
           status: "new",
           ai_score: 65,
           notes: `Created from phone call. ${c.summary ? `Summary: ${c.summary}` : ""}`,
@@ -420,7 +420,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
-  // ---- ENDOPULSE FRANCHISE HUB ----
+  // ---- endoPulse FRANCHISE HUB ----
   app.get("/api/endopulse/summary", requireAuth, async (req: AuthedRequest, res) => {
     const db = req.db!;
     const userId = req.user!.id;
@@ -465,7 +465,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       );
 
       res.json({
-        brandName: ENDOPULSE_BRAND_NAME,
+        brandName: ENDO_PULSE_BRAND_NAME,
         period: { month: now.toLocaleString("en-GB", { month: "long", year: "numeric" }), monthStart },
         treatments: {
           total: treatments.length,
@@ -498,7 +498,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
     } catch (err: any) {
       console.error("[endopulse/summary] error:", err);
-      res.status(500).json({ message: "Failed to compute EndoPulse summary" });
+      res.status(500).json({ message: "Failed to compute endoPulse summary" });
     }
   });
 
@@ -746,11 +746,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { data: existing } = await db.from("treatments").select("id").eq("user_id", req.user!.id).limit(1);
     if (existing && existing.length > 0) return res.json({ seeded: false, existing: true });
     const seeds = [
-      { name: "EndoPulse™ Full Body Laser Skin Tightening", duration_mins: 90, price: 650, description: "Full body non-invasive laser skin tightening treatment." },
-      { name: "EndoPulse™ Abdomen Laser Fat Melting", duration_mins: 60, price: 450, description: "Targeted abdominal fat melting with laser technology." },
-      { name: "EndoPulse™ Arms Laser Contouring", duration_mins: 45, price: 350, description: "Laser contouring for upper arms." },
-      { name: "EndoPulse™ Thighs Laser Contouring", duration_mins: 60, price: 420, description: "Laser contouring for thighs." },
-      { name: "EndoPulse™ Face & Neck Skin Tightening", duration_mins: 45, price: 380, description: "Face and neck skin tightening." },
+      { name: "endoPulse™ Full Body Laser Skin Tightening", duration_mins: 90, price: 650, description: "Full body non-invasive laser skin tightening treatment." },
+      { name: "endoPulse™ Abdomen Laser Fat Melting", duration_mins: 60, price: 450, description: "Targeted abdominal fat melting with laser technology." },
+      { name: "endoPulse™ Arms Laser Contouring", duration_mins: 45, price: 350, description: "Laser contouring for upper arms." },
+      { name: "endoPulse™ Thighs Laser Contouring", duration_mins: 60, price: 420, description: "Laser contouring for thighs." },
+      { name: "endoPulse™ Face & Neck Skin Tightening", duration_mins: 45, price: 380, description: "Face and neck skin tightening." },
       { name: "Patch Test", duration_mins: 15, price: 0, description: "Required patch test before treatment." },
     ].map((t) => normalizeTreatmentBrandFields({ ...t, user_id: req.user!.id, is_active: true }));
     const { data, error } = await db.from("treatments").insert(seeds).select();
@@ -1390,7 +1390,7 @@ Respond ONLY with a JSON object (no markdown, no code blocks):
   "caption": "full ready-to-post caption with emojis and hashtags",
   "hook": "the opening line that stops the scroll",
   "hashtags": "#tag1 #tag2 #tag3 #tag4 #fyp",
-  "keyword_cta": "the comment keyword e.g. ENDOPULSE, MACHINE, HARLEY"
+  "keyword_cta": "the comment keyword e.g. endoPulse, MACHINE, HARLEY"
 }`;
 
     try {
@@ -1553,11 +1553,11 @@ Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra tex
   "overlays": [
     {"time": "0s", "text": "ON SCREEN TEXT"},
     {"time": "3s", "text": "Supporting point"},
-    {"time": "7s", "text": "Comment ENDOPULSE \u2b07\ufe0f"}
+    {"time": "7s", "text": "Comment endoPulse \u2b07\ufe0f"}
   ],
   "veo3_prompt": "Full cinematic Veo 3 video prompt here \u2014 detailed, specific, 3-5 sentences",
   "caption": "Full ready-to-post Instagram/TikTok caption with emojis and hashtags",
-  "keyword_cta": "comment keyword e.g. ENDOPULSE"
+  "keyword_cta": "comment keyword e.g. endoPulse"
 }`;
 
     try {

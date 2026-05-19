@@ -23,7 +23,7 @@ OFFICIAL WEBSITE: https://www.endopulse.co.uk
 INSTAGRAM: @endopulse
 
 ACCURATE PRODUCT FACTS (always use these — do not invent):
-- EndoPulse™ 980nm + 1470nm dual wavelength laser — UK CE-Marked
+- endoPulse™ 980nm + 1470nm dual wavelength laser — UK CE-Marked
 - Stimulates collagen and elastin, activates fibroblasts
 - Treatments: face, neck, jawline, under eyes, jowls, tummy, arms, thighs, back, sensitive areas
 - Non-surgical, minimally invasive, minimal downtime

@@ -117,11 +117,11 @@ async function executeCompleteTreatment(payload: any, context: ExecutionContext)
   };
 
   if (payload.areasTreated?.length) {
-    updateData.notes = (updateData.notes || "") + `\n[EndoPulse] Areas: ${payload.areasTreated.join(", ")}`;
+    updateData.notes = (updateData.notes || "") + `\n[endoPulse] Areas: ${payload.areasTreated.join(", ")}`;
   }
-  if (payload.energy) updateData.notes = (updateData.notes || "") + `\n[EndoPulse] Energy: ${payload.energy}`;
-  if (payload.passes) updateData.notes = (updateData.notes || "") + `\n[EndoPulse] Passes: ${payload.passes}`;
-  if (payload.wavelength) updateData.notes = (updateData.notes || "") + `\n[EndoPulse] Wavelength: ${payload.wavelength}`;
+  if (payload.energy) updateData.notes = (updateData.notes || "") + `\n[endoPulse] Energy: ${payload.energy}`;
+  if (payload.passes) updateData.notes = (updateData.notes || "") + `\n[endoPulse] Passes: ${payload.passes}`;
+  if (payload.wavelength) updateData.notes = (updateData.notes || "") + `\n[endoPulse] Wavelength: ${payload.wavelength}`;
 
   const { error } = await db
     .from("bookings")
@@ -349,7 +349,7 @@ async function executeScheduleFollowUp(payload: any, context: ExecutionContext):
     client_id: clientId || null,
     date: futureDate.toISOString().split("T")[0],
     time: "10:00", // default time, user can change
-    service: payload.service || "EndoPulse Follow-up",
+    service: payload.service || "endoPulse Follow-up",
     status: "scheduled",
     notes: `[Hermes] Follow-up scheduled from previous treatment. ${notes}`,
   });
