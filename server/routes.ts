@@ -148,8 +148,6 @@ function computeAiScore(lead: {
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
     registerPublicConfigRoute(app);
-  // Health
-  app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
   app.get("/api/calls", requireAuth, async (req: AuthedRequest, res: Response) => {
     const { data, error } = await supabaseForUser(req.token!)

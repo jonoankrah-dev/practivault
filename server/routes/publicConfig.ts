@@ -2,9 +2,18 @@ import type { Express, Request, Response } from "express";
 import {
   resolveSupabaseAnonKey,
   resolveSupabaseUrl,
+  supabaseConfigSource,
 } from "../config/supabaseEnv";
 
 export function registerPublicConfigRoute(app: Express): void {
+  app.get("/api/health", (_req: Request, res: Response) => {
+    res.status(200).json({
+      ok: true,
+      supabase: supabaseConfigSource(),
+      version: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
+    });
+  });
+
   app.get("/api/public-config", (_req: Request, res: Response) => {
     const supabaseUrl = resolveSupabaseUrl();
     const supabaseAnonKey = resolveSupabaseAnonKey();

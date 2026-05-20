@@ -12,37 +12,35 @@ function fromEnv(...keys: string[]): string {
   return "";
 }
 
-function useBuiltInDefaults(): boolean {
-  if (process.env.NODE_ENV === "production") return true;
-  if (process.env.RAILWAY_ENVIRONMENT) return true;
-  if (process.env.RAILWAY_PROJECT_ID) return true;
-  if (process.env.RAILWAY_SERVICE_ID) return true;
-  return false;
+/** True when SUPABASE_* env vars are set (not using built-in defaults). */
+export function isSupabaseConfiguredFromEnv(): boolean {
+  return Boolean(
+    fromEnv("SUPABASE_URL", "VITE_SUPABASE_URL") &&
+      fromEnv("SUPABASE_ANON_KEY", "VITE_SUPABASE_ANON_KEY"),
+  );
 }
 
-/** Resolve Supabase URL: env first, then Railway/production project default. */
+/** Resolve Supabase URL: env first, then built-in project default. */
 export function resolveSupabaseUrl(): string {
   const fromEnvironment = fromEnv("SUPABASE_URL", "VITE_SUPABASE_URL");
   if (fromEnvironment) return normalizeSupabaseUrl(fromEnvironment);
-  if (useBuiltInDefaults()) return PRACTIVAULT_SUPABASE_URL;
-  return "";
+  return PRACTIVAULT_SUPABASE_URL;
 }
 
-/** Resolve anon key: env first, then Railway/production project default. */
+/** Resolve anon key: env first, then built-in project default. */
 export function resolveSupabaseAnonKey(): string {
   const fromEnvironment = fromEnv(
     "SUPABASE_ANON_KEY",
     "VITE_SUPABASE_ANON_KEY",
   );
   if (fromEnvironment) return fromEnvironment;
-  if (useBuiltInDefaults()) return PRACTIVAULT_SUPABASE_ANON_KEY;
-  return "";
+  return PRACTIVAULT_SUPABASE_ANON_KEY;
 }
 
 export function resolveSupabaseServiceRoleKey(): string {
   return fromEnv("SUPABASE_SERVICE_ROLE_KEY");
 }
 
-export function isSupabaseConfigured(): boolean {
-  return Boolean(resolveSupabaseUrl() && resolveSupabaseAnonKey());
+export function supabaseConfigSource(): "env" | "builtin" {
+  return isSupabaseConfiguredFromEnv() ? "env" : "builtin";
 }
